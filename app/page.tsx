@@ -19,40 +19,6 @@ const steps: Step[] = [
         status: "complete",
         helper: "Profile and email only—no Drive access yet.",
     },
-    // {
-    //     id: 2,
-    //     title: "Connect Stripe",
-    //     description:
-    //         "Authorize Stripe Connect so we can read your business data and mirror it into your protected sheet tabs.",
-    //     ctaLabel: "Connect Stripe",
-    //     status: "complete",
-    //     helper: "Business: Aurelia Studio (acct_1N8X...)",
-    // },
-    // {
-    //     id: 3,
-    //     title: "Connect Google Sheets",
-    //     description:
-    //         "Grant drive.file + spreadsheets scopes. We only create and manage files we generate—nothing else is touched.",
-    //     ctaLabel: "Allow Sheets access",
-    //     status: "current",
-    //     helper: "Google: alex@aurelia.studio",
-    // },
-    // {
-    //     id: 4,
-    //     title: "Create your spreadsheet",
-    //     description:
-    //         "We’ll name it ‘Stripe Sync – Aurelia Studio’ with protected *_raw tabs, an editable Working tab, and a README tab.",
-    //     ctaLabel: "Create sheet",
-    //     status: "upcoming",
-    // },
-    // {
-    //     id: 5,
-    //     title: "Choose objects & start backfill",
-    //     description:
-    //         "Select which Stripe objects to mirror, pick history depth, and launch the initial backfill and continuous sync.",
-    //     ctaLabel: "Start backfill & sync",
-    //     status: "upcoming",
-    // },
 ];
 
 const selectedObjects = [
@@ -127,10 +93,10 @@ export default function Home() {
                                         <div className="flex items-start gap-3">
                                             <div
                                                 className={`flex size-10 items-center justify-center rounded-full border text-sm font-semibold shadow-sm ${step.status === "complete"
-                                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                                        : step.status === "current"
-                                                            ? "border-indigo-100 bg-indigo-50 text-indigo-700"
-                                                            : "border-slate-200 bg-white text-slate-500"
+                                                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                                    : step.status === "current"
+                                                        ? "border-indigo-100 bg-indigo-50 text-indigo-700"
+                                                        : "border-slate-200 bg-white text-slate-500"
                                                     }`}
                                                 aria-label={`Step ${step.id} ${step.status}`}
                                             >
@@ -146,10 +112,10 @@ export default function Home() {
                                         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                                             <button
                                                 className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${step.status === "complete"
-                                                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100"
-                                                        : step.status === "current"
-                                                            ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-500"
-                                                            : "bg-slate-900 text-white shadow-sm hover:bg-slate-800"
+                                                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100"
+                                                    : step.status === "current"
+                                                        ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-500"
+                                                        : "bg-slate-900 text-white shadow-sm hover:bg-slate-800"
                                                     }`}
                                                 type="button"
                                                 aria-label={step.ctaLabel}
@@ -158,10 +124,10 @@ export default function Home() {
                                             </button>
                                             <span
                                                 className={`text-xs font-semibold uppercase tracking-[0.2em] ${step.status === "complete"
-                                                        ? "text-emerald-600"
-                                                        : step.status === "current"
-                                                            ? "text-indigo-600"
-                                                            : "text-slate-400"
+                                                    ? "text-emerald-600"
+                                                    : step.status === "current"
+                                                        ? "text-indigo-600"
+                                                        : "text-slate-400"
                                                     }`}
                                             >
                                                 {step.status === "complete"
@@ -187,8 +153,8 @@ export default function Home() {
                                                 <div
                                                     key={object.name}
                                                     className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${object.enabled
-                                                            ? "border-emerald-100 bg-emerald-50/70"
-                                                            : "border-slate-200 bg-slate-50"
+                                                        ? "border-emerald-100 bg-emerald-50/70"
+                                                        : "border-slate-200 bg-slate-50"
                                                         }`}
                                                 >
                                                     <div
