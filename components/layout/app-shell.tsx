@@ -9,7 +9,6 @@ import { signOut, useSession } from "next-auth/react";
 
 const navItems = [
     { href: "/dashboard", label: "Workspaces" },
-    { href: "/onboarding", label: "New workspace" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -22,9 +21,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
                 <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
                     <div className="flex items-center gap-3">
+                        <Link href="/">
                         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                             AS
                         </span>
+                        </Link>
                         <div className="flex flex-col">
                             <span className="text-sm font-semibold text-slate-900">
                                 AutoSync Control Tower

@@ -92,7 +92,7 @@ export function OnboardingWizard() {
             <header className="flex flex-col gap-4 lg:sticky lg:top-8 lg:max-w-sm">
                 <div className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-100">
                     <span className="size-2 rounded-full bg-emerald-500" aria-hidden />
-                    Get Started
+                    Get Set Up
                 </div>
                 <div className="space-y-3">
                     <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
