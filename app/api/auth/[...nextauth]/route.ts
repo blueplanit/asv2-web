@@ -6,18 +6,24 @@ export const authOptions: NextAuthOptions = {
         GoogleProvider({
             clientId: process.env.GOOGLE_CLIENT_ID!,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            authorization: {
+                params: {
+                    scope: [
+                        "openid",
+                        "https://www.googleapis.com/auth/userinfo.email",
+                        "https://www.googleapis.com/auth/userinfo.profile",
+                    ].join(" "),
+                },
+            },
         }),
     ],
-    // For now: cookie-based JWT sessions, no DB needed
-    // (you can add an adapter later when DynamoDB is ready)
     session: {
         strategy: "jwt",
     },
     pages: {
-        signIn: "/login", // use our custom login page
+        signIn: "/login",
     },
 };
 
 const handler = NextAuth(authOptions);
-
 export { handler as GET, handler as POST };
