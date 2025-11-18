@@ -3,12 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
-
-// TODO: replace with real encryption (e.g. KMS, libsodium, etc.)
-function encrypt(raw: unknown): string {
-    // MVP ONLY – DO NOT USE IN PROD AS-IS
-    return Buffer.from(JSON.stringify(raw)).toString("base64");
-}
+import { encrypt } from "@/lib/google-auth";
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);

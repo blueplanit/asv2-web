@@ -55,6 +55,13 @@ const selectedObjects = [
     { name: "Balance txns", enabled: false, note: "advanced reconciliation" },
 ];
 
+async function createSheet() {
+    const res = await fetch("/api/google/create-sheet", {
+        method: "POST",
+    });
+    return res.json();
+}
+
 export function OnboardingWizard() {
     const searchParams = useSearchParams();
 
@@ -80,7 +87,7 @@ export function OnboardingWizard() {
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
 
-    function handlePrimaryAction() {
+    async function handlePrimaryAction() {
         
         if (currentStep.id === 1) {
             // Stripe connect → Stripe OAuth
@@ -91,6 +98,11 @@ export function OnboardingWizard() {
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
             return;
+        }
+        else if (currentStep.id === 3) {
+            // Create sheet
+            const createSheetResponse = await createSheet();
+            console.log(createSheetResponse);
         }
 
         // TODO: later:
