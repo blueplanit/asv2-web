@@ -153,15 +153,6 @@ export default function HomePage() {
                 </section>
             </main>
 
-            {/* Footer */}
-            <footer className="border-t border-slate-200 bg-white/60">
-                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 text-xs text-slate-500">
-                    <span>© {year} AutoSync.</span>
-                    <span className="text-slate-500">
-                        Stripe and Google Sheets are trademarks of their respective owners.
-                    </span>
-                </div>
-            </footer>
         </div>
     );
 }

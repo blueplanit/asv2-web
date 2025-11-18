@@ -81,9 +81,15 @@ export function OnboardingWizard() {
     const isLastStep = currentStepIndex === totalSteps - 1;
 
     function handlePrimaryAction() {
-        if (currentStep.id === 2) {
+        
+        if (currentStep.id === 1) {
+            // Stripe connect → Stripe OAuth
+            window.location.href = "/api/stripe/connect";
+            return;
+        }
+        else if (currentStep.id === 2) {
             // Sheets access → Google OAuth
-            window.location.href = "/google/connect";
+            window.location.href = "/api/google/connect";
             return;
         }
 
