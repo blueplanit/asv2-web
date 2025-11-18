@@ -20,7 +20,6 @@ export const SyncConfigSchema = z.object({
     historySinceDays: z.number().int().positive().default(90), // e.g. last 90 days when historyMode="since"
 
     // sync lifecycle
-    state: z.enum(["onboarding", "backfill_running", "active", "paused", "error"]).default("onboarding"),
     lastSyncAt: z.string().nullable().default(null),              // ISO or null
     lastError: z.string().nullable().default(null),               // human-readable or code
 

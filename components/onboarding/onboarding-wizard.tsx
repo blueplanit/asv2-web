@@ -2,7 +2,9 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, redirect } from "next/navigation";
+import { useUserState } from "../user-state-provider";
+import { useEffect } from "react";
 
 type StepStatus = "complete" | "current" | "upcoming";
 
@@ -64,7 +66,7 @@ async function createSheet() {
 
 export function OnboardingWizard() {
     const searchParams = useSearchParams();
-    const router = useRouter();
+    const { user, setUser } = useUserState();
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
@@ -76,9 +78,13 @@ export function OnboardingWizard() {
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
 
     // If the query param changes (e.g. another redirect), sync the step
-    React.useEffect(() => {
+    useEffect(() => {
         setCurrentStepIndex(initialIndex);
-    }, [initialIndex]);
+        console.log("userState.onboardingStage", user.onboardingStage);
+        if (user.onboardingStage === "ready") {
+            redirect("/dashboard");
+        }
+    }, [initialIndex, user.onboardingStage]);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
@@ -88,7 +94,7 @@ export function OnboardingWizard() {
     const isLastStep = currentStepIndex === totalSteps - 1;
 
     async function handlePrimaryAction() {
-        
+
         if (currentStep.id === 1) {
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
@@ -114,7 +120,7 @@ export function OnboardingWizard() {
             setCurrentStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
         }
         else {
-            router.push("/dashboard");
+            redirect("/dashboard");
         }
     }
 

@@ -1,6 +1,6 @@
 // lib/sync-config.ts
 import { ddb } from "./dynamo";
-import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import {
     SyncConfigSchema,
     type SyncConfig,
@@ -9,6 +9,38 @@ import {
 } from "@/lib/schemas/sync-config";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
+
+// Assume there is only one sync config for a user for MVP 
+export async function getUserSyncConfig(
+    authUserId: string,
+): Promise<SyncConfig | undefined> {
+    const res = await ddb.send(
+        new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
+            ExpressionAttributeValues: {
+                ":pk": `USER#${authUserId}`,
+                ":sk": "SYNC#",
+            },
+            Limit: 2, // enough to detect "more than one"
+        }),
+    );
+
+    const items = res.Items ?? [];
+    if (items.length === 0) return undefined;
+
+    if (items.length > 1) {
+        console.error("Invariant violation: multiple sync configs for user", {
+            authUserId,
+            count: items.length,
+        });
+        // You can choose to throw here instead if you want it loud:
+        // throw new Error("Multiple sync configs for user");
+    }
+
+    return SyncConfigSchema.parse(items[0]);
+}
+
 
 export async function ensureSyncConfigForSheet(params: {
     authUserId: string;
@@ -19,16 +51,10 @@ export async function ensureSyncConfigForSheet(params: {
     const pk = `USER#${authUserId}`;
     const sk = `SYNC#${spreadsheetId}`;
 
-    // 1) If it already exists, return it and don’t overwrite anything
-    const existing = await ddb.send(
-        new GetCommand({
-            TableName: TABLE_NAME,
-            Key: { pk, sk },
-        }),
-    );
-
-    if (existing.Item) {
-        return SyncConfigSchema.parse(existing.Item);
+    // 1) If any sync config already exists, just return it
+    const existing = await getUserSyncConfig(authUserId);
+    if (existing) {
+        return existing;
     }
 
     if (!stripeAccountId) {
@@ -51,7 +77,6 @@ export async function ensureSyncConfigForSheet(params: {
         userId: authUserId,
         spreadsheetId,
         stripeAccountId,
-        state: "onboarding",
         lastSyncAt: null,
         lastError: null,
         createdAt: now,
@@ -102,7 +127,6 @@ export async function createSyncConfig(params: {
         historyMode,
         historySinceDays,
 
-        state: "onboarding",
         lastSyncAt: null,
         lastError: null,
 
@@ -150,7 +174,7 @@ export async function updateSyncConfig(params: {
         enabledStripeObjects,
         historyMode,
         historySinceDays,
-      } = params;
+    } = params;
 
     const updates: string[] = [];
     const values: Record<string, unknown> = {
