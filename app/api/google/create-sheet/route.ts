@@ -2,15 +2,12 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { ddb } from "@/lib/dynamo";
-import { QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { GoogleConnectionSchema } from "@/lib/schemas/google-connection";
 import { google } from "googleapis";
-import { decrypt, getGoogleAccessTokenForUser, StoredAccessPayload, StoredRefreshPayload } from "@/lib/google-auth";
+import { getGoogleAccessTokenForUser } from "@/lib/google-auth";
+import { ensureSyncConfigForSheet } from "@/lib/sync-config";
+import { getStripeAccountIdForUser } from "@/lib/stripe-connection";
 
 export const runtime = "nodejs";
-
-const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function POST() {
     const session = await getServerSession(authOptions);
@@ -29,7 +26,6 @@ export async function POST() {
         const oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID!,
             process.env.GOOGLE_CLIENT_SECRET!,
-            // redirectUri not needed for plain API calls
         );
 
         oauth2Client.setCredentials({
@@ -85,6 +81,10 @@ export async function POST() {
         const spreadsheetId = sheetsResp.data.spreadsheetId;
         const spreadsheetUrl = sheetsResp.data.spreadsheetUrl;
 
+        if (!spreadsheetId) {
+            return new NextResponse("Failed to create sheet", { status: 502 });
+        }
+
         // move the new spreadsheet into the "Sync" folder
         if (syncFolderId && spreadsheetId) {
             await drive.files.update({
@@ -94,10 +94,23 @@ export async function POST() {
             });
         }
 
+        const stripeAccountId = await getStripeAccountIdForUser(authUserId);
+
+        if (!stripeAccountId) {
+            return new NextResponse("Failed to get Stripe account ID", { status: 502 });
+        }
+
+        const dbResp = await ensureSyncConfigForSheet({
+            authUserId,
+            spreadsheetId,
+            stripeAccountId,
+        });      
+
         // existing return
         return NextResponse.json({
             spreadsheetId,
             spreadsheetUrl,
+            dbResp,
         });
     } catch (err) {
         console.error("Error creating Google Sheet:", err);

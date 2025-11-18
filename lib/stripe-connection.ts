@@ -1,6 +1,6 @@
 // lib/stripe-connection.ts
 import { ddb } from "./dynamo";
-import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
     StripeConnectionSchema,
     type StripeConnection,
@@ -50,4 +50,29 @@ export async function getStripeConnection(authUserId: string, stripeAccountId: s
     );
     if (!res.Item) return undefined;
     return StripeConnectionSchema.parse(res.Item);
+}
+
+
+// Assumes exactly one StripeConnection per user for now    
+export async function getStripeAccountIdForUser(
+    authUserId: string,
+): Promise<string | undefined> {
+    const res = await ddb.send(
+        new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
+            ExpressionAttributeValues: {
+                ":pk": `USER#${authUserId}`,
+                ":sk": "STRIPE#",
+            },
+            Limit: 1,
+        }),
+    );
+
+    if (!res.Items || res.Items.length === 0) return undefined;
+
+    const conn = StripeConnectionSchema.parse(
+        res.Items[0],
+    ) as StripeConnection;
+    return conn.stripeAccountId;
 }

@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 type StepStatus = "complete" | "current" | "upcoming";
 
@@ -64,7 +64,7 @@ async function createSheet() {
 
 export function OnboardingWizard() {
     const searchParams = useSearchParams();
-
+    const router = useRouter();
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
@@ -112,6 +112,9 @@ export function OnboardingWizard() {
 
         if (!isLastStep) {
             setCurrentStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
+        }
+        else {
+            router.push("/dashboard");
         }
     }
 
