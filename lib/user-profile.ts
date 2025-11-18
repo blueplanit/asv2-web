@@ -8,17 +8,9 @@
 
 import { ddb } from "./dynamo";
 import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { UserProfileSchema, type UserProfile } from "./schemas/user-profile";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
-
-export type UserProfile = {
-    pk: string;   // USER#<authUserId>
-    sk: string;   // PROFILE
-    userId: string;
-    email: string;
-    googleUserId: string;
-    createdAt: string;
-};
 
 export async function getUserProfile(authUserId: string) {
     const pk = `USER#${authUserId}`;
@@ -29,11 +21,17 @@ export async function getUserProfile(authUserId: string) {
             Key: { pk, sk: "PROFILE" },
         })
     );
+    if (!res.Item) return undefined;
 
-    return res.Item as UserProfile | undefined;
+    const parsed = UserProfileSchema.parse(res.Item);
+    return parsed; // typed UserProfile
 }
 
-export async function createUserProfile(authUserId: string, email: string, googleUserId: string) {
+export async function createUserProfile(
+    authUserId: string,
+    email: string,
+    googleUserId: string
+): Promise<UserProfile> {
     const now = new Date().toISOString();
     const pk = `USER#${authUserId}`;
 
@@ -45,6 +43,9 @@ export async function createUserProfile(authUserId: string, email: string, googl
         googleUserId,
         createdAt: now,
     };
+    
+    // validate before write (optional if you're confident)
+    UserProfileSchema.parse(item);
 
     await ddb.send(
         new PutCommand({

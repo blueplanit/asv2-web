@@ -1,7 +1,22 @@
-// app/google/callback/route.ts
+// app/api/google/callback/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { putGoogleConnection } from "@/lib/google-connection";
+
+// TODO: replace with real encryption (e.g. KMS, libsodium, etc.)
+function encrypt(raw: unknown): string {
+    // MVP ONLY – DO NOT USE IN PROD AS-IS
+    return Buffer.from(JSON.stringify(raw)).toString("base64");
+}
 
 export async function GET(req: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || !(session.user as any).id) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+    const authUserId = (session.user as any).id as string;
+
     const url = new URL(req.url);
     const searchParams = url.searchParams;
 
@@ -9,30 +24,108 @@ export async function GET(req: NextRequest) {
     const error = searchParams.get("error");
 
     if (error || !code) {
-        // Optional: send them back to step 2 with an error flag
-        const errorUrl = new URL("/onboarding?step=2&googleError=1", process.env.NEXTAUTH_URL);
+        const errorUrl = new URL(
+            "/onboarding?step=2&googleError=1",
+            process.env.NEXTAUTH_URL,
+        );
         return NextResponse.redirect(errorUrl);
     }
 
-    // (Optional) You *can* exchange the code for tokens here,
-    // but per your "for now" requirement, we won't store or use them yet.
-    // const tokenEndpoint = "https://oauth2.googleapis.com/token";
-    // const body = new URLSearchParams({
-    //   code,
-    //   client_id: process.env.GOOGLE_CLIENT_ID!,
-    //   client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-    //   redirect_uri: `${process.env.NEXTAUTH_URL}/google/callback`,
-    //   grant_type: "authorization_code",
-    // });
-    // const tokenRes = await fetch(tokenEndpoint, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    //   body,
-    // });
-    // const tokenJson = await tokenRes.json();
-    // console.log("Google drive.file token response (dev):", tokenJson);
+    // 1) Exchange code for tokens
+    const tokenEndpoint = "https://oauth2.googleapis.com/token";
+    const body = new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        redirect_uri: `${process.env.NEXTAUTH_URL}/api/google/callback`,
+        grant_type: "authorization_code",
+    });
 
-    // Success → jump user back into onboarding at step 3
+    const tokenRes = await fetch(tokenEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+    });
+
+    if (!tokenRes.ok) {
+        console.error("Google token exchange failed:", tokenRes.status, await tokenRes.text());
+        const errorUrl = new URL(
+            "/onboarding?step=2&googleError=1",
+            process.env.NEXTAUTH_URL,
+        );
+        return NextResponse.redirect(errorUrl);
+    }
+
+    const tokenJson = await tokenRes.json() as {
+        access_token?: string;
+        refresh_token?: string;
+        id_token?: string;
+        expires_in?: number;
+        scope?: string;
+        token_type?: string;
+    };
+
+    const accessToken = tokenJson.access_token;
+    const refreshToken = tokenJson.refresh_token;
+
+    if (!accessToken || !refreshToken) {
+        console.error("Missing access/refresh token from Google:", tokenJson);
+        const errorUrl = new URL(
+            "/onboarding?step=2&googleError=1",
+            process.env.NEXTAUTH_URL,
+        );
+        return NextResponse.redirect(errorUrl);
+    }
+
+    // 2) Get the Sheets account identity (sub + email)
+    const userinfoRes = await fetch(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        },
+    );
+
+    if (!userinfoRes.ok) {
+        console.error("Google userinfo failed:", userinfoRes.status, await userinfoRes.text());
+        const errorUrl = new URL(
+            "/onboarding?step=2&googleError=1",
+            process.env.NEXTAUTH_URL,
+        );
+        return NextResponse.redirect(errorUrl);
+    }
+
+    const userinfo = await userinfoRes.json() as {
+        sub: string;
+        email: string;
+    };
+
+    const googleUserId = userinfo.sub;
+    const email = userinfo.email;
+
+    // 3) Encrypt tokens for storage
+    const accessTokenEncrypted = encrypt({
+        accessToken,
+        scope: tokenJson.scope,
+        tokenType: tokenJson.token_type,
+        expiresAt: tokenJson.expires_in
+            ? Date.now() + tokenJson.expires_in * 1000
+            : undefined,
+    });
+
+    const refreshTokenEncrypted = encrypt({
+        refreshToken,
+    });
+
+    // 4) Write GoogleConnection item into DynamoDB
+    await putGoogleConnection({
+        authUserId,
+        googleUserId,
+        email,
+        accessTokenEncrypted,
+        refreshTokenEncrypted,
+    });
+
+    // 5) Back to onboarding, step 3 (Create sheet)
     const onboardingUrl = new URL("/onboarding?step=3", process.env.NEXTAUTH_URL);
     return NextResponse.redirect(onboardingUrl);
 }
