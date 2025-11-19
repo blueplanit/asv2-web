@@ -8,7 +8,7 @@ import { User } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 
 const navItems = [
-    { href: "/dashboard", label: "Workspaces" },
+    { href: "/dashboard", label: "Dashboard" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

@@ -32,21 +32,21 @@ const steps: Step[] = [
         id: 2,
         title: "Grant Sheets access",
         description:
-            "Allow AutoSync to create and update one Google Sheet in your Drive using drive.file + spreadsheets scopes.",
+            "Allow AutoSync to create and update Google Sheets files in your Drive. We will not access any existing files you own.",
         ctaLabel: "Connect Google Sheets",
     },
     {
         id: 3,
         title: "Create your workspace sheet",
         description:
-            "We’ll create a spreadsheet named “Stripe Sync – {Business}” with protected *_raw tabs and a Working tab for analysis.",
+            "We’ll create a Google Sheets spreadsheet named “Stripe Sync” in your Drive with protected *_raw tabs and a Working tab for analysis.",
         ctaLabel: "Create sheet",
     },
     {
         id: 4,
-        title: "Choose objects & start sync",
+        title: "Choose Stripe data & start sync",
         description:
-            "Pick which Stripe objects to sync into your newly created Google Sheet. Then start your initial backfill and ongoing sync.",
+            "Pick which Stripe data objects to sync into your newly created Google Sheet. Then start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
     },
 ];

@@ -36,14 +36,16 @@ export function WorkspaceCard({ workspace, onSyncNow }: Props) {
                 : "bg-rose-50 text-rose-700 ring-rose-100";
 
     return (
-        <article className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                    <h3 className="text-base font-semibold text-slate-900">{workspace.name}</h3>
-                    <p className="text-sm text-slate-600">
-                        Stripe: <span className="font-medium">{workspace.stripeAccountName}</span>
+        <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-start justify-between gap-3">
+                {/* LEFT COLUMN */}
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-semibold text-slate-900 truncate">{workspace.name}</h3>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500 truncate">
+                        {workspace.stripeAccountName}
                     </p>
-                    <p className="text-sm text-slate-600">
+
+                    <p className="text-sm text-slate-600 truncate">
                         Sheet:{" "}
                         <Link
                             href={workspace.sheetUrl}
@@ -54,16 +56,18 @@ export function WorkspaceCard({ workspace, onSyncNow }: Props) {
                         </Link>
                     </p>
                 </div>
-                <div className="flex flex-col items-end gap-2">
+
+                {/* RIGHT COLUMN */}
+                <div className="flex shrink-0 items-center gap-2">
                     <span
-                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ring-1 ring-inset ${healthColorClasses}`}
+                        className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] ring-1 ring-inset ${healthColorClasses}`}
                     >
                         {healthLabel}
                     </span>
                     <button
                         type="button"
                         onClick={() => onSyncNow?.(workspace.id)}
-                        className="inline-flex items-center justify-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                        className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                     >
                         Sync now
                     </button>
@@ -77,7 +81,7 @@ export function WorkspaceCard({ workspace, onSyncNow }: Props) {
                     </span>
                 </p>
                 <p className="flex flex-wrap gap-1">
-                    Objects:{" "}
+                    Stripe data synced:{" "}
                     {workspace.objectsEnabled.map((obj) => (
                         <span
                             key={obj}

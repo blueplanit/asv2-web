@@ -43,7 +43,9 @@ export async function POST(req: Request) {
         authUserId,
         spreadsheetId: existing.spreadsheetId,
         enabledStripeObjects,
-        // leave historyMode/historySinceDays as-is for now
+        historyMode: null,
+        historySinceDays: null,
+        syncStatus: "syncing"
     });
 
     return NextResponse.json({ syncConfig: updated });
