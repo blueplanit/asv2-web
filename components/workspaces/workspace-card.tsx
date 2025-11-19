@@ -1,11 +1,17 @@
 "use client";
-
+import {
+    EllipsisHorizontalIcon,
+    PauseCircleIcon,
+    PlayCircleIcon,
+    ArrowPathIcon, 
+} from "@heroicons/react/20/solid";
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Link from "next/link";
+import { useState, useRef, useEffect } from "react";
 
 export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error";
 
@@ -18,6 +24,7 @@ export type Workspace = {
     lastSyncAt: string | null;
     health: WorkspaceHealth;
     objectsEnabled: string[];
+    syncStatus: "syncing" | "paused" | "backfill_running" | "error" | "onboarding";
 };
 
 const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; tooltip: string }> = {
@@ -46,12 +53,42 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
 type Props = {
     workspace: Workspace;
     onSyncNow?: (id: string) => void;
+    onTogglePause: (id: string, nextStatus: "paused" | "syncing") => void;
 };
 
-export function WorkspaceCard({ workspace, onSyncNow }: Props) {
+export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
     const health = HEALTH_LABELS[workspace.health];
     const healthLabel = health.label;
     const healthColorClasses = health.color;
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement | null>(null);
+
+    const isPaused = workspace.syncStatus === "paused";
+
+    // basic click-outside to close the menu
+    useEffect(() => {
+        if (!menuOpen) return;
+        function handleClick(event: MouseEvent) {
+            if (!menuRef.current) return;
+            if (!menuRef.current.contains(event.target as Node)) {
+                setMenuOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [menuOpen]);
+
+    function handlePauseClick() {
+        const next = isPaused ? "syncing" : "paused";
+        onTogglePause(workspace.id, next);
+        setMenuOpen(false);
+    }
+
+    function handleBackfillClick() {
+        // TODO: wire to backfill API
+        console.log("Backfill requested for workspace", workspace.id);
+        setMenuOpen(false);
+    }
 
     return (
         <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -76,7 +113,7 @@ export function WorkspaceCard({ workspace, onSyncNow }: Props) {
                 </div>
 
                 {/* RIGHT COLUMN */}
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="relative flex shrink-0 items-center gap-2">
                     <Tooltip key={health.label}>
                         <TooltipTrigger asChild>
                             <span
@@ -96,6 +133,50 @@ export function WorkspaceCard({ workspace, onSyncNow }: Props) {
                     >
                         Sync now
                     </button>
+                    <button
+                        type="button"
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => setMenuOpen((v) => !v)}
+                        className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    >
+                        <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+                    </button>
+
+
+                    {/* 3-dot dropdown menu */}
+                    {menuOpen && (
+                        <div
+                            ref={menuRef}
+                            className="absolute right-0 top-5 z-20 w-44 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+                        >
+                            <button
+                                type="button"
+                                onClick={handlePauseClick}
+                                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                            >
+                                {isPaused ? (
+                                    <PlayCircleIcon className="h-4 w-4" aria-hidden="true" />
+                                ) : (
+                                    <PauseCircleIcon className="h-4 w-4" aria-hidden="true" />
+                                )}
+                                <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleBackfillClick}
+                                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                            >
+                                <ArrowPathIcon
+                                    className="h-4 w-4 text-slate-500"
+                                    aria-hidden="true"
+                                />
+                                <span>Start backfill</span>
+                            </button>
+                        </div>
+                    )}
+
                 </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">

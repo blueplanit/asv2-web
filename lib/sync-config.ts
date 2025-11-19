@@ -183,22 +183,22 @@ export async function updateSyncConfig(params: {
         ":updatedAt": new Date().toISOString(),
     };
 
-    if (enabledStripeObjects) {
+    if (enabledStripeObjects !== undefined) {
         updates.push("enabledStripeObjects = :objs");
         values[":objs"] = enabledStripeObjects;
     }
 
-    if (historyMode) {
+    if (historyMode !== undefined && historyMode !== null) {
         updates.push("historyMode = :hm");
         values[":hm"] = historyMode;
     }
 
-    if (historySinceDays) {
+    if (historySinceDays !== undefined && historySinceDays !== null) {
         updates.push("historySinceDays = :hsd");
         values[":hsd"] = historySinceDays;
     }
 
-    if (syncStatus) {
+    if (syncStatus !== undefined) {
         updates.push("syncStatus = :sts");
         values[":sts"] = syncStatus;
     }

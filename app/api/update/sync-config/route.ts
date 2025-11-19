@@ -11,6 +11,13 @@ import { getUserSyncConfig, updateSyncConfig } from "@/lib/sync-config";
 
 export const runtime = "nodejs";
 
+type Body = {
+    enabledStripeObjects?: string[];
+    historyMode?: "full" | "since";
+    historySinceDays?: number;
+    syncStatus?: "onboarding" | "backfill_running" | "paused" | "error" | "syncing";
+} | null;
+
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).id) {
@@ -18,35 +25,38 @@ export async function POST(req: Request) {
     }
     const authUserId = (session.user as any).id as string;
 
-    const body = (await req.json().catch(() => null)) as | { 
-        enabledStripeObjects?: string[], 
-        historyMode?: 'full' | 'since', 
-        historySinceDays?: number, 
-        syncStatus?: 'onboarding' | 'backfill_running' | 'paused' | 'error' | 'syncing' 
-    } | null;
-
-    const raw = body?.enabledStripeObjects ?? DEFAULT_ENABLED_STRIPE_OBJECTS;
-
-    const historyMode = body?.historyMode ?? "since";
-    const historySinceDays = body?.historySinceDays ?? 90;
-    const syncStatus = body?.syncStatus ?? "syncing";
-
-    // Validate against enum — no arbitrary strings
-    let enabledStripeObjects: StripeObject[];
-    try {
-        enabledStripeObjects = raw.map((v) => StripeObjectEnum.parse(v)) as StripeObject[];
-    } catch {
-        return new NextResponse("Invalid stripe object selection", { status: 400 });
+    if (!authUserId) {
+        return new NextResponse("Auth user ID not found", { status: 400 });
     }
 
-    if (enabledStripeObjects.length === 0) {
-        return new NextResponse("At least one object must be selected", { status: 400 });
-    }
+    const body = (await req.json().catch(() => null)) as Body;
 
     const existing = await getUserSyncConfig(authUserId);
-    if (!existing) {
-        return new NextResponse("Sync config not found for user", { status: 400 });
+    if (!existing || !existing.spreadsheetId) {
+        return new NextResponse("Sync config not found for user or spreadsheet ID not set", { status: 400 });
     }
+
+    // Validate against enum — no arbitrary strings
+    let enabledStripeObjects: StripeObject[] | undefined;
+    if (body?.enabledStripeObjects) {
+        try {
+            enabledStripeObjects = body.enabledStripeObjects.map((v) =>
+                StripeObjectEnum.parse(v),
+            ) as StripeObject[];
+        } catch {
+            return new NextResponse("Invalid stripe object selection", { status: 400 });
+        }
+        if (enabledStripeObjects.length === 0) {
+            return new NextResponse("At least one object must be selected", { status: 400 });
+        }
+    }
+
+    const historyMode = body?.historyMode;
+    const historySinceDays =
+        body && typeof body.historySinceDays === "number"
+            ? body.historySinceDays
+            : undefined;
+    const syncStatus = body?.syncStatus;
 
     const updated = await updateSyncConfig({
         authUserId,

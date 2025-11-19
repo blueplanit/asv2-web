@@ -43,6 +43,7 @@ function mapSyncConfigToWorkspace(args: {
         lastSyncAt,
         health,
         objectsEnabled,
+        syncStatus: cfg.syncStatus,
     };
 }
 
@@ -66,7 +67,7 @@ function getNextOnboardingStep(onboardingStage: string): number {
 }
 
 export function DashboardClient() {
-    const { user } = useUserState();
+    const { user, refresh } = useUserState();
     const { onboardingStage, googleConnections, stripeConnections, syncConfigs } = user;
 
     // MVP: assume at most one sync config
@@ -81,7 +82,7 @@ export function DashboardClient() {
                 const stripeConn = stripeConnections.find(
                     (c) => c.stripeAccountId === cfg.stripeAccountId,
                 );
-                if (cfg.spreadsheetId === null || 
+                if (cfg.spreadsheetId === null ||
                     cfg.enabledStripeObjects?.length === 0 ||
                     !stripeConn) return null;
                 return mapSyncConfigToWorkspace({
@@ -90,7 +91,7 @@ export function DashboardClient() {
                 });
             }).filter((ws) => ws !== null);
 
-    const syncIsActive = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running");
+    const syncIsActive = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running" || userSyncConfig.syncStatus === "paused");
 
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;
@@ -118,6 +119,28 @@ export function DashboardClient() {
         }
         return "Finish these last steps to get Stripe data synced into your Google Sheet.";
     })();
+
+    async function handleTogglePause(
+        workspaceId: string,
+        nextStatus: "paused" | "syncing",
+    ) {
+        // for MVP: single sync config per user → just set syncStatus
+        try {
+            const res = await fetch("/api/update/sync-config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ syncStatus: nextStatus }),
+            });
+            if (!res.ok) {
+                console.error("Failed to update sync status");
+                return;
+            }
+            await refresh();
+        } catch (err) {
+            console.error("Error updating sync status", err);
+        }
+    }
+
 
     console.log("user", user);
     console.log("showOnboardingBanner", showOnboardingBanner);
@@ -183,7 +206,7 @@ export function DashboardClient() {
                                 Resume setup
                             </Link>
                             <p className="text-[11px] text-slate-500">
-                                
+
                             </p>
                         </div>
                     </div>
@@ -218,8 +241,7 @@ export function DashboardClient() {
                                 // later: POST /api/workspaces/{id}/sync
                                 console.log("Sync now for workspace", id);
                             }}
-                        // optional: if not active, WorkspaceCard can show a "Setup in progress" badge
-                        // and disable the Sync Now button based on ws.health
+                            onTogglePause={handleTogglePause}
                         />
                     ))
                 )}
