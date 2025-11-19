@@ -24,7 +24,7 @@ const steps: Step[] = [
     {
         id: 1,
         title: "Connect Stripe",
-        description: "Connect the Stripe account you want mirrored into Sheets via Stripe Connect OAuth.",
+        description: "Connect the Stripe account you want synced to Google Sheets via a secure connection using Stripe Connect OAuth.",
         ctaLabel: "Connect Stripe",
         helper: "We never see full card numbers—Stripe handles billing data.",
     },
@@ -51,6 +51,31 @@ const steps: Step[] = [
     },
 ];
 
+function Spinner() {
+    return (
+        <svg
+            className="mr-2 h-4 w-4 animate-spin text-indigo-50"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+        >
+            <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+            />
+            <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            />
+        </svg>
+    );
+}
 
 export function OnboardingWizard() {
     const searchParams = useSearchParams();
@@ -80,13 +105,23 @@ export function OnboardingWizard() {
         if (user.onboardingStage === "ready") {
             redirect("/dashboard");
         }
-    }, [initialIndex, user.onboardingStage]);
+    }, [initialIndex, user.onboardingStage, router]);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
     const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
+
+    const primaryLoadingLabel =
+        currentStep.id === 1
+            ? "Redirecting to Stripe…"
+            : currentStep.id === 2
+                ? "Redirecting to Google…"
+                : currentStep.id === 3
+                    ? "Creating sheet…"
+                    : "Saving config & starting sync…";
+
 
     async function createSheet() {
         const res = await fetch("/api/google/create-sheet", {
@@ -124,20 +159,25 @@ export function OnboardingWizard() {
     }
 
     async function handlePrimaryAction() {
+        setError(null);
         if (currentStep.id === 1) {
+            setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
             return;
         }
         else if (currentStep.id === 2) {
+            setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
             return;
         }
         else if (currentStep.id === 3) {
+            setSubmitting(true);
             // Create sheet
             const createSheetResponse = await createSheet();
             console.log("createSheetResponse", createSheetResponse);
+            setSubmitting(false);
             if (!createSheetResponse) return;
         }
         else if (currentStep.id === 4) {
@@ -145,11 +185,6 @@ export function OnboardingWizard() {
             const ok = await saveSyncConfigSelection();
             if (!ok) return;
         }
-
-        // TODO: later:
-        // if (currentStep.id === 1) { /* Stripe connect */ }
-        // if (currentStep.id === 3) { /* create sheet */ }
-        // if (currentStep.id === 4) { /* start backfill */ }
 
         if (!isLastStep) {
             console.log("next step");
@@ -238,6 +273,7 @@ export function OnboardingWizard() {
                                             <button
                                                 type="button"
                                                 onClick={handleBack}
+                                                disabled={submitting}
                                                 className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                                             >
                                                 Back
@@ -247,9 +283,17 @@ export function OnboardingWizard() {
                                             className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                                             type="button"
                                             onClick={handlePrimaryAction}
+                                            disabled={submitting}
                                             aria-label={currentStep.ctaLabel}
                                         >
-                                            {currentStep.ctaLabel}
+                                            {submitting ? (
+                                                <>
+                                                    <Spinner />
+                                                    {primaryLoadingLabel}
+                                                </>
+                                            ) : (
+                                                currentStep.ctaLabel
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -261,8 +305,8 @@ export function OnboardingWizard() {
                                     <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
                                         Permissions
                                     </span>
-                                    drive.file scope only. We never access existing files you own; new sheets are
-                                    created in your Drive with you as the owner.
+                                    We never access existing files you own; new sheets are
+                                    created in your Drive with you as the owner. AutoSync only has access to the files you create within our app.
                                 </div>
                             )}
 
