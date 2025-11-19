@@ -165,8 +165,9 @@ export async function updateSyncConfig(params: {
     authUserId: string;
     spreadsheetId: string;
     enabledStripeObjects?: StripeObject[];
-    historyMode?: SyncConfig["historyMode"];
+    historyMode?: SyncConfig["historyMode"] | null;
     historySinceDays?: number | null;
+    syncStatus?: SyncConfig["syncStatus"];
 }) {
     const {
         authUserId,
@@ -174,6 +175,7 @@ export async function updateSyncConfig(params: {
         enabledStripeObjects,
         historyMode,
         historySinceDays,
+        syncStatus,
     } = params;
 
     const updates: string[] = [];
@@ -181,19 +183,24 @@ export async function updateSyncConfig(params: {
         ":updatedAt": new Date().toISOString(),
     };
 
-    if (enabledStripeObjects) {
+    if (enabledStripeObjects !== undefined) {
         updates.push("enabledStripeObjects = :objs");
         values[":objs"] = enabledStripeObjects;
     }
 
-    if (historyMode) {
+    if (historyMode !== undefined && historyMode !== null) {
         updates.push("historyMode = :hm");
         values[":hm"] = historyMode;
     }
 
-    if (historySinceDays !== undefined) {
+    if (historySinceDays !== undefined && historySinceDays !== null) {
         updates.push("historySinceDays = :hsd");
         values[":hsd"] = historySinceDays;
+    }
+
+    if (syncStatus !== undefined) {
+        updates.push("syncStatus = :sts");
+        values[":sts"] = syncStatus;
     }
 
     updates.push("updatedAt = :updatedAt");

@@ -2,9 +2,12 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams, redirect } from "next/navigation";
+import { useState } from "react";
+import { useSearchParams, redirect, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { useEffect } from "react";
+import { StripeObject, DEFAULT_ENABLED_STRIPE_OBJECTS } from "@/lib/schemas/sync-config";
+import { StripeObjectsStep } from "./stripe-objects-config";
 
 type StepStatus = "complete" | "current" | "upcoming";
 
@@ -21,7 +24,7 @@ const steps: Step[] = [
     {
         id: 1,
         title: "Connect Stripe",
-        description: "Connect the Stripe account you want mirrored into Sheets via Stripe Connect OAuth.",
+        description: "Connect the Stripe account you want synced to Google Sheets via a secure connection using Stripe Connect OAuth.",
         ctaLabel: "Connect Stripe",
         helper: "We never see full card numbers—Stripe handles billing data.",
     },
@@ -29,44 +32,55 @@ const steps: Step[] = [
         id: 2,
         title: "Grant Sheets access",
         description:
-            "Allow AutoSync to create and update one Google Sheet in your Drive using drive.file + spreadsheets scopes.",
+            "Allow AutoSync to create and update Google Sheets files in your Drive. We will not access any existing files you own.",
         ctaLabel: "Connect Google Sheets",
     },
     {
         id: 3,
         title: "Create your workspace sheet",
         description:
-            "We’ll create a spreadsheet named “Stripe Sync – {Business}” with protected *_raw tabs and a Working tab for analysis.",
+            "We’ll create a Google Sheets spreadsheet named “Stripe Sync” in your Drive with protected *_raw tabs and a Working tab for analysis.",
         ctaLabel: "Create sheet",
     },
     {
         id: 4,
-        title: "Choose objects & start sync",
+        title: "Choose Stripe data & start sync",
         description:
-            "Pick which Stripe objects to mirror and how far back to pull, then start your initial backfill and ongoing sync.",
+            "Pick which Stripe data objects to sync into your newly created Google Sheet. Then start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
     },
 ];
 
-const selectedObjects = [
-    { name: "Invoices", enabled: true, note: "includes status + payments" },
-    { name: "Charges", enabled: true, note: "card + ACH charges" },
-    { name: "Customers", enabled: true, note: "all identifiers + emails" },
-    { name: "Payouts", enabled: true, note: "with fees and net" },
-    { name: "Refunds", enabled: false, note: "toggle on to include" },
-    { name: "Balance txns", enabled: false, note: "advanced reconciliation" },
-];
-
-async function createSheet() {
-    const res = await fetch("/api/google/create-sheet", {
-        method: "POST",
-    });
-    return res.json();
+function Spinner() {
+    return (
+        <svg
+            className="mr-2 h-4 w-4 animate-spin text-indigo-50"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+        >
+            <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+            />
+            <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            />
+        </svg>
+    );
 }
 
 export function OnboardingWizard() {
     const searchParams = useSearchParams();
-    const { user, setUser } = useUserState();
+    const { user, refresh } = useUserState();
+    const router = useRouter();
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
@@ -76,48 +90,110 @@ export function OnboardingWizard() {
     }, [searchParams]);
 
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // init selection from server if present, else defaults
+    const serverConfig = user.syncConfigs?.[0];
+    const [enabledStripeObjects, setEnabledStripeObjects] = useState<StripeObject[]>(
+        (serverConfig?.enabledStripeObjects.length > 0 ? serverConfig.enabledStripeObjects as StripeObject[] : [...DEFAULT_ENABLED_STRIPE_OBJECTS]),
+    );
 
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
         setCurrentStepIndex(initialIndex);
-        console.log("userState.onboardingStage", user.onboardingStage);
         if (user.onboardingStage === "ready") {
             redirect("/dashboard");
         }
-    }, [initialIndex, user.onboardingStage]);
+    }, [initialIndex, user.onboardingStage, router]);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
-
     const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
 
-    async function handlePrimaryAction() {
+    const primaryLoadingLabel =
+        currentStep.id === 1
+            ? "Redirecting to Stripe…"
+            : currentStep.id === 2
+                ? "Redirecting to Google…"
+                : currentStep.id === 3
+                    ? "Creating sheet…"
+                    : "Saving config & starting sync…";
 
+
+    async function createSheet() {
+        const res = await fetch("/api/google/create-sheet", {
+            method: "POST",
+        });
+        if (!res.ok) {
+            return;
+        }
+
+        await refresh(); // now userState has SyncConfig + sheet info
+        return res.json();
+    }
+
+    async function saveSyncConfigSelection() {
+        setSubmitting(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/update/sync-config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabledStripeObjects, syncStatus: "backfill_running" }),
+            });
+            if (!res.ok) {
+                setError("Failed to save sync settings");
+                return false;
+            }
+            await refresh();
+            return true;
+        } catch {
+            setError("Failed to save sync settings");
+            return false;
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    async function handlePrimaryAction() {
+        setError(null);
         if (currentStep.id === 1) {
+            setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
             return;
         }
         else if (currentStep.id === 2) {
+            setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
             return;
         }
         else if (currentStep.id === 3) {
+            setSubmitting(true);
             // Create sheet
             const createSheetResponse = await createSheet();
-            console.log(createSheetResponse);
+            console.log("createSheetResponse", createSheetResponse);
+            setSubmitting(false);
+            if (!createSheetResponse) return;
+        }
+        else if (currentStep.id === 4) {
+            // Save sync config selection
+            const ok = await saveSyncConfigSelection();
+            if (!ok) return;
         }
 
-        // TODO: later:
-        // if (currentStep.id === 1) { /* Stripe connect */ }
-        // if (currentStep.id === 3) { /* create sheet */ }
-        // if (currentStep.id === 4) { /* start backfill */ }
-
         if (!isLastStep) {
-            setCurrentStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
+            console.log("next step");
+            setCurrentStepIndex((prev) => {
+                const nextIndex = Math.min(prev + 1, totalSteps - 1);
+                const nextStep = steps[nextIndex];
+                router.replace(`?step=${nextStep.id}`, { scroll: false });
+                return nextIndex;
+            });
         }
         else {
             redirect("/dashboard");
@@ -125,9 +201,13 @@ export function OnboardingWizard() {
     }
 
     function handleBack() {
-        if (!isFirstStep) {
-            setCurrentStepIndex((prev) => Math.max(prev - 1, 0));
-        }
+        if (isFirstStep) return;
+        setCurrentStepIndex((prev) => {
+            const nextIndex = Math.max(prev - 1, 0);
+            const nextStep = steps[nextIndex];
+            router.replace(`?step=${nextStep.id}`, { scroll: false });
+            return nextIndex;
+        });
     }
 
     return (
@@ -152,7 +232,7 @@ export function OnboardingWizard() {
                         <div className="space-y-1">
                             <div className="flex items-center gap-3">
                                 <h2 className="text-xl font-semibold text-slate-900">
-                                    {currentStepIndex + 1} of {totalSteps}
+                                    Step {currentStepIndex + 1} of {totalSteps}
                                 </h2>
                                 <div className="h-1.5 w-32 rounded-full bg-slate-100">
                                     <div
@@ -180,12 +260,20 @@ export function OnboardingWizard() {
                                         )}
                                     </div>
                                 </div>
+                                {currentStep.id === 4 && (
+                                    <StripeObjectsStep
+                                        value={enabledStripeObjects}
+                                        onChange={setEnabledStripeObjects}
+                                        disabled={submitting}
+                                    />
+                                )}
                                 <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                                     <div className="flex gap-2">
                                         {!isFirstStep && (
                                             <button
                                                 type="button"
                                                 onClick={handleBack}
+                                                disabled={submitting}
                                                 className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                                             >
                                                 Back
@@ -195,9 +283,17 @@ export function OnboardingWizard() {
                                             className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                                             type="button"
                                             onClick={handlePrimaryAction}
+                                            disabled={submitting}
                                             aria-label={currentStep.ctaLabel}
                                         >
-                                            {currentStep.ctaLabel}
+                                            {submitting ? (
+                                                <>
+                                                    <Spinner />
+                                                    {primaryLoadingLabel}
+                                                </>
+                                            ) : (
+                                                currentStep.ctaLabel
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -209,35 +305,17 @@ export function OnboardingWizard() {
                                     <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
                                         Permissions
                                     </span>
-                                    drive.file scope only. We never access existing files you own; new sheets are
-                                    created in your Drive with you as the owner.
+                                    We never access existing files you own; new sheets are
+                                    created in your Drive with you as the owner. AutoSync only has access to the files you create within our app.
                                 </div>
                             )}
 
-                            {currentStep.id === 4 && (
-                                <div className="grid gap-3 rounded-xl border border-slate-100 bg-white/80 p-3 sm:grid-cols-2">
-                                    {selectedObjects.map((object) => (
-                                        <div
-                                            key={object.name}
-                                            className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${object.enabled ? "border-emerald-100 bg-emerald-50/70" : "border-slate-200 bg-slate-50"
-                                                }`}
-                                        >
-                                            <div
-                                                className={`mt-1 size-2 rounded-full ${object.enabled ? "bg-emerald-500" : "bg-slate-300"
-                                                    }`}
-                                                aria-hidden
-                                            />
-                                            <div className="space-y-0.5">
-                                                <p className="text-sm font-semibold text-slate-900">{object.name}</p>
-                                                <p className="text-sm text-slate-600">{object.note}</p>
-                                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                                    {object.enabled ? "Enabled" : "Optional"}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                            {error && (
+                                <p className="text-sm text-red-600 mt-2">
+                                    {error}
+                                </p>
                             )}
+
                         </article>
                     </div>
                 </section>
