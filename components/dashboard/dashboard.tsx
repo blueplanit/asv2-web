@@ -48,7 +48,7 @@ export function DashboardClient() {
         tempElement = <div>Step 3: Create your workspace sheet.</div>;
         tempLink = '/onboarding?step=3';
     }
-    else if (onboardingStage === "connections_linked" && syncConfigs.length > 0) {
+    else if (onboardingStage === "sheet_created" && syncConfigs.length > 0) {
         if (userSyncConfig?.enabledStripeObjects.length === 0) {
             tempElement = <div>Step 4: Choose objects to sync.</div>;
             tempLink = '/onboarding?step=4';

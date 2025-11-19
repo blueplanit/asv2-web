@@ -15,7 +15,7 @@ export const SyncConfigSchema = z.object({
     spreadsheetId: z.string(),
     stripeAccountId: z.string(),                    // connected account this sheet belongs to
 
-    enabledStripeObjects: z.array(StripeObjectEnum).min(1).default(DEFAULT_ENABLED_STRIPE_OBJECTS),
+    enabledStripeObjects: z.array(StripeObjectEnum).default([]),
     historyMode: z.enum(["full", "since"]).default("since"),         // "full" = all history, "since" = recent window
     historySinceDays: z.number().int().positive().default(90), // e.g. last 90 days when historyMode="since"
 
