@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-export type WorkspaceHealth = "healthy" | "delayed" | "error";
+export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error";
 
 export type Workspace = {
     id: string;
@@ -15,25 +15,34 @@ export type Workspace = {
     objectsEnabled: string[];
 };
 
+const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string }> = {
+    healthy: {
+        label: "Healthy",
+        color: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    },
+    backfilling: {
+        label: "Backfilling",
+        color: "bg-amber-50 text-amber-700 ring-amber-100",
+    },
+    paused: {
+        label: "Paused",
+        color: "bg-rose-50 text-rose-700 ring-rose-100",
+    },
+    error: {
+        label: "Error",
+        color: "bg-red-50 text-red-700 ring-red-100",
+    },
+};
+
 type Props = {
     workspace: Workspace;
     onSyncNow?: (id: string) => void;
 };
 
 export function WorkspaceCard({ workspace, onSyncNow }: Props) {
-    const healthLabel =
-        workspace.health === "healthy"
-            ? "Healthy"
-            : workspace.health === "delayed"
-                ? "Delayed"
-                : "Error";
-
-    const healthColorClasses =
-        workspace.health === "healthy"
-            ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-            : workspace.health === "delayed"
-                ? "bg-amber-50 text-amber-700 ring-amber-100"
-                : "bg-rose-50 text-rose-700 ring-rose-100";
+    const health = HEALTH_LABELS[workspace.health];
+    const healthLabel = health.label;
+    const healthColorClasses = health.color;
 
     return (
         <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

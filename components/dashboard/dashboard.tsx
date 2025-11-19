@@ -90,7 +90,7 @@ export function DashboardClient() {
                 });
             }).filter((ws) => ws !== null);
 
-    const syncIsActive = userSyncConfig && userSyncConfig.syncStatus === "syncing";
+    const syncIsActive = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running");
 
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;

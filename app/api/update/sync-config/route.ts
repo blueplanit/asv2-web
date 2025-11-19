@@ -18,9 +18,18 @@ export async function POST(req: Request) {
     }
     const authUserId = (session.user as any).id as string;
 
-    const body = (await req.json().catch(() => null)) as | { enabledStripeObjects?: string[] } | null;
+    const body = (await req.json().catch(() => null)) as | { 
+        enabledStripeObjects?: string[], 
+        historyMode?: 'full' | 'since', 
+        historySinceDays?: number, 
+        syncStatus?: 'onboarding' | 'backfill_running' | 'paused' | 'error' | 'syncing' 
+    } | null;
 
     const raw = body?.enabledStripeObjects ?? DEFAULT_ENABLED_STRIPE_OBJECTS;
+
+    const historyMode = body?.historyMode ?? "since";
+    const historySinceDays = body?.historySinceDays ?? 90;
+    const syncStatus = body?.syncStatus ?? "syncing";
 
     // Validate against enum — no arbitrary strings
     let enabledStripeObjects: StripeObject[];
@@ -43,9 +52,9 @@ export async function POST(req: Request) {
         authUserId,
         spreadsheetId: existing.spreadsheetId,
         enabledStripeObjects,
-        historyMode: null,
-        historySinceDays: null,
-        syncStatus: "syncing"
+        historyMode,
+        historySinceDays,
+        syncStatus,
     });
 
     return NextResponse.json({ syncConfig: updated });

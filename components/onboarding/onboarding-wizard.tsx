@@ -107,7 +107,7 @@ export function OnboardingWizard() {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ enabledStripeObjects }),
+                body: JSON.stringify({ enabledStripeObjects, syncStatus: "backfill_running" }),
             });
             if (!res.ok) {
                 setError("Failed to save sync settings");

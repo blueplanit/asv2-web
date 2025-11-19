@@ -50,7 +50,7 @@ export function StripeObjectsStep(props: {
         onChange([...DEFAULT_ENABLED_STRIPE_OBJECTS]);
     }
 
-    const reccomendedBtnText = allSelected ? "Recommended" : "Reset";
+    const reccomendedBtnText = allSelected ? "Recommended options" : "Sync all data";
 
     return (
         <div className="space-y-4 mb-4">
@@ -59,9 +59,9 @@ export function StripeObjectsStep(props: {
                     type="button"
                     onClick={resetToRecommended}
                     disabled={disabled || allSelected}
-                    className={`cursor-pointer inline-flex items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold ${allSelected
+                    className={`inline-flex items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold ${allSelected
                         ? "border-indigo-300 bg-indigo-50 text-indigo-800"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer "
                         }`}
                 >
                     {reccomendedBtnText}
