@@ -187,7 +187,6 @@ export function OnboardingWizard() {
         }
 
         if (!isLastStep) {
-            console.log("next step");
             setCurrentStepIndex((prev) => {
                 const nextIndex = Math.min(prev + 1, totalSteps - 1);
                 const nextStep = steps[nextIndex];
