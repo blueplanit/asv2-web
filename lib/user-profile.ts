@@ -42,8 +42,9 @@ export async function createUserProfile(
         email,
         googleUserId,
         createdAt: now,
+        subscriptionStatus: "inactive",
     };
-    
+
     // validate before write (optional if you're confident)
     UserProfileSchema.parse(item);
 

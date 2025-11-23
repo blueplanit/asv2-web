@@ -8,7 +8,7 @@ export const UserProfileSchema = z.object({
     email: z.email(),
     googleUserId: z.string(),
     createdAt: z.string(),     // ISO string
-    subscriptionId: z.string().default(""), // Stripe subscription ID
+    subscriptionId: z.string().default("").optional(), // Stripe subscription ID
     subscriptionStatus: z.enum(["active", "inactive"]).default("inactive"), // subscription status updated by webhooks
 });
 
