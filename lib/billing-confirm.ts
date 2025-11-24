@@ -1,7 +1,8 @@
 // lib/billing-confirm.ts
 import type Stripe from "stripe";
 import { stripeBilling } from "@/lib/stripe-billing";
-import { updateUserSubscriptionStatusToActive } from "@/lib/user-profile";
+import { UpdateUserSubscriptionParams, updateUserSubscriptionStatusToActive } from "@/lib/user-profile";
+import { mapStripePriceToPlan } from "./billing-plan-map";
 
 export async function confirmCheckoutSessionAndActivateUser(
     sessionId: string,
@@ -30,6 +31,16 @@ export async function confirmCheckoutSessionAndActivateUser(
         throw new Error("No subscription found on checkout session");
     }
 
+    const stripeCustomerId = session.customer as string;
+    const priceId = session.metadata?.priceId || session.line_items?.data[0]?.price?.id || null;
+    const planInfo = mapStripePriceToPlan(priceId);
+    const subParams: UpdateUserSubscriptionParams = {
+        subscriptionId,
+        stripeCustomerId,
+        planId: planInfo?.planId,
+        interval: planInfo?.interval,
+    };
+
     // Idempotent: it's fine if webhook already did this
-    await updateUserSubscriptionStatusToActive(authUserId, subscriptionId);
+    await updateUserSubscriptionStatusToActive(authUserId, subParams);
 }

@@ -11,24 +11,70 @@ import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { UserProfileSchema, type UserProfile } from "./schemas/user-profile";
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
+export type UpdateUserSubscriptionParams = {
+    subscriptionId: string;
+    stripeCustomerId: string;
+    planId?: string;                 // e.g. "pro"
+    interval?: "monthly" | "yearly"; // normalized
+    currentPeriodEnd?: number | null; // unix seconds from Stripe
+    rawStatus?: string;             // Stripe Subscription.status
+};
+
 export async function updateUserSubscriptionStatusToActive(
     authUserId: string,
-    subscriptionId: string,
+    params: UpdateUserSubscriptionParams,
 ) {
     const pk = `USER#${authUserId}`;
     const now = new Date().toISOString();
 
+    const {
+        subscriptionId,
+        stripeCustomerId,
+        planId,
+        interval,
+        currentPeriodEnd,
+        rawStatus
+    } = params;
+
+    const periodEndIso =
+        typeof currentPeriodEnd === "number"
+            ? new Date(currentPeriodEnd * 1000).toISOString()
+            : undefined;
+
+    const updateParts: string[] = [
+        "subscriptionStatus = :status",
+        "subscriptionId = :subId",
+        "subscriptionCustomerId = :custId",
+        "subscriptionPlanId = :planId",
+        "subscriptionInterval = :interval",
+        "ACTIVE_SUB_GSI_PK = :aspk",
+        "updatedAt = :now",
+    ];
+    const values: Record<string, unknown> = {
+        ":status": "active",
+        ":subId": subscriptionId,
+        ":custId": stripeCustomerId,
+        ":planId": planId,
+        ":interval": interval,
+        ":aspk": "ACTIVE#true",
+        ":now": now,
+    };
+
+    if (periodEndIso) {
+        updateParts.push("subscriptionCurrentPeriodEnd = :periodEnd");
+        values[":periodEnd"] = periodEndIso;
+    }
+
+    if (rawStatus) {
+        updateParts.push("subscriptionRawStatus = :raw");
+        values[":raw"] = rawStatus;
+    }
+
     await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { pk, sk: "PROFILE" },
-        UpdateExpression: `SET subscriptionStatus = :subscriptionStatus, subscriptionId = :subId, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
-        ExpressionAttributeValues: {
-            ":subscriptionStatus": "active",
-            ":subId": subscriptionId,
-            // can also update to ACTIVE#trialing if needed
-            ":aspk": "ACTIVE#true", // GSI to query active subscriptions 
-            ":now": now,
-        },
+        UpdateExpression: `SET ${updateParts.join(", ")}`,
+        ExpressionAttributeValues: values,
         ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)"
     }));
 }

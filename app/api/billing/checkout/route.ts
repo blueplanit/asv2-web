@@ -37,6 +37,12 @@ export async function POST(req: Request) {
 
     const successUrl = `${process.env.NEXTAUTH_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.NEXTAUTH_URL}/pricing?canceled=1`;
+    const metadata = {
+        authUserId,
+        planId,
+        interval,
+        priceId,
+    };
 
     const checkoutSession = await stripeBilling.checkout.sessions.create({
         mode: "subscription",
@@ -49,29 +55,13 @@ export async function POST(req: Request) {
         ],
         customer_email: userProfile.email,
         allow_promotion_codes: true,
-        // payment intent metadata
-        payment_intent_data: {
-            metadata: {
-                authUserId,
-                planId,
-                interval,
-            },
-        },
         // subscription data metadata
         subscription_data: {
             // trial_period_days: 14,
-            metadata: {
-                authUserId,
-                planId,
-                interval,
-            },
+            metadata,
         },
         // checkout session metadata
-        metadata: {
-            authUserId,
-            planId,
-            interval,
-        },
+        metadata,
         success_url: successUrl,
         cancel_url: cancelUrl,
     });
