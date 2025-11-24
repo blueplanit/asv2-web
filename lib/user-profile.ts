@@ -23,9 +23,11 @@ export async function updateUserSubscriptionStatusToActive(
         UpdateExpression: `SET subscriptionStatus = :subscriptionStatus, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
         ExpressionAttributeValues: {
             ":subscriptionStatus": "active",
-            ":aspk": "ACTIVE#true", // GSI to query active subscriptions
-            ":updatedAt": now,
+            // can also update to ACTIVE#trialing if needed
+            ":aspk": "ACTIVE#true", // GSI to query active subscriptions 
+            ":now": now,
         },
+        ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)"
     }));
 }
 
@@ -38,12 +40,12 @@ export async function updateUserSubscriptionStatusToInactive(
     await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { pk, sk: "PROFILE" },
-        UpdateExpression: `SET subscriptionActive = :subscriptionStatus, updatedAt = :now
-        REMOVE ACTIVE_SUB_GSI_PK`,
+        UpdateExpression: `SET subscriptionStatus = :subscriptionStatus, updatedAt = :now REMOVE ACTIVE_SUB_GSI_PK`,
         ExpressionAttributeValues: {
             ":subscriptionStatus": "inactive",
             ":now": now,
         },
+        ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)"
     }));
 }
 

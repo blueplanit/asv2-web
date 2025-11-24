@@ -11,6 +11,7 @@ export const UserProfileSchema = z.object({
     updatedAt: z.string(),     // ISO string
     subscriptionId: z.string().default("").optional(), // Stripe subscription ID
     subscriptionStatus: z.enum(["active", "inactive"]).default("inactive"), // subscription status updated by webhooks
+    ACTIVE_SUB_GSI_PK: z.string().optional(),
 });
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
