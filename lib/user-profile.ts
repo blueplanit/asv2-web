@@ -7,10 +7,27 @@
 ////////////////////////////////////////////////////////////////////////////
 
 import { ddb } from "./dynamo";
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { UserProfileSchema, type UserProfile } from "./schemas/user-profile";
-
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
+
+export async function updateUserSubscriptionStatusToActive(
+    authUserId: string,
+) {
+    const pk = `USER#${authUserId}`;
+    const now = new Date().toISOString();
+
+    await ddb.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { pk: pk, sk: "PROFILE" },
+        UpdateExpression: `SET subscriptionStatus = :t, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
+        ExpressionAttributeValues: {
+            ":subscriptionStatus": true,
+            ":aspk": "ACTIVE#true", // GSI to query active subscriptions
+            ":updatedAt": now,
+        },
+    }));
+}
 
 export async function getUserProfile(authUserId: string) {
     const pk = `USER#${authUserId}`;
@@ -43,6 +60,7 @@ export async function createUserProfile(
         googleUserId,
         createdAt: now,
         subscriptionStatus: "inactive",
+        updatedAt: now,
     };
 
     // validate before write (optional if you're confident)
