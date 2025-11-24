@@ -19,12 +19,30 @@ export async function updateUserSubscriptionStatusToActive(
 
     await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: { pk: pk, sk: "PROFILE" },
-        UpdateExpression: `SET subscriptionStatus = :t, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
+        Key: { pk, sk: "PROFILE" },
+        UpdateExpression: `SET subscriptionStatus = :subscriptionStatus, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
         ExpressionAttributeValues: {
-            ":subscriptionStatus": true,
+            ":subscriptionStatus": "active",
             ":aspk": "ACTIVE#true", // GSI to query active subscriptions
             ":updatedAt": now,
+        },
+    }));
+}
+
+export async function updateUserSubscriptionStatusToInactive(
+    authUserId: string,
+) {
+    const pk = `USER#${authUserId}`;
+    const now = new Date().toISOString();
+
+    await ddb.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { pk, sk: "PROFILE" },
+        UpdateExpression: `SET subscriptionActive = :subscriptionStatus, updatedAt = :now
+        REMOVE ACTIVE_SUB_GSI_PK`,
+        ExpressionAttributeValues: {
+            ":subscriptionStatus": "inactive",
+            ":now": now,
         },
     }));
 }
