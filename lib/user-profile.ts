@@ -13,6 +13,7 @@ const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function updateUserSubscriptionStatusToActive(
     authUserId: string,
+    subscriptionId: string,
 ) {
     const pk = `USER#${authUserId}`;
     const now = new Date().toISOString();
@@ -20,9 +21,10 @@ export async function updateUserSubscriptionStatusToActive(
     await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { pk, sk: "PROFILE" },
-        UpdateExpression: `SET subscriptionStatus = :subscriptionStatus, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
+        UpdateExpression: `SET subscriptionStatus = :subscriptionStatus, subscriptionId = :subId, ACTIVE_SUB_GSI_PK = :aspk, updatedAt = :now`,
         ExpressionAttributeValues: {
             ":subscriptionStatus": "active",
+            ":subId": subscriptionId,
             // can also update to ACTIVE#trialing if needed
             ":aspk": "ACTIVE#true", // GSI to query active subscriptions 
             ":now": now,
