@@ -140,7 +140,6 @@ export function OnboardingWizard() {
     }
 
     async function saveSyncConfigSelection() {
-        setSubmitting(true);
         setError(null);
         try {
             const res = await fetch("/api/update/sync-config", {
@@ -157,9 +156,39 @@ export function OnboardingWizard() {
         } catch {
             setError("Failed to save sync settings");
             return false;
-        } finally {
-            setSubmitting(false);
         }
+    }
+
+    async function handleStartTrial() {
+        setError(null);
+        try {
+            const res = await fetch("/api/billing/start-trial", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    planId: "pro",
+                    interval: "monthly",
+                }),
+            });
+
+            if (!res.ok) {
+                const message = await res.text();
+                setError(message || "Failed to start trial");
+                return;
+            }
+
+            const data = await res.json();
+            if (!data.ok) {
+                setError(data.error || "Failed to start trial");
+                return;
+            }
+            // Optional: show trial end date from data.trialEndsAt
+            console.log("start trial resp data", data);
+        } catch (e) {
+            setError("Failed to start trial");
+            return false;
+        }
+        return true;
     }
 
     // Navigation helpers: compute next index, update state, then update URL
@@ -188,14 +217,29 @@ export function OnboardingWizard() {
             setSubmitting(true);
             // Create sheet
             const createSheetResponse = await createSheet();
-            console.log("createSheetResponse", createSheetResponse);
             setSubmitting(false);
             if (!createSheetResponse) return;
         }
         else if (currentStep.id === 4) {
-            // Save sync config selection
-            const ok = await saveSyncConfigSelection();
-            if (!ok) return;
+            try {
+                setSubmitting(true);
+                const trialOk = await handleStartTrial();
+                // Save sync config selection
+                const saveConfigOk = await saveSyncConfigSelection();
+                if (!trialOk) {
+                    throw new Error("Failed to start trial");
+                }
+                if (!saveConfigOk) {
+                    throw new Error("Failed to save sync config");
+                }
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
+                setSubmitting(false);
+                return;
+            }
+            finally {
+                setSubmitting(false);
+            }
         }
 
         if (!isLastStep) {

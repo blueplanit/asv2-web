@@ -2,16 +2,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useUserState } from "@/components/user-state-provider";
 
-const STRIPE_OBJECT_LABELS: Record<string, string> = {
-    invoices: "Invoices",
-    charges: "Charges",
-    customers: "Customers",
-    payouts: "Payouts",
-    subscriptions: "Subscriptions",
-};
 
 export function AccountPageClient() {
     const { user } = useUserState();
@@ -20,13 +12,12 @@ export function AccountPageClient() {
     const profile = user.profile;
     const stripeConnections = user.stripeConnections ?? [];
     const googleConnections = user.googleConnections ?? [];
-    const syncConfigs = user.syncConfigs ?? [];
 
     const primaryStripe = stripeConnections[0] ?? null;
     const primaryGoogle = googleConnections[0] ?? null;
-    const primarySync = syncConfigs[0] ?? null;
 
     const status = profile?.subscriptionStatus ?? "inactive";
+    const rawStatus = profile?.subscriptionRawStatus ?? null;
     const planId = profile?.subscriptionPlanId ?? null;
     const interval = profile?.subscriptionInterval ?? null;
     const nextRenewalIso = profile?.subscriptionCurrentPeriodEnd ?? null;
@@ -42,23 +33,6 @@ export function AccountPageClient() {
             : interval === "yearly"
                 ? "Annual"
                 : null;
-
-    const syncStatus = primarySync?.syncStatus ?? "onboarding";
-    const syncStatusLabel =
-        syncStatus === "syncing"
-            ? "Syncing"
-            : syncStatus === "backfill_running"
-                ? "Backfill in progress"
-                : syncStatus === "paused"
-                    ? "Paused"
-                    : syncStatus === "error"
-                        ? "Error"
-                        : "Not started";
-
-    const enabledObjects =
-        primarySync?.enabledStripeObjects?.map(
-            (o) => STRIPE_OBJECT_LABELS[o] ?? o,
-        ) ?? [];
 
     async function handleManageBilling() {
         setPortalLoading(true);
@@ -111,24 +85,27 @@ export function AccountPageClient() {
                         <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                             Subscription
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">
-                            {planLabel}
-                            {intervalLabel && (
-                                <span className="font-normal text-slate-500">
-                                    {" "}
-                                    · {intervalLabel}
-                                </span>
-                            )}
-                        </p>
+                        {rawStatus === "trialing" ? null :
+                        (
+                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                                {planLabel}
+                                {intervalLabel && (
+                                    <span className="font-normal text-slate-500">
+                                        {" "}
+                                        · {intervalLabel}
+                                    </span>
+                                )}
+                            </p>
+                        )}
                         <p className="mt-1 text-xs text-slate-600">
                             Status:{" "}
                             <span className="font-medium text-slate-900">
-                                {status === "active" ? "Active" : "Inactive"}
+                                {rawStatus === "trialing" ? "Free 14-day Trial" : rawStatus === "active" ? "Active" : "Inactive"}
                             </span>
                         </p>
                         {nextRenewalDate && status === "active" && (
                             <p className="mt-1 text-xs text-slate-600">
-                                Next renewal:{" "}
+                                {rawStatus === "trialing" ? "Trial ends on" : "Next renewal on"}{' '}
                                 {nextRenewalDate.toLocaleDateString(undefined, {
                                     month: "short",
                                     day: "numeric",
@@ -138,7 +115,7 @@ export function AccountPageClient() {
                         )}
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        {status === "inactive" && (
+                        {status === "inactive" || rawStatus === "trialing" && (
                             <a
                                 href="/pricing"
                                 className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
@@ -146,7 +123,7 @@ export function AccountPageClient() {
                                 Upgrade to Pro
                             </a>
                         )}
-                        {status === "active" && (
+                        {status === "active" && rawStatus !== "trialing" && (
                             <button
                                 type="button"
                                 onClick={handleManageBilling}

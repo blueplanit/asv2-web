@@ -44,6 +44,10 @@ export async function POST(req: Request) {
         priceId,
     };
 
+    const customerParams = userProfile.subscriptionCustomerId
+        ? { customer: userProfile.subscriptionCustomerId }
+        : { customer_email: userProfile.email };
+
     const checkoutSession = await stripeBilling.checkout.sessions.create({
         mode: "subscription",
         payment_method_types: ["card"],
@@ -53,17 +57,16 @@ export async function POST(req: Request) {
                 quantity: 1,
             },
         ],
-        customer_email: userProfile.email,
         allow_promotion_codes: true,
         // subscription data metadata
         subscription_data: {
-            // trial_period_days: 14,
             metadata,
         },
         // checkout session metadata
         metadata,
         success_url: successUrl,
         cancel_url: cancelUrl,
+        ...customerParams,
     });
 
     return NextResponse.json({ url: checkoutSession.url });

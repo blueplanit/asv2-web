@@ -16,6 +16,7 @@ export const UserProfileSchema = z.object({
     subscriptionInterval: z.enum(["monthly", "yearly"]).optional(), // normalized interval
     subscriptionCurrentPeriodEnd: z.string().optional(),    // ISO date of the current period end
     subscriptionCustomerId: z.string().optional(),          // Stripe customer id
+    subscriptionRawStatus: z.string().optional(),           // incomplete, incomplete_expired, trialing, active, past_due, canceled, unpaid, or paused. (only for UI copy/decisions)
     // GSI to query active subscriptions 
     ACTIVE_SUB_GSI_PK: z.string().optional(),
 });
