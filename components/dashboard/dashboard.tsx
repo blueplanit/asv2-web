@@ -5,11 +5,9 @@ import Link from "next/link";
 import { WorkspaceCard, type Workspace } from "@/components/workspaces/workspace-card";
 import { useUserState } from "@/components/user-state-provider";
 import type { SyncConfig } from "@/lib/schemas/sync-config";
-import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, Squares2X2Icon, UserCircleIcon } from "@heroicons/react/20/solid";
-import { useState } from "react";
+import { Squares2X2Icon, UserCircleIcon } from "@heroicons/react/20/solid";
+import { useEffect, useMemo, useState } from "react";
 import { AccountPageClient } from "@/components/account/account-page-client";
-import { BillingBar } from "../account/billing-bar";
-import { signOut, useSession } from "next-auth/react";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -23,11 +21,13 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
 function mapSyncConfigToWorkspace(args: {
     cfg: SyncConfig;
     stripeAccountName?: string;
+    sheetTitles: Record<string, string>;
 }): Workspace {
-    const { cfg, stripeAccountName } = args;
+    const { cfg, stripeAccountName, sheetTitles } = args;
 
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${cfg.spreadsheetId}`;
-    const sheetName = cfg.spreadsheetId;
+    const resolvedTitle = sheetTitles[cfg.spreadsheetId];
+    const name = resolvedTitle ?? cfg.spreadsheetId;
 
     const objectsEnabled =
         cfg.enabledStripeObjects?.map((o) => STRIPE_OBJECT_LABELS[o] ?? o) ?? [];
@@ -39,19 +39,21 @@ function mapSyncConfigToWorkspace(args: {
 
     const lastSyncAt = cfg.lastSyncAt ?? null;
 
+    const nameLoading = resolvedTitle === undefined;
+
     return {
         id: cfg.spreadsheetId,
-        name: sheetName,
+        name,
         stripeAccountName: stripeAccountName ?? cfg.stripeAccountId,
-        sheetName,
+        sheetName: name,
         sheetUrl,
         lastSyncAt,
         health,
         objectsEnabled,
         syncStatus: cfg.syncStatus,
+        nameLoading,
     };
 }
-
 // Map your onboarding stage → the next step id in /onboarding
 function getNextOnboardingStep(onboardingStage: string): number {
     switch (onboardingStage) {
@@ -73,14 +75,60 @@ function getNextOnboardingStep(onboardingStage: string): number {
 
 export function DashboardClient() {
     const { user, refresh } = useUserState();
-    const { onboardingStage, stripeConnections, syncConfigs } = user;
+    const { onboardingStage, googleConnections, stripeConnections, syncConfigs } = user;
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
-    const { data: session } = useSession();
-    const accountEmail = session?.user?.email ?? user.profile?.email ?? "Account";
+    const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
+    const [titlesRequested, setTitlesRequested] = useState(false);
 
     // MVP: assume at most one sync config
     const userSyncConfig: SyncConfig | null =
         syncConfigs.length > 0 ? syncConfigs[0] : null;
+
+    const filteredConfigs = useMemo(
+        () =>
+            syncConfigs.filter((cfg) => {
+                const stripeConn = stripeConnections.find(
+                    (c) => c.stripeAccountId === cfg.stripeAccountId,
+                );
+                if (!stripeConn) return false;
+                if (!cfg.spreadsheetId) return false;
+                if (!cfg.enabledStripeObjects || cfg.enabledStripeObjects.length === 0) return false;
+                return true;
+            }),
+        [syncConfigs, stripeConnections],
+    );
+
+    // Lazy-load titles after initial render
+    useEffect(() => {
+        if (titlesRequested) return;
+        if (filteredConfigs.length === 0) return;
+
+        const ids = Array.from(
+            new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId)),
+        ).filter((id) => !sheetTitles[id]);
+
+        if (ids.length === 0) return;
+
+        setTitlesRequested(true);
+
+        (async () => {
+            try {
+                const res = await fetch("/api/google/sheet-titles", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ spreadsheetIds: ids }),
+                });
+                if (!res.ok) {
+                    console.error("Failed to fetch sheet titles");
+                    return;
+                }
+                const data = (await res.json()) as { titles: Record<string, string> };
+                setSheetTitles((prev) => ({ ...prev, ...data.titles }));
+            } catch (err) {
+                console.error("Error fetching sheet titles:", err);
+            }
+        })();
+    }, [filteredConfigs, googleConnections.length, sheetTitles, titlesRequested]);
 
     // derive workspace(s) from sync config + stripe connection
     const workspaces: Workspace[] =
@@ -96,8 +144,11 @@ export function DashboardClient() {
                 return mapSyncConfigToWorkspace({
                     cfg,
                     stripeAccountName: stripeConn?.businessName,
+                    sheetTitles,
                 });
             }).filter((ws) => ws !== null);
+
+
 
     const syncIsActive = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running" || userSyncConfig.syncStatus === "paused");
 

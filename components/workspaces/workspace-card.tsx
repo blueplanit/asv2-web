@@ -3,7 +3,7 @@ import {
     EllipsisHorizontalIcon,
     PauseCircleIcon,
     PlayCircleIcon,
-    ArrowPathIcon, 
+    ArrowPathIcon,
 } from "@heroicons/react/20/solid";
 import {
     Tooltip,
@@ -25,6 +25,7 @@ export type Workspace = {
     health: WorkspaceHealth;
     objectsEnabled: string[];
     syncStatus: "syncing" | "paused" | "backfill_running" | "error" | "onboarding";
+    nameLoading?: boolean;
 };
 
 const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; tooltip: string }> = {
@@ -62,7 +63,9 @@ export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
     const healthColorClasses = health.color;
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
-
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${workspace.id}`;
+    const name = workspace.name;
+    const nameLoading = workspace.nameLoading ?? false;
     const isPaused = workspace.syncStatus === "paused";
 
     // basic click-outside to close the menu
@@ -90,26 +93,32 @@ export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
         setMenuOpen(false);
     }
 
+    console.log("workspace", workspace);
+
     return (
         <article className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-start justify-between gap-3">
                 {/* LEFT COLUMN */}
                 <div className="min-w-0 flex-1">
-                    <h3 className="text-base font-semibold text-slate-900 truncate">{workspace.name}</h3>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500 truncate">
+                    <div className="flex items-center gap-2 mb-1">  
+                    {nameLoading ? (
+                        <div className="h-4 w-40 animate-pulse rounded bg-slate-200" />
+                    ) : (
+                        <a
+                            href={sheetUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block max-w-full truncate text-sm font-semibold text-indigo-600 hover:underline"
+                            title={name}
+                        >
+                            <h1 className="text-lg font-semibold text-indigo-600 truncate">{name}</h1>
+                        </a>
+                    )}
+                    </div>
+                    <p className="text-sm text-slate-500 truncate">
                         {workspace.stripeAccountName}
                     </p>
 
-                    <p className="text-sm text-slate-600 truncate">
-                        Sheet:{" "}
-                        <Link
-                            href={workspace.sheetUrl}
-                            target="_blank"
-                            className="font-medium text-indigo-600 underline-offset-2 hover:underline"
-                        >
-                            {workspace.sheetName}
-                        </Link>
-                    </p>
                 </div>
 
                 {/* RIGHT COLUMN */}
@@ -190,7 +199,7 @@ export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
                     </span>
                 </p>
                 <p className="flex flex-wrap gap-1">
-                    Stripe data synced:{" "}
+                    <b>Syncing:</b>{" "}
                     {workspace.objectsEnabled.map((obj) => (
                         <span
                             key={obj}
