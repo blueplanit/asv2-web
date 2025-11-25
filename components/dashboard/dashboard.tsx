@@ -9,6 +9,7 @@ import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, Squares2X2Icon, UserCirc
 import { useState } from "react";
 import { AccountPageClient } from "@/components/account/account-page-client";
 import { BillingBar } from "../account/billing-bar";
+import { signOut, useSession } from "next-auth/react";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -72,8 +73,10 @@ function getNextOnboardingStep(onboardingStage: string): number {
 
 export function DashboardClient() {
     const { user, refresh } = useUserState();
-    const { onboardingStage, googleConnections, stripeConnections, syncConfigs } = user;
+    const { onboardingStage, stripeConnections, syncConfigs } = user;
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
+    const { data: session } = useSession();
+    const accountEmail = session?.user?.email ?? user.profile?.email ?? "Account";
 
     // MVP: assume at most one sync config
     const userSyncConfig: SyncConfig | null =

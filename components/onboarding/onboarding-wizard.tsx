@@ -102,10 +102,14 @@ export function OnboardingWizard() {
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
         setCurrentStepIndex(initialIndex);
+    }, [initialIndex]);
+
+    // If onboarding is complete, push to dashboard (client-side)
+    useEffect(() => {
         if (user.onboardingStage === "ready") {
-            redirect("/dashboard");
+            router.replace("/dashboard");
         }
-    }, [initialIndex, user.onboardingStage, router]);
+    }, [user.onboardingStage, router]);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
@@ -158,6 +162,14 @@ export function OnboardingWizard() {
         }
     }
 
+    // Navigation helpers: compute next index, update state, then update URL
+    function goToStepByIndex(nextIndex: number) {
+        const clamped = Math.min(Math.max(nextIndex, 0), totalSteps - 1);
+        const nextStep = steps[clamped];
+        setCurrentStepIndex(clamped);
+        router.replace(`?step=${nextStep.id}`, { scroll: false });
+    }
+
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
@@ -187,27 +199,17 @@ export function OnboardingWizard() {
         }
 
         if (!isLastStep) {
-            setCurrentStepIndex((prev) => {
-                const nextIndex = Math.min(prev + 1, totalSteps - 1);
-                const nextStep = steps[nextIndex];
-                router.replace(`?step=${nextStep.id}`, { scroll: false });
-                return nextIndex;
-            });
-        }
-        else {
-            redirect("/dashboard");
-        }
+            goToStepByIndex(currentStepIndex + 1);
+          } else {
+            router.replace("/dashboard");
+          }
     }
 
     function handleBack() {
         if (isFirstStep) return;
-        setCurrentStepIndex((prev) => {
-            const nextIndex = Math.max(prev - 1, 0);
-            const nextStep = steps[nextIndex];
-            router.replace(`?step=${nextStep.id}`, { scroll: false });
-            return nextIndex;
-        });
-    }
+        goToStepByIndex(currentStepIndex - 1);
+      }
+    
 
     return (
         <main className="mx-auto flex max-w-6xl flex-1 flex-col px-6 pb-16 pt-8">
