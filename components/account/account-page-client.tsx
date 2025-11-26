@@ -59,7 +59,8 @@ export function AccountPageClient() {
     }
 
     const isActiveSubscription = status === "active";
-    const helpText = isActiveSubscription ? 
+    const isTrialing = rawStatus === "trialing";
+    const helpText = isActiveSubscription && !isTrialing ? 
         `Use “Manage in Stripe” above to download invoices, update your payment method, or change your plan. `:
         "";
 

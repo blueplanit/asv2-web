@@ -109,9 +109,9 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                                 </span>
                                 <span className="text-sm text-slate-500">{intervalLabel}</span>
                             </div>
-                            <p className="text-xs font-medium text-emerald-700">
+                            {/* <p className="text-xs font-medium text-emerald-700">
                                 {trialLabel}
-                            </p>
+                            </p> */}
                             <ul className="mt-4 space-y-2 text-sm text-slate-700">
                                 <li>• 1 Stripe account synced to Sheets</li>
                                 <li>• Automated backfill + 30-minute sync cadence</li>
@@ -130,8 +130,7 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                                 {loading ? "Redirecting to secure checkout…" : "Continue to Checkout"}
                             </button>
                             <p className="mt-2 text-[11px] text-slate-500 text-center">
-                                You’ll be redirected to a secure Stripe-hosted payment page to complete
-                                your subscription.
+                                You’ll be redirected to a secure Stripe-hosted payment page to checkout.
                             </p>
                         </div>
                     </article>

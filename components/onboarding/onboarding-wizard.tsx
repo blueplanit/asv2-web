@@ -44,9 +44,9 @@ const steps: Step[] = [
     },
     {
         id: 4,
-        title: "Choose Stripe data & start sync",
+        title: "Choose Stripe data & start your 14-day trial",
         description:
-            "Pick which Stripe data objects to sync into your newly created Google Sheet. Then start your initial backfill and ongoing sync.",
+            "Pick which Stripe data objects to sync into your newly created Google Sheet. Then, start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
     },
 ];
@@ -124,7 +124,7 @@ export function OnboardingWizard() {
                 ? "Redirecting to Google…"
                 : currentStep.id === 3
                     ? "Creating sheet…"
-                    : "Saving config & starting sync…";
+                    : "Starting trial & backfill...";
 
 
     async function createSheet() {
@@ -296,14 +296,21 @@ export function OnboardingWizard() {
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div className="flex items-start gap-3">
                                         <div className="space-y-1">
-                                            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                                Step {currentStep.id}
-                                            </p>
-                                            <h3 className="text-lg font-semibold text-slate-900">{currentStep.title}</h3>
-                                            <p className="text-sm text-slate-600">{currentStep.description}</p>
-                                            {currentStep.helper && (
-                                                <p className="text-sm font-medium text-slate-700">{currentStep.helper}</p>
-                                            )}
+                                            <div className="space-y-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                                                        Step {currentStep.id}
+                                                    </p>
+                                                </div>
+                                                <h3 className="text-lg font-semibold text-slate-900">{currentStep.title}</h3>
+                                                <p className="text-sm text-slate-600">{currentStep.description}</p>
+                                                {currentStep.helper && (
+                                                    <p className="text-sm font-medium text-slate-700">
+                                                        {currentStep.helper}
+                                                    </p>
+                                                )}
+                                            </div>
+
                                         </div>
                                     </div>
                                     {currentStep.id === 4 && (
@@ -326,7 +333,7 @@ export function OnboardingWizard() {
                                                 </button>
                                             )}
                                             <button
-                                                className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                                                className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 truncate"
                                                 type="button"
                                                 onClick={handlePrimaryAction}
                                                 disabled={submitting}
@@ -342,10 +349,17 @@ export function OnboardingWizard() {
                                                 )}
                                             </button>
                                         </div>
+
+                                        {currentStep.id === 4 && (
+                                            <p className="text-[11px] text-slate-500 text-right sm:text-left max-w-xs">
+                                                <span className="inline-flex items-center gap-2  text-[11px] font-medium text-emerald-700 ">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Your 14-day free trial starts after this. No card required!
+                                                </span>
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Step-specific panels */}
                                 {currentStep.id === 2 && (
                                     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-900">
                                         <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
@@ -354,7 +368,7 @@ export function OnboardingWizard() {
                                         We never access existing files you own; new sheets are
                                         created in your Drive with you as the owner. AutoSync only has access to the files you create within our app.
                                     </div>
-                                )}
+                                )}                            
 
                                 {error && (
                                     <p className="text-sm text-red-600 mt-2">

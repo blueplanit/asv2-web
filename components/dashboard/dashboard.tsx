@@ -21,9 +21,10 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
 function mapSyncConfigToWorkspace(args: {
     cfg: SyncConfig;
     stripeAccountName?: string;
+    googleAccountEmail?: string;
     sheetTitles: Record<string, string>;
 }): Workspace {
-    const { cfg, stripeAccountName, sheetTitles } = args;
+    const { cfg, stripeAccountName, googleAccountEmail, sheetTitles } = args;
 
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${cfg.spreadsheetId}`;
     const resolvedTitle = sheetTitles[cfg.spreadsheetId];
@@ -45,6 +46,7 @@ function mapSyncConfigToWorkspace(args: {
         id: cfg.spreadsheetId,
         name,
         stripeAccountName: stripeAccountName ?? cfg.stripeAccountId,
+        googleAccountEmail: googleAccountEmail ?? "",
         sheetName: name,
         sheetUrl,
         lastSyncAt,
@@ -145,6 +147,7 @@ export function DashboardClient() {
                     cfg,
                     stripeAccountName: stripeConn?.businessName,
                     sheetTitles,
+                    googleAccountEmail: user.googleConnections[0]?.email ?? "",
                 });
             }).filter((ws) => ws !== null);
 
@@ -203,7 +206,7 @@ export function DashboardClient() {
     const navItems = [
         {
             key: "workspaces" as const,
-            name: "Workspaces",
+            name: "Workspace",
             icon: Squares2X2Icon,
         },
         {
@@ -283,7 +286,7 @@ export function DashboardClient() {
                                     <p className="text-sm uppercase tracking-[0.18em] text-slate-500">
                                         Dashboard
                                     </p>
-                                    <h1 className="text-2xl font-semibold text-slate-900">Your workspaces</h1>
+                                    <h1 className="text-2xl font-semibold text-slate-900">Your workspace</h1>
                                 </div>
                             </header>
 
@@ -346,9 +349,9 @@ export function DashboardClient() {
                                 </section>
                             )}
 
-                            <section className="grid gap-4 md:grid-cols-2">
+                            <section className="space-y-4">
                                 {workspaces.length === 0 ? (
-                                    <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-sm text-slate-600">
+                                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-sm text-slate-600">
                                         <p className="font-medium text-slate-900">
                                             No workspace sheet created yet.
                                         </p>
@@ -371,7 +374,6 @@ export function DashboardClient() {
                                             key={ws.id}
                                             workspace={ws}
                                             onSyncNow={(id) => {
-                                                // later: POST /api/workspaces/{id}/sync
                                                 console.log("Sync now for workspace", id);
                                             }}
                                             onTogglePause={handleTogglePause}
@@ -379,6 +381,7 @@ export function DashboardClient() {
                                     ))
                                 )}
                             </section>
+
                         </>
                     ) : (
                         <AccountPageClient />
