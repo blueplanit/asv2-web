@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         planId,
         interval,
         priceId,
-        trial_origin: "onboarding_step_4",
+        subscription_stage: "trial",          // "trial" vs "paid"
     };
 
     const subscription = await stripeBilling.subscriptions.create({
@@ -88,7 +88,6 @@ export async function POST(req: NextRequest) {
 
     const currentPeriodEnd = getSubscriptionPeriodEnd(subscription);
     const trialEnd = subscription.trial_end ?? currentPeriodEnd;
-
 
     await updateUserSubscriptionStatusToActive(authUserId, {
         subscriptionId: subscription.id,

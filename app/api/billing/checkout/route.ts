@@ -42,6 +42,7 @@ export async function POST(req: Request) {
         planId,
         interval,
         priceId,
+        subscription_stage: "paid",
     };
 
     const customerParams = userProfile.subscriptionCustomerId
