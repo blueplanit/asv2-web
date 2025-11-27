@@ -85,7 +85,7 @@ export function OnboardingWizard() {
         if (user.onboardingStage === "ready") {
             router.replace("/dashboard");
         }
-    }, [user.onboardingStage, router]);
+    }, []);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
@@ -216,13 +216,15 @@ export function OnboardingWizard() {
             finally {
                 setSubmitting(false);
             }
+            router.replace("/dashboard?backfill_started=1");
+            return;
         }
 
         if (!isLastStep) {
             goToStepByIndex(currentStepIndex + 1);
-          } else {
+        } else {
             router.replace("/dashboard");
-          }
+        }
     }
 
     function handleBack() {

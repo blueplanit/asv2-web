@@ -8,6 +8,10 @@ import type { SyncConfig } from "@/lib/schemas/sync-config";
 import { Squares2X2Icon, UserCircleIcon } from "@heroicons/react/20/solid";
 import { useEffect, useMemo, useState } from "react";
 import { AccountPageClient } from "@/components/account/account-page-client";
+import { BillingBar } from "@/components/account/billing-bar";
+import { isDevEnvironment } from "@/lib/utils";
+import { useRouter, useSearchParams } from "next/navigation";
+import { BackfillIntroModal } from "./backfill-intro-modal";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -17,6 +21,19 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
     payouts: "Payouts",
     subscriptions: "Subscriptions",
 };
+
+const navItems = [
+    {
+        key: "workspaces" as const,
+        name: "Workspace",
+        icon: Squares2X2Icon,
+    },
+    {
+        key: "account" as const,
+        name: "Account",
+        icon: UserCircleIcon,
+    },
+];
 
 function mapSyncConfigToWorkspace(args: {
     cfg: SyncConfig;
@@ -81,6 +98,11 @@ export function DashboardClient() {
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
     const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
     const [titlesRequested, setTitlesRequested] = useState(false);
+
+    const searchParams = useSearchParams();
+    const router = useRouter();
+
+    const [backfillModalOpen, setBackfillModalOpen] = useState(false);
 
     // MVP: assume at most one sync config
     const userSyncConfig: SyncConfig | null =
@@ -152,14 +174,14 @@ export function DashboardClient() {
             }).filter((ws) => ws !== null);
 
 
-
-    const syncIsActive = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running" || userSyncConfig.syncStatus === "paused");
-
+    const primaryWorkspace = workspaces[0] ?? null;
+    const isOnboardingDone = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running" || userSyncConfig.syncStatus === "paused");
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;
 
     // Top banner: only if not fully onboarded
-    const showOnboardingBanner = !syncIsActive;
+    const showOnboardingBanner = !isOnboardingDone;
+    const showPurchaseBanner = user.profile?.subscriptionRawStatus === "trialing" || user.profile?.subscriptionStatus === "inactive";
 
     const stepLabel = (() => {
         switch (nextStepId) {
@@ -203,22 +225,43 @@ export function DashboardClient() {
         }
     }
 
-    const navItems = [
-        {
-            key: "workspaces" as const,
-            name: "Workspace",
-            icon: Squares2X2Icon,
-        },
-        {
-            key: "account" as const,
-            name: "Account",
-            icon: UserCircleIcon,
-        },
-    ];
+    // Triggered once when redirected from onboarding with ?backfill_started=1, only if the current syncStatus is "backfill_running"
+    useEffect(() => {
+        const flag = searchParams.get("backfill_started");
+        if (!flag) return;
+        if (!primaryWorkspace || !userSyncConfig) return;
+        if (userSyncConfig.syncStatus !== "backfill_running") {
+            // Clean URL and mark processed; nothing to show.
+            router.replace("/dashboard", { scroll: false });
+            return;
+        }
 
+        if (flag === "1") {
+            // Clean the URL so refreshes don't re-trigger the param
+            router.replace("/dashboard", { scroll: false });
+            setBackfillModalOpen(true);
+            return;
+        }
+    }, [searchParams]);
 
-    console.log("user", user);
-    console.log("showOnboardingBanner", showOnboardingBanner);
+    function handleBackfillModalOpenChange(open: boolean) {
+        if (!open && primaryWorkspace && user.profile?.userId) {
+            const storageKey = `backfillIntroDismissed:${user.profile.userId}:${primaryWorkspace.id}`;
+            try {
+                if (typeof window !== "undefined") {
+                    window.localStorage.setItem(storageKey, "1");
+                }
+            } catch {
+                // ignore localStorage errors
+            }
+        }
+        setBackfillModalOpen(open);
+    }
+
+    if (isDevEnvironment()) {
+        console.log("user", user);
+        console.log("showOnboardingBanner", showOnboardingBanner);
+    }
 
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 md:flex-row">
@@ -290,7 +333,7 @@ export function DashboardClient() {
                                 </div>
                             </header>
 
-                            {/* <BillingBar /> */}
+                            {showPurchaseBanner && <BillingBar />}
 
                             {showOnboardingBanner && (
                                 <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 sm:p-5">
@@ -327,7 +370,7 @@ export function DashboardClient() {
                                                 </li>
                                                 <li className="flex items-center gap-1">
                                                     <span
-                                                        className={`h-1.5 w-1.5 rounded-full ${syncIsActive ? "bg-emerald-500" : "bg-slate-300"
+                                                        className={`h-1.5 w-1.5 rounded-full ${isOnboardingDone ? "bg-emerald-500" : "bg-slate-300"
                                                             }`}
                                                     />
                                                     Start sync
@@ -388,6 +431,16 @@ export function DashboardClient() {
                     )}
                 </div>
             </main>
+
+            {primaryWorkspace && userSyncConfig?.syncStatus === "backfill_running" && (
+                <BackfillIntroModal
+                    open={backfillModalOpen}
+                    onOpenChange={handleBackfillModalOpenChange}
+                    sheetUrl={primaryWorkspace.sheetUrl}
+                    workspaceName={primaryWorkspace.name}
+                    nameLoading={primaryWorkspace.nameLoading ?? false}
+                />
+            )}
         </div>
     );
 }

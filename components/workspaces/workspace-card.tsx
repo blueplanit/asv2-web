@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/tooltip";
 import { useState, useRef, useEffect } from "react";
 import { ExternalLinkIcon } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceStats } from "./workspace-stats";
 
 

@@ -10,6 +10,7 @@ export function BillingBar() {
     const [portalLoading, setPortalLoading] = useState(false);
 
     const status = user.profile?.subscriptionStatus ?? "inactive"; // "active" | "inactive"
+    const rawStatus = user.profile?.subscriptionRawStatus ?? null; // "trialing" | "active" | "inactive" | "past_due" | "canceled" | "unpaid" | "paused" | "incomplete" | "incomplete_expired"
     const planId = user.profile?.subscriptionPlanId ?? null;         // e.g. "pro"
     const interval = user.profile?.subscriptionInterval ?? null;     // "monthly" | "yearly"
     const nextRenewalIso = user.profile?.subscriptionCurrentPeriodEnd ?? null;
@@ -51,16 +52,26 @@ export function BillingBar() {
         }
     }
 
-    if (status === "inactive") {
+    if (status === "inactive" || rawStatus === "trialing") {
         // Free / no subscription
+        const purchaseTitle = rawStatus === "trialing" ? "You're  on a free 14-day trial." : 
+            rawStatus === "canceled" ? "Your subscription has been canceled." :
+            rawStatus === "past_due" ? "Your subscription is past due." :
+            rawStatus === "inactive" ? "You're subscription is inactive." : "Upgrade to Pro";
+        
+        const ctaLabel = rawStatus === "trialing" ? "Upgrade to Pro" :
+         rawStatus === "canceled" ? "Reactivate subscription" :
+         rawStatus === "past_due" ? "Pay now" :
+         rawStatus === "inactive" ? "Upgrade to Pro" : "View plans";
+        
         return (
             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-0.5">
                     <p className="font-medium text-amber-900">
-                        You’re on the free tier.
+                        {purchaseTitle}
                     </p>
                     <p className="text-xs text-amber-800">
-                        Upgrade to Pro to keep Stripe → Sheets sync running automatically and unlock higher limits.
+                        Upgrade to Pro to keep Stripe → Sheets sync running smoothly.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -68,7 +79,7 @@ export function BillingBar() {
                         href="/pricing"
                         className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
                     >
-                        View plans
+                        {ctaLabel}
                     </Link>
                 </div>
             </div>
