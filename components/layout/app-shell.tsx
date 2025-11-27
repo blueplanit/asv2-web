@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         </div>
                     </div>
 
-                    <nav className="flex items-center gap-2 text-sm">
+                    <nav className="flex items-center gap-0 text-sm">
                         {navItems.map((item) => (
                             <Link
                                 key={item.href}

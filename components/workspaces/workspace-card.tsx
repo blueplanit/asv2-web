@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useState, useRef, useEffect } from "react";
 import { ExternalLinkIcon } from "lucide-react";
-import { ChevronDownIcon } from "@heroicons/react/20/solid";
+import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceStats } from "./workspace-stats";
 
 
@@ -160,6 +160,15 @@ export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
                             <span
                                 className={`inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] ring-1 ring-inset ${health.color}`}
                             >
+                                {health.label === "Backfilling" && (
+                                    <span className="relative mr-2 inline-flex h-4 w-4 items-center justify-center">
+                                        {/* outer ping */}
+                                        <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-70 animate-ping" />
+                                        {/* inner solid dot */}
+                                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                                    </span>
+                                )}
+
                                 {health.label}
                             </span>
                         </TooltipTrigger>
