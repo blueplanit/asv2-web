@@ -26,10 +26,10 @@ export default function HomePage() {
                             How it works
                         </a>
                         <a
-                            href="#features"
+                            href="/pricing"
                             className="text-slate-600 hover:text-slate-900 transition"
                         >
-                            Features
+                            Pricing
                         </a>
                         <Link
                             href="/login"

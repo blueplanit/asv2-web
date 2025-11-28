@@ -20,7 +20,7 @@ export function LoginForm() {
 
                 <button
                     type="button"
-                    onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+                    onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
                     className="cursor-pointer flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                 >
                     <span className="inline-flex size-5 items-center justify-center rounded bg-white/10">
