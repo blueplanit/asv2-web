@@ -18,7 +18,7 @@ const resourcesLinks = [
     { label: "Docs", href: "#" },
     { label: "API Reference", href: "#" },
     { label: "Guides", href: "#" },
-    { label: "Blog", href: "#" },
+    { label: "Blog", href: "/blog" },
 ];
 
 const companyLinks = [
@@ -29,7 +29,7 @@ const companyLinks = [
 ];
 
 const legalLinks = [
-    { label: "Privacy", href: "#" },
+    { label: "Privacy", href: "/pages/privacy-policy" },
     { label: "Terms", href: "#" },
     { label: "Data Processing", href: "#" },
     { label: "Security", href: "#" },
@@ -51,9 +51,11 @@ export function SiteFooter() {
                     {/* Brand + brief copy */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
+                        <Link href="/" className="flex items-center gap-3">
                             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                                 AS
                             </span>
+                            </Link>
                             <div className="flex flex-col">
                                 <span className="text-sm font-semibold text-slate-900">
                                     AutoSync
@@ -83,7 +85,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -101,7 +103,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -119,7 +121,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -137,7 +139,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -155,7 +157,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -167,7 +169,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>

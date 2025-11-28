@@ -1,45 +1,15 @@
 // app/page.tsx
+import { SiteHeader } from "@/components/layout/site-header";
 import Link from "next/link";
 
-export default function HomePage() {
-    const year = new Date().getFullYear();
 
+export default function HomePage() {
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
             {/* Top nav */}
-            <header className="border-b border-slate-200 bg-white/70 backdrop-blur">
-                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-                    <div className="flex items-center gap-3">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                            AS
-                        </span>
-                        <span className="text-sm font-semibold tracking-tight text-slate-900">
-                            AutoSync
-                        </span>
-                    </div>
-
-                    <nav className="flex items-center gap-4 text-sm">
-                        <a
-                            href="#how-it-works"
-                            className="text-slate-600 hover:text-slate-900 transition"
-                        >
-                            How it works
-                        </a>
-                        <a
-                            href="/pricing"
-                            className="text-slate-600 hover:text-slate-900 transition"
-                        >
-                            Pricing
-                        </a>
-                        <Link
-                            href="/login"
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                        >
-                            Log in
-                        </Link>
-                    </nav>
-                </div>
-            </header>
+            <SiteHeader
+                variant="public"
+            />
 
             {/* Hero */}
             <main className="mx-auto flex max-w-6xl flex-1 flex-col px-6 py-12 lg:flex-row lg:items-center lg:justify-between lg:gap-12">

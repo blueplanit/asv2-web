@@ -98,21 +98,29 @@ export function AccountPageClient() {
                                 )}
                             </p>
                         )}
-                        <p className="mt-1 text-xs text-slate-600">
+                        <p className="mt-1 text-xs text-slate-600 mb-1">
                             Status:{" "}
                             <span className="font-medium text-slate-900">
-                                {rawStatus === "trialing" ? "Free 14-day Trial" : rawStatus === "active" ? "Active" : "Inactive"}
+                                {rawStatus === "trialing" ? "Free 14-day Trial" : status === "active" ? "Active" : "Inactive"}
                             </span>
                         </p>
                         {nextRenewalDate && status === "active" && (
-                            <p className="mt-1 text-xs text-slate-600">
-                                {rawStatus === "trialing" ? "Trial ends on" : "Next renewal on"}{' '}
-                                {nextRenewalDate.toLocaleDateString(undefined, {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                })}
-                            </p>
+                            <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                                <span className="mr-1 text-[0.65rem] uppercase tracking-[0.14em] text-slate-800 font-semibold">
+                                    {rawStatus === "trialing"
+                                        ? "Trial ends"
+                                        : rawStatus === "canceling"
+                                            ? "Cancels"
+                                            : "Renews"}
+                                </span>
+                                <span className="text-slate-900">
+                                    {nextRenewalDate.toLocaleDateString(undefined, {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                    })}
+                                </span>
+                            </span>
                         )}
                     </div>
                     <div className="flex flex-col items-end gap-2">

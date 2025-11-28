@@ -11,6 +11,7 @@ import { mapStripePriceToPlan } from "@/lib/billing-plan-map";
 import { getSubscriptionPeriodEnd } from "@/lib/billing-period";
 import { getUserProfile } from "@/lib/user-profile";
 import { isStripeSubscriptionEntitled, isStripeSubscriptionNonEntitledTerminal } from "@/lib/subscription-entitlement";
+import { isDevEnvironment } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,15 @@ function buildUpdateParamsFromSubscription(
             : "monthly");
 
     const currentPeriodEnd = getSubscriptionPeriodEnd(subscription);
+    const stripeStatus = subscription.status as Stripe.Subscription.Status;
+    const isCancelAtPeriodEnd = !!subscription.cancel_at_period_end || !!subscription.cancel_at;
+    const rawStatus = stripeStatus === "active" && isCancelAtPeriodEnd ? "canceling" : stripeStatus;
+
+    if (isDevEnvironment()) {
+        console.log("stripeStatus", stripeStatus);
+        console.log(subscription)
+        console.log("rawStatus", rawStatus);
+    }
 
     const params: UpdateUserSubscriptionParams = {
         subscriptionId: subscription.id,
@@ -42,7 +52,7 @@ function buildUpdateParamsFromSubscription(
         planId: planInfo?.planId,
         interval,
         currentPeriodEnd,
-        rawStatus: subscription.status,
+        rawStatus,
     };
 
     return { authUserId, params };

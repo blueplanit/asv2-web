@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 
 export function LoginForm() {
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 flex items-center justify-center px-4">
+        <div className="min-h-[75vh] bg-gradient-to-b from-slate-50 via-white to-slate-50 flex items-center justify-center px-4">
             <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm space-y-6">
                 <div className="space-y-2 text-center">
                     <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
