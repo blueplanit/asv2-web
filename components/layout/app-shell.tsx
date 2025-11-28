@@ -15,9 +15,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 variant="app"
                 isAuthed={isAuthed}
                 userEmail={userEmail}
-                onSignOut={() => {
-                    signOut({ callbackUrl: "/login" });
-                }}
             />
 
             <main>{children}</main>

@@ -11,10 +11,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const userEmail = session?.user?.email ?? null;
     return (
         <div className="min-h-screen flex flex-col">
-            <SiteHeader 
-            variant="public" 
-            isAuthed={isAuthed}
-            userEmail={userEmail}/>
+            <SiteHeader
+                variant="public"
+                isAuthed={isAuthed}
+                userEmail={userEmail}
+            />
             <div className="flex-1">{children}</div>
         </div>
     );

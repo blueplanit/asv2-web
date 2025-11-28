@@ -6,6 +6,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { User, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 type NavItem = { href: string; label: string };
 
@@ -18,9 +19,6 @@ type SiteHeaderProps = {
     // Auth state (used mostly for app variant, but you can reuse on public)
     isAuthed?: boolean;
     userEmail?: string | null;
-
-    // Called when user clicks "Log out"
-    onSignOut?: () => void;
 };
 
 const baseNavItems = [
@@ -30,7 +28,7 @@ const baseNavItems = [
 ];
 
 export function SiteHeader(props: SiteHeaderProps) {
-    const { variant, appNavItems = [], isAuthed, userEmail, onSignOut } = props;
+    const { variant, appNavItems = [], isAuthed, userEmail } = props;
     const router = useRouter();
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -63,14 +61,12 @@ export function SiteHeader(props: SiteHeaderProps) {
 
     const userMenu = (
         <div className="relative ml-2" ref={menuRef}>
+
             <button
                 type="button"
                 onClick={() => {
                     if (!isAuthed && isPublic) {
                         router.push("/login");
-                        return;
-                    }
-                    if (isPublic) {
                         return;
                     }
                     setMenuOpen((v) => !v);
@@ -89,7 +85,13 @@ export function SiteHeader(props: SiteHeaderProps) {
                         type="button"
                         onClick={() => {
                             setMenuOpen(false);
-                            onSignOut?.();
+                            if (isAuthed) {
+                                try {
+                                    signOut({ callbackUrl: "/login" });
+                                } catch (error) {
+                                    console.error("Error signing out", error);
+                                }
+                            }
                         }}
                         className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50"
                     >
