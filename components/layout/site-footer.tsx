@@ -18,7 +18,7 @@ const resourcesLinks = [
     { label: "Docs", href: "#" },
     { label: "API Reference", href: "#" },
     { label: "Guides", href: "#" },
-    { label: "Blog", href: "#" },
+    { label: "Blog", href: "/blog" },
 ];
 
 const companyLinks = [

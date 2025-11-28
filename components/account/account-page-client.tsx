@@ -106,7 +106,7 @@ export function AccountPageClient() {
                         </p>
                         {nextRenewalDate && status === "active" && (
                             <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                                <span className="mr-1 text-[0.65rem] uppercase tracking-[0.14em] text-slate-400">
+                                <span className="mr-1 text-[0.65rem] uppercase tracking-[0.14em] text-slate-800 font-semibold">
                                     {rawStatus === "trialing"
                                         ? "Trial ends"
                                         : rawStatus === "canceling"
