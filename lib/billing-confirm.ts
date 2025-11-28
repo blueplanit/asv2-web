@@ -4,6 +4,7 @@ import { stripeBilling } from "@/lib/stripe-billing";
 import { getUserProfile, UpdateUserSubscriptionParams, updateUserSubscriptionStatusToActive } from "@/lib/user-profile";
 import { mapStripePriceToPlan } from "./billing-plan-map";
 import { getSubscriptionPeriodEnd } from "./billing-period";
+import { isStripeSubscriptionEntitled } from "./subscription-entitlement";
 
 export async function confirmCheckoutSessionAndActivateUser(
     sessionId: string,
@@ -27,6 +28,10 @@ export async function confirmCheckoutSessionAndActivateUser(
         throw new Error(`Checkout session not complete: ${session.status}`);
     }
 
+    if (session.payment_status !== "paid") {
+        throw new Error("Payment not completed yet");
+    }
+
     // Expanded subscription, or string id if expand failed for some reason
     const subscriptionExpanded = typeof session.subscription === "string"
             ? null
@@ -38,8 +43,11 @@ export async function confirmCheckoutSessionAndActivateUser(
     }
 
     const subscription = subscriptionExpanded;
-    const subscriptionId = subscription.id;
+    const newSubscriptionId = subscription.id;
     const stripeCustomerId = session.customer as string;
+
+    const currentProfile = await getUserProfile(authUserId);
+    const previousSubscriptionId = currentProfile?.subscriptionId;
 
     // Use metadata priceId first, then fall back to subscription/line_items
     const priceId =
@@ -52,7 +60,7 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     // Only mark as active if Stripe sees it as entitled
     const status = subscription.status;
-    const entitled = status === "trialing" || status === "active";
+    const entitled = isStripeSubscriptionEntitled(status);
 
     if (!entitled) {
         // Let webhook drive the state for non-entitled statuses
@@ -60,7 +68,7 @@ export async function confirmCheckoutSessionAndActivateUser(
     }
 
     const subParams: UpdateUserSubscriptionParams = {
-        subscriptionId,
+        subscriptionId: newSubscriptionId,
         stripeCustomerId,
         planId: planInfo?.planId,
         interval: planInfo?.interval,
@@ -68,6 +76,26 @@ export async function confirmCheckoutSessionAndActivateUser(
         rawStatus: status,
     };
 
-    // Idempotent: it's fine if webhook already did this
-    await updateUserSubscriptionStatusToActive(authUserId, subParams);
+    // Update Database (Optimistic)
+    // We catch conditional errors just in case, but usually we overwrite
+    try {
+        await updateUserSubscriptionStatusToActive(authUserId, subParams, previousSubscriptionId);
+    } catch (err: any) {
+        // If ConditionalCheckFailed, the webhook likely already updated the DB.
+        // We can safely return here, OR proceed to check cancellation just to be safe.
+        console.log("Optimistic update skipped - DB likely already updated by webhook");
+    }
+
+    // Cancel the old subscription if it's different
+    if (previousSubscriptionId && previousSubscriptionId !== newSubscriptionId) {
+        console.log(`Optimistic cleanup: canceling old subscription ${previousSubscriptionId}`);
+        try {
+            await stripeBilling.subscriptions.cancel(previousSubscriptionId);
+        } catch (err: any) {
+            // Ignore if already canceled or missing
+            if (err.code !== 'resource_missing' && !err.message.includes('No such subscription')) {
+                console.error("Failed to cancel old subscription optimistic cleanup:", err);
+            }
+        }
+    }
 }

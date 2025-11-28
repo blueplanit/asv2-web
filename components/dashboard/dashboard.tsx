@@ -181,7 +181,7 @@ export function DashboardClient() {
 
     // Top banner: only if not fully onboarded
     const showOnboardingBanner = !isOnboardingDone;
-    const showPurchaseBanner = user.profile?.subscriptionRawStatus === "trialing" || user.profile?.subscriptionStatus === "inactive";
+    const showPurchaseBanner = (user.profile?.subscriptionRawStatus === "trialing" || user.profile?.subscriptionStatus === "inactive") && isOnboardingDone;
 
     const stepLabel = (() => {
         switch (nextStepId) {
@@ -260,7 +260,6 @@ export function DashboardClient() {
 
     if (isDevEnvironment()) {
         console.log("user", user);
-        console.log("showOnboardingBanner", showOnboardingBanner);
     }
 
     return (

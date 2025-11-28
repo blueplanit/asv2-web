@@ -46,8 +46,6 @@ export async function updateUserSubscriptionStatusToActive(
         "subscriptionStatus = :status",
         "subscriptionId = :subId",
         "subscriptionCustomerId = :custId",
-        "subscriptionPlanId = :planId",
-        "subscriptionInterval = :interval",
         "ACTIVE_SUB_GSI_PK = :aspk",
         "updatedAt = :now",
     ];
@@ -55,11 +53,18 @@ export async function updateUserSubscriptionStatusToActive(
         ":status": "active",
         ":subId": subscriptionId,
         ":custId": stripeCustomerId,
-        ":planId": planId,
-        ":interval": interval,
         ":aspk": "ACTIVE#true",
         ":now": now,
     };
+
+    if (planId) {
+        updateParts.push("subscriptionPlanId = :planId");
+        values[":planId"] = planId;
+    }
+    if (interval) {
+        updateParts.push("subscriptionInterval = :interval");
+        values[":interval"] = interval;
+    }
 
     if (periodEndIso) {
         updateParts.push("subscriptionCurrentPeriodEnd = :periodEnd");

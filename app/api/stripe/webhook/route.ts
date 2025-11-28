@@ -10,6 +10,7 @@ import Stripe from "stripe";
 import { mapStripePriceToPlan } from "@/lib/billing-plan-map";
 import { getSubscriptionPeriodEnd } from "@/lib/billing-period";
 import { getUserProfile } from "@/lib/user-profile";
+import { isStripeSubscriptionEntitled, isStripeSubscriptionNonEntitledTerminal } from "@/lib/subscription-entitlement";
 
 export const runtime = "nodejs";
 
@@ -64,13 +65,8 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
 
     const stage = (subscription.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
     const isCurrent = profile.subscriptionId === subscription.id;
-    const isEntitled = status === "trialing" || status === "active";
-
-    const isNonEntitledTerminal =
-        status === "canceled" ||
-        status === "unpaid" ||
-        status === "incomplete_expired" ||
-        status === "past_due";
+    const isEntitled = isStripeSubscriptionEntitled(status);
+    const isNonEntitledTerminal = isStripeSubscriptionNonEntitledTerminal(status);
 
     try {
         if (isEntitled) {
@@ -197,7 +193,7 @@ async function cancelPreviousTrialSubscription(args: {
     try {
         const oldSub = await stripeBilling.subscriptions.retrieve(previousSubscriptionId);
         const oldStage = (oldSub.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
-        const looksTrial = oldStage === "trial" || oldSub.status === "trialing" || !!oldSub.trial_end;
+        const looksTrial = (oldStage === "trial" || oldSub.status === "trialing" || !!oldSub.trial_end) && oldSub.status !== "active" && oldSub.status !== "past_due";
 
         if (!looksTrial) {
             console.log(`Previous subscription is not a trial; not canceling automatically: prevSubId: ${previousSubscriptionId}, authUserId: ${authUserId}, oldStage: ${oldStage}, oldStatus: ${oldSub.status}`,);

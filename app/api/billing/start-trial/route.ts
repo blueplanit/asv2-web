@@ -14,6 +14,7 @@ import {
 } from "@/lib/user-profile";
 import { ensureStripeCustomerId } from "@/lib/ensure-stripe-customer";
 import { getSubscriptionPeriodEnd } from "@/lib/billing-period";
+import { isUserProfileEntitled } from "@/lib/subscription-entitlement";
 
 export const runtime = "nodejs";
 
@@ -44,8 +45,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Guard against duplicate trials / subscriptions
-    if (profile.subscriptionStatus === "active") {
+    if (isUserProfileEntitled(profile)) {
         return new NextResponse("Subscription already active", { status: 409 });
+    }
+
+    // Check if they have already trialed
+    if (profile.subscriptionId || profile.subscriptionCustomerId) {
+        // If they have a customer ID, they've likely interacted with billing before.
+        // Enforces one trial per user.
+        return new NextResponse("Trial already used. Please upgrade to a paid plan.", { status: 403 });
     }
 
     const stripeCustomerId = await ensureStripeCustomerId(authUserId);
@@ -88,16 +96,24 @@ export async function POST(req: NextRequest) {
 
     const currentPeriodEnd = getSubscriptionPeriodEnd(subscription);
     const trialEnd = subscription.trial_end ?? currentPeriodEnd;
+    const previousSubscriptionId = profile.subscriptionId ?? null;
 
-    await updateUserSubscriptionStatusToActive(authUserId, {
-        subscriptionId: subscription.id,
-        stripeCustomerId,
-        planId,
-        interval,
-        currentPeriodEnd,
-        rawStatus: subscription.status, // "trialing" initially
-    });
-
+    try {
+        await updateUserSubscriptionStatusToActive(authUserId, {
+            subscriptionId: subscription.id,
+            stripeCustomerId,
+            planId,
+            interval,
+            currentPeriodEnd,
+            rawStatus: subscription.status, // "trialing" initially
+        }, previousSubscriptionId);
+    } catch (err: any) {
+        // If someone else raced and updated the profile, treat as "already trialing"
+        if (err.name === "ConditionalCheckFailedException") {
+            return new NextResponse("Subscription already active", { status: 409 });
+        }
+        throw err;
+    }
     const trialEndsAtIso = trialEnd != null ? new Date(trialEnd * 1000).toISOString() : null;
 
     return NextResponse.json({

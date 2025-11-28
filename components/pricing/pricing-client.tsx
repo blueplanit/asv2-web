@@ -14,11 +14,9 @@ type PricingClientProps = {
 export function PricingClient({ isLoggedIn }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
-    const router = useRouter();
 
     const priceDisplay = interval === "monthly" ? "$15" : "$129";
     const intervalLabel = interval === "monthly" ? "/month" : "/year";
-    const trialLabel = "14-day free trial";
 
     async function handleSelectPlan() {
         if (!isLoggedIn) {
@@ -59,7 +57,7 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                         Simple pricing for automated Stripe → Sheets sync.
                     </h1>
                     <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
-                        Start with a {trialLabel}. No long-term contracts. Cancel anytime.
+                        No long-term contracts. Cancel anytime.
                     </p>
                 </section>
 
