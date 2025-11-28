@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { User, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type NavItem = { href: string; label: string };
 
@@ -22,9 +23,15 @@ type SiteHeaderProps = {
     onSignOut?: () => void;
 };
 
+const baseNavItems = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/pricing", label: "Pricing" },
+    { href: "/blog", label: "Blog" },
+];
+
 export function SiteHeader(props: SiteHeaderProps) {
     const { variant, appNavItems = [], isAuthed, userEmail, onSignOut } = props;
-
+    const router = useRouter();
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,10 +59,51 @@ export function SiteHeader(props: SiteHeaderProps) {
     }, [menuOpen]);
 
     const isPublic = variant === "public";
+    const navItems = baseNavItems.concat(appNavItems);
+
+    const userMenu = (
+        <div className="relative ml-2" ref={menuRef}>
+            <button
+                type="button"
+                onClick={() => {
+                    if (!isAuthed && isPublic) {
+                        router.push("/login");
+                        return;
+                    }
+                    if (isPublic) {
+                        return;
+                    }
+                    setMenuOpen((v) => !v);
+                }}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+            >
+                <User className="h-4 w-4" />
+                <span className="max-w-[140px] truncate">
+                    {userEmail ?? "Account"}
+                </span>
+            </button>
+
+            {menuOpen ? (
+                <div className="absolute right-0 mt-2 flex w-40 flex-col items-start gap-1 rounded-xl border border-slate-200 bg-white py-1 text-xs text-slate-700 shadow-lg">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setMenuOpen(false);
+                            onSignOut?.();
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50"
+                    >
+                        <LogOut className="h-4 w-4" />
+                        Log out
+                    </button>
+                </div>
+            ) : null}
+        </div>
+    )
 
     return (
         <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
-            <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-3">
+            <div className="mx-auto flex w-full items-center justify-between px-6 py-3">
                 {/* Brand */}
                 <div className="flex items-center gap-3">
                     <Link href="/" className="flex items-center gap-3">
@@ -74,83 +122,77 @@ export function SiteHeader(props: SiteHeaderProps) {
                 </div>
 
                 {/* Nav */}
-                {isPublic ? (
-                    <nav className="flex items-center gap-4 text-sm">
-                        <a
-                            href="/pricing"
-                            className="text-slate-600 transition hover:text-slate-900"
+
+                <nav className="flex items-center gap-0 text-sm">
+                    {navItems.map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={clsx(
+                                "rounded-full px-3 py-1 font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900",
+                            )}
                         >
-                            Pricing
-                        </a>
-                        <a
-                            href="/blog"
-                            className="text-slate-600 transition hover:text-slate-900"
-                        >
-                            Blog
-                        </a>
-                        {isAuthed ? (
-                            <Link
-                                href="/dashboard"
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                            >
-                                Go to app
-                            </Link>
-                        ) : (
+                            {item.label}
+                        </Link>
+                    ))}
+
+                    {
+                        !isAuthed ? (
                             <Link
                                 href="/login"
                                 className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                             >
                                 Log in
                             </Link>
-                        )}
-                    </nav>
-                ) : (
-                    <nav className="flex items-center gap-0 text-sm">
-                        {appNavItems.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={clsx(
-                                    "rounded-full px-3 py-1 font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900",
-                                )}
-                            >
-                                {item.label}
-                            </Link>
-                        ))}
-
-                        {isAuthed && (
-                            <div className="relative ml-2" ref={menuRef}>
-                                <button
-                                    type="button"
-                                    onClick={() => setMenuOpen((v) => !v)}
-                                    className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                                >
-                                    <User className="h-4 w-4" />
-                                    <span className="max-w-[140px] truncate">
-                                        {userEmail ?? "Account"}
-                                    </span>
-                                </button>
-
-                                {menuOpen && (
-                                    <div className="absolute right-0 mt-2 flex w-40 flex-col items-start gap-1 rounded-xl border border-slate-200 bg-white py-1 text-xs text-slate-700 shadow-lg">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setMenuOpen(false);
-                                                onSignOut?.();
-                                            }}
-                                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50"
-                                        >
-                                            <LogOut className="h-4 w-4" />
-                                            Log out
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </nav>
-                )}
+                        ) : userMenu
+                    }
+                </nav>
             </div>
         </header>
     );
 }
+
+
+// {isPublic ? (
+//     <nav className="flex items-center gap-4 text-sm">
+//         <a
+//             href="/pricing"
+//             className="text-slate-600 transition hover:text-slate-900"
+//         >
+//             Pricing
+//         </a>
+//         <a
+//             href="/blog"
+//             className="text-slate-600 transition hover:text-slate-900"
+//         >
+//             Blog
+//         </a>
+//         {isAuthed ? (
+//             <Link
+//                 href="/dashboard"
+//                 className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+//             >
+//                 Go to app
+//             </Link>
+//         ) : (
+//             <Link
+//                 href="/login"
+//                 className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+//             >
+//                 Log in
+//             </Link>
+//         )}
+//     </nav>
+// ) : (
+//     <nav className="flex items-center gap-0 text-sm">
+//         {appNavItems.map((item) => (
+//             <Link
+//                 key={item.href}
+//                 href={item.href}
+//                 className={clsx(
+//                     "rounded-full px-3 py-1 font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900",
+//                 )}
+//             >
+//                 {item.label}
+//             </Link>
+//         ))}

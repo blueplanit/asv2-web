@@ -51,9 +51,11 @@ export function SiteFooter() {
                     {/* Brand + brief copy */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
+                        <Link href="/" className="flex items-center gap-3">
                             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                                 AS
                             </span>
+                            </Link>
                             <div className="flex flex-col">
                                 <span className="text-sm font-semibold text-slate-900">
                                     AutoSync

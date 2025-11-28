@@ -1,12 +1,13 @@
 // components/pricing/pricing-client.tsx
 "use client";
-
-import { useState } from "react";
+// at the top of pricing-client.tsx
+import { CheckCircle2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { Snackbar } from "@/components/ui/snackbar";
 
 type BillingInterval = "monthly" | "yearly";
-
 type PricingClientProps = {
     isLoggedIn: boolean;
 };
@@ -14,13 +15,33 @@ type PricingClientProps = {
 export function PricingClient({ isLoggedIn }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
-
+    const searchParams = useSearchParams();
+    const authFlag = searchParams.get("auth");
+    const justLoggedIn = isLoggedIn && authFlag === "1";
     const priceDisplay = interval === "monthly" ? "$15" : "$129";
     const intervalLabel = interval === "monthly" ? "/month" : "/year";
 
+    const [showSignedInHint, setShowSignedInHint] = useState(justLoggedIn);
+
+    useEffect(() => {
+        if (!justLoggedIn) return;
+        setShowSignedInHint(true);
+
+        const id = window.setTimeout(() => {
+            setShowSignedInHint(false);
+        }, 7000);
+
+        return () => window.clearTimeout(id);
+    }, [justLoggedIn]);
+
     async function handleSelectPlan() {
         if (!isLoggedIn) {
-            await signIn("google", { callbackUrl: "/pricing" });
+            setLoading(true);
+            try {
+                await signIn("google", { callbackUrl: "/pricing?auth=1" });
+            } finally {
+                setLoading(false);
+            }
             return;
         }
 
@@ -48,8 +69,28 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
         }
     }
 
+    const freeTrialMsg = !isLoggedIn ? <span className="text-sm text-slate-600"><a href="/login" className="text-indigo-600 hover:text-indigo-500 hover:underline font-bold">Free 14-day trial after sign in and setup.</a></span> : null;
+    const primaryCtaLabel = isLoggedIn
+        ? loading
+            ? "Redirecting to secure checkout…"
+            : "Continue to checkout"
+        : loading
+            ? "Opening secure sign-in…"
+            : "Sign in to checkout";
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
+            {/* Snackbar sits at the bottom of the viewport, independent of scroll */}
+            <Snackbar
+                open={showSignedInHint}
+                onClose={() => setShowSignedInHint(false)}
+                variant="success"
+                title="You’re signed in with Google"
+                description="You can now continue to checkout."
+                animated
+                autoHideMs={7000}
+            />
+
             <main className="mx-auto max-w-5xl px-4 py-16 space-y-12">
                 {/* Hero */}
                 <section className="text-center space-y-4">
@@ -57,7 +98,7 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                         Simple pricing for automated Stripe → Sheets sync.
                     </h1>
                     <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
-                        No long-term contracts. Cancel anytime.
+                        {freeTrialMsg} No long-term contracts. Cancel anytime.
                     </p>
                 </section>
 
@@ -68,8 +109,8 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                             type="button"
                             onClick={() => setInterval("monthly")}
                             className={`cursor-pointer rounded-full px-3 py-1 ${interval === "monthly"
-                                    ? "bg-slate-900 text-white"
-                                    : "bg-transparent text-slate-600"
+                                ? "bg-slate-900 text-white"
+                                : "bg-transparent text-slate-600"
                                 }`}
                         >
                             Monthly
@@ -78,8 +119,8 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                             type="button"
                             onClick={() => setInterval("yearly")}
                             className={`cursor-pointer rounded-full px-3 py-1 ${interval === "yearly"
-                                    ? "bg-slate-900 text-white"
-                                    : "bg-transparent text-slate-600"
+                                ? "bg-slate-900 text-white"
+                                : "bg-transparent text-slate-600"
                                 }`}
                         >
                             Annual
@@ -107,9 +148,6 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                                 </span>
                                 <span className="text-sm text-slate-500">{intervalLabel}</span>
                             </div>
-                            {/* <p className="text-xs font-medium text-emerald-700">
-                                {trialLabel}
-                            </p> */}
                             <ul className="mt-4 space-y-2 text-sm text-slate-700">
                                 <li>• 1 Stripe account synced to Sheets</li>
                                 <li>• Automated backfill + 30-minute sync cadence</li>
@@ -125,7 +163,7 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                                 disabled={loading}
                                 className="cursor-pointer inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-70"
                             >
-                                {loading ? "Redirecting to secure checkout…" : "Continue to Checkout"}
+                                {primaryCtaLabel}
                             </button>
                             <p className="mt-2 text-[11px] text-slate-500 text-center">
                                 You’ll be redirected to a secure Stripe-hosted payment page to checkout.
