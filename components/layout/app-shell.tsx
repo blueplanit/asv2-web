@@ -10,6 +10,7 @@ import { signOut, useSession } from "next-auth/react";
 const navItems = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/pricing", label: "Pricing" },
+    { href: "/blog", label: "Blog" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

@@ -29,7 +29,7 @@ const companyLinks = [
 ];
 
 const legalLinks = [
-    { label: "Privacy", href: "#" },
+    { label: "Privacy", href: "/pages/privacy-policy" },
     { label: "Terms", href: "#" },
     { label: "Data Processing", href: "#" },
     { label: "Security", href: "#" },
@@ -83,7 +83,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -101,7 +101,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -119,7 +119,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -137,7 +137,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -155,7 +155,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
@@ -167,7 +167,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                                            className="cursor-pointer rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
