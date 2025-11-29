@@ -67,14 +67,14 @@ export async function POST() {
         const sheetsResp = await sheets.spreadsheets.create({
             requestBody: {
                 properties: { title },
-                sheets: [
-                    { properties: { title: "Invoices_raw" } },
-                    { properties: { title: "Charges_raw" } },
-                    { properties: { title: "Customers_raw" } },
-                    { properties: { title: "Payouts_raw" } },
-                    { properties: { title: "Working" } },
-                    { properties: { title: "README" } },
-                ],
+                // sheets: [
+                //     { properties: { title: "Invoices_raw" } },
+                //     { properties: { title: "Charges_raw" } },
+                //     { properties: { title: "Customers_raw" } },
+                //     { properties: { title: "Payouts_raw" } },
+                //     { properties: { title: "Working" } },
+                //     { properties: { title: "README" } },
+                // ],
             },
         });
 

@@ -6,7 +6,10 @@ import { useState } from "react";
 import { useSearchParams, redirect, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { useEffect } from "react";
-import { StripeObject, DEFAULT_ENABLED_STRIPE_OBJECTS } from "@/lib/schemas/sync-config";
+import {
+    StripeObject,
+    DEFAULT_ENABLED_STRIPE_OBJECTS,
+  } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -57,6 +60,8 @@ export function OnboardingWizard() {
     const searchParams = useSearchParams();
     const { user, refresh } = useUserState();
     const router = useRouter();
+    const serverConfig = user.syncConfigs?.[0];
+
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
@@ -70,10 +75,24 @@ export function OnboardingWizard() {
     const [error, setError] = useState<string | null>(null);
 
     // init selection from server if present, else defaults
-    const serverConfig = user.syncConfigs?.[0];
-    const [enabledStripeObjects, setEnabledStripeObjects] = useState<StripeObject[]>(
-        (serverConfig?.enabledStripeObjects.length > 0 ? serverConfig.enabledStripeObjects as StripeObject[] : [...DEFAULT_ENABLED_STRIPE_OBJECTS]),
-    );
+    const initialStripeSelection: StripeObject[] = React.useMemo(() => {
+        if (
+            serverConfig?.stripeDataSyncMap &&
+            (serverConfig.stripeDataSyncMap as any[]).length > 0
+        ) {
+            return (serverConfig.stripeDataSyncMap as any[])
+                .filter(
+                    (entry) =>
+                        entry.kind === "object_table" &&
+                        entry.enabled &&
+                        typeof entry.primaryStripeObject === "string",
+                )
+                .map((entry) => entry.primaryStripeObject) as StripeObject[];
+        }
+        return [...DEFAULT_ENABLED_STRIPE_OBJECTS] as StripeObject[];
+    }, [serverConfig]);
+
+    const [selectedStripeObjects, setSelectedStripeObjects] = useState<StripeObject[]>(initialStripeSelection);
 
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
@@ -121,7 +140,7 @@ export function OnboardingWizard() {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ enabledStripeObjects, syncStatus: "backfill_running" }),
+                body: JSON.stringify({ selectedStripeObjects, syncStatus: "backfill_running" }),
             });
             if (!res.ok) {
                 setError("Failed to save sync settings");
@@ -293,8 +312,8 @@ export function OnboardingWizard() {
                                     </div>
                                     {currentStep.id === 4 && (
                                         <StripeObjectsStep
-                                            value={enabledStripeObjects}
-                                            onChange={setEnabledStripeObjects}
+                                            value={selectedStripeObjects}
+                                            onChange={setSelectedStripeObjects}
                                             disabled={submitting}
                                         />
                                     )}

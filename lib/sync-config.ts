@@ -4,8 +4,9 @@ import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/li
 import {
     SyncConfigSchema,
     type SyncConfig,
-    StripeObjectEnum,
+    type StripeDataSyncEntry,
     StripeObject,
+    buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
@@ -99,7 +100,7 @@ export async function createSyncConfig(params: {
     authUserId: string;
     spreadsheetId: string;
     stripeAccountId: string;
-    enabledStripeObjects?: (typeof StripeObjectEnum.enum)[];
+    stripeDataSyncMap?: StripeDataSyncEntry[];
     historyMode?: SyncConfig["historyMode"];
     historySinceDays?: number;
 }) {
@@ -107,10 +108,20 @@ export async function createSyncConfig(params: {
         authUserId,
         spreadsheetId,
         stripeAccountId,
-        enabledStripeObjects = ["charges", "invoices", "customers", "payouts", "subscriptions"], // sane defaults
+        stripeDataSyncMap,
         historyMode = "since",
         historySinceDays = 90,
     } = params;
+
+    if (!stripeAccountId) {
+        throw new Error("Stripe account ID is required");
+    }
+    if (!spreadsheetId) {
+        throw new Error("Spreadsheet ID is required");
+    }
+    if (!authUserId) {
+        throw new Error("Auth user ID is required");
+    }
 
     const now = new Date().toISOString();
 
@@ -123,7 +134,7 @@ export async function createSyncConfig(params: {
         spreadsheetId,
         stripeAccountId,
 
-        enabledStripeObjects,
+        stripeDataSyncMap: stripeDataSyncMap ?? buildDefaultStripeDataSyncMap(),
         historyMode,
         historySinceDays,
 
@@ -164,7 +175,7 @@ export async function getSyncConfig(authUserId: string, spreadsheetId: string) {
 export async function updateSyncConfig(params: {
     authUserId: string;
     spreadsheetId: string;
-    enabledStripeObjects?: StripeObject[];
+    stripeDataSyncMap?: StripeDataSyncEntry[];
     historyMode?: SyncConfig["historyMode"] | null;
     historySinceDays?: number | null;
     syncStatus?: SyncConfig["syncStatus"];
@@ -172,7 +183,7 @@ export async function updateSyncConfig(params: {
     const {
         authUserId,
         spreadsheetId,
-        enabledStripeObjects,
+        stripeDataSyncMap,
         historyMode,
         historySinceDays,
         syncStatus,
@@ -183,10 +194,10 @@ export async function updateSyncConfig(params: {
         ":updatedAt": new Date().toISOString(),
     };
 
-    if (enabledStripeObjects !== undefined) {
-        updates.push("enabledStripeObjects = :objs");
-        values[":objs"] = enabledStripeObjects;
-    }
+    if (stripeDataSyncMap !== undefined) {
+        updates.push("stripeDataSyncMap = :sdsm");
+        values[":sdsm"] = stripeDataSyncMap;
+      }
 
     if (historyMode !== undefined && historyMode !== null) {
         updates.push("historyMode = :hm");

@@ -3,16 +3,21 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
-    DEFAULT_ENABLED_STRIPE_OBJECTS,
     StripeObjectEnum,
     type StripeObject,
+    type SyncConfig,
 } from "@/lib/schemas/sync-config";
 import { getUserSyncConfig, updateSyncConfig } from "@/lib/sync-config";
+import {
+    ensureStripeDataSyncMap,
+    applyStripeSelectionToStripeDataSyncMap,
+} from "@/lib/stripe-data-sync-map-helpers";
+import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google-stripe-data-sync-map";
 
 export const runtime = "nodejs";
 
 type Body = {
-    enabledStripeObjects?: string[];
+    selectedStripeObjects?: string[];
     historyMode?: "full" | "since";
     historySinceDays?: number;
     syncStatus?: "onboarding" | "backfill_running" | "paused" | "error" | "syncing";
@@ -37,16 +42,16 @@ export async function POST(req: Request) {
     }
 
     // Validate against enum — no arbitrary strings
-    let enabledStripeObjects: StripeObject[] | undefined;
-    if (body?.enabledStripeObjects) {
+    let selectedStripeObjects: StripeObject[] | undefined;
+    if (body?.selectedStripeObjects) {
         try {
-            enabledStripeObjects = body.enabledStripeObjects.map((v) =>
+            selectedStripeObjects = body.selectedStripeObjects.map((v) =>
                 StripeObjectEnum.parse(v),
             ) as StripeObject[];
         } catch {
             return new NextResponse("Invalid stripe object selection", { status: 400 });
         }
-        if (enabledStripeObjects.length === 0) {
+        if (selectedStripeObjects.length === 0) {
             return new NextResponse("At least one object must be selected", { status: 400 });
         }
     }
@@ -58,10 +63,25 @@ export async function POST(req: Request) {
             : undefined;
     const syncStatus = body?.syncStatus;
 
+    let stripeDataSyncMap = ensureStripeDataSyncMap(existing);
+
+    if (selectedStripeObjects) {
+        stripeDataSyncMap = applyStripeSelectionToStripeDataSyncMap(
+            stripeDataSyncMap,
+            selectedStripeObjects,
+        );
+    }
+
+    stripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
+        authUserId,
+        spreadsheetId: existing.spreadsheetId,
+        stripeDataSyncMap,
+    });
+
     const updated = await updateSyncConfig({
         authUserId,
         spreadsheetId: existing.spreadsheetId,
-        enabledStripeObjects,
+        stripeDataSyncMap,
         historyMode,
         historySinceDays,
         syncStatus,
