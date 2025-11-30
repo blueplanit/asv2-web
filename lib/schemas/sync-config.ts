@@ -8,14 +8,15 @@ export type StripeObject = z.infer<typeof StripeObjectEnum>;
 
 export const StripeDataSyncKindEnum = z.enum([
     "object_table",   // 1:1 Stripe object table
-    "derived",       // derived / multi-source like revenue insights
+    "derived",        // derived / multi-source like revenue insights
     "custom",         // future user-defined
 ]);
 
+// This is the schema for a single stripe data sync entry (ie the data that will be synced to a Google Sheet tab).
 export const StripeDataSyncEntrySchema = z.object({
     id: z.string().min(1), // e.g. "charges", "invoices", "customers", "payouts", "subscriptions", or later: "revenue_insights", "custom_user_defined"
 
-    kind: StripeDataSyncKindEnum,
+    kind: StripeDataSyncKindEnum, // object_table, derived, or custom
 
     // Google Sheets tab id (gid). Null until created/bound.
     sheetId: z.number().int().nonnegative().nullable().default(null),

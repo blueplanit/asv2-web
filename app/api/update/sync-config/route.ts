@@ -5,7 +5,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
     StripeObjectEnum,
     type StripeObject,
-    type SyncConfig,
 } from "@/lib/schemas/sync-config";
 import { getUserSyncConfig, updateSyncConfig } from "@/lib/sync-config";
 import {
@@ -21,6 +20,8 @@ type Body = {
     historyMode?: "full" | "since";
     historySinceDays?: number;
     syncStatus?: "onboarding" | "backfill_running" | "paused" | "error" | "syncing";
+    workingSheetTitle?: string;
+    workingSheetMessage?: string;
 } | null;
 
 export async function POST(req: Request) {
@@ -35,6 +36,8 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => null)) as Body;
+    const workingSheetTitle = body?.workingSheetTitle;
+    const workingSheetMessage = body?.workingSheetMessage;
 
     const existing = await getUserSyncConfig(authUserId);
     if (!existing || !existing.spreadsheetId) {
@@ -72,10 +75,13 @@ export async function POST(req: Request) {
         );
     }
 
+    // Build Google Sheet tabs based on which stripe to-sync data is enabled from UI
     stripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
         authUserId,
         spreadsheetId: existing.spreadsheetId,
         stripeDataSyncMap,
+        workingSheetTitle,
+        workingSheetMessage,
     });
 
     const updated = await updateSyncConfig({

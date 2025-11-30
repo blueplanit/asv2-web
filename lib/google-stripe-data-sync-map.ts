@@ -6,7 +6,6 @@ import type {
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 
-
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
     return `${base}_raw (DO NOT EDIT)`;
@@ -16,13 +15,20 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
     authUserId: string;
     spreadsheetId: string;
     stripeDataSyncMap: StripeDataSyncEntry[];
+    workingSheetTitle?: string;
+    workingSheetMessage?: string;
 }): Promise<StripeDataSyncEntry[]> {
     const { authUserId, spreadsheetId } = params;
+    let {workingSheetTitle, workingSheetMessage} = params;
+    workingSheetTitle = workingSheetTitle || "Working Sheet";
+    workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
 
     try {
         let { stripeDataSyncMap } = params;
 
         if (stripeDataSyncMap.length === 0) return stripeDataSyncMap;
+        if (!spreadsheetId) throw new Error("Spreadsheet ID is required");
+        if (!authUserId) throw new Error("Auth user ID is required");
 
         // 1) Get Google access token for this user
         const { accessToken } = await getGoogleAccessTokenForUser(
@@ -117,45 +123,90 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
             });
         }
 
-        // Second batch: protect our tabs + delete default "Sheet1" if safe
-        const protectAndDeleteRequests: sheets_v4.Schema$Request[] = [];
+        // Second batch: protect our tabs + ensure "Working Sheet" exists, is named, seeded, and moved to the end
+        const postRequests: sheets_v4.Schema$Request[] = [];
 
         // Protect all enabled entries with a bound sheetId
         for (const entry of stripeDataSyncMap) {
             if (!entry.enabled || entry.sheetId == null) continue;
 
-            protectAndDeleteRequests.push({
+            postRequests.push({
                 addProtectedRange: {
                     protectedRange: {
                         range: {
                             sheetId: entry.sheetId,
                         },
                         warningOnly: false,
-                        // Editors left empty → only sheet owner / explicitly added editors
                         editors: {},
                     },
                 },
             });
         }
 
-        // Delete default "Sheet1" if it exists and there is more than one sheet
-        const sheet1 = existingSheets.find(
-            (s) => s.properties?.title === "Sheet1" && typeof s.properties?.sheetId === "number",
-        );
-        const totalSheetsAfterCreate = existingSheets.length + createdCount;
+        // Ensure a single "Working Sheet" tab exists, reuse/rename "Sheet1" if present
+        const existingWorkingSheet = existingSheets.find((s) => s.properties?.title === workingSheetTitle && typeof s.properties?.sheetId === "number");
+        const sheet1 = existingSheets.find((s) => s.properties?.title === "Sheet1" && typeof s.properties?.sheetId === "number");
 
-        if (sheet1 && totalSheetsAfterCreate > 1) {
-            protectAndDeleteRequests.push({
-                deleteSheet: {
-                    sheetId: sheet1.properties!.sheetId!,
+        let workingSheetId: number | null | undefined =
+            existingWorkingSheet?.properties?.sheetId ??
+            sheet1?.properties?.sheetId;
+
+        // If we’re reusing Sheet1 as the working sheet, rename it
+        if (!existingWorkingSheet && sheet1 && sheet1.properties?.sheetId != null) {
+            workingSheetId = sheet1.properties.sheetId;
+            postRequests.push({
+                updateSheetProperties: {
+                    properties: {
+                        sheetId: workingSheetId,
+                        title: workingSheetTitle,
+                    },
+                    fields: "title",
                 },
             });
         }
 
-        if (protectAndDeleteRequests.length > 0) {
+        // Seed A1 text and move Working Sheet to the end (idempotent enough)
+        if (workingSheetId != null) {
+            // Seed message in A1 (will overwrite A1 on repeated calls)
+            postRequests.push({
+                updateCells: {
+                    start: {
+                        sheetId: workingSheetId,
+                        rowIndex: 0,
+                        columnIndex: 0,
+                    },
+                    rows: [
+                        {
+                            values: [
+                                {
+                                    userEnteredValue: {
+                                        stringValue: workingSheetMessage,
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    fields: "userEnteredValue",
+                },
+            });
+
+            // Move to last position
+            const targetIndex = Math.max(0, existingSheets.length + createdCount);
+            postRequests.push({
+                updateSheetProperties: {
+                    properties: {
+                        sheetId: workingSheetId,
+                        index: targetIndex,
+                    },
+                    fields: "index",
+                },
+            });
+        }
+
+        if (postRequests.length > 0) {
             await sheets.spreadsheets.batchUpdate({
                 spreadsheetId,
-                requestBody: { requests: protectAndDeleteRequests },
+                requestBody: { requests: postRequests },
             });
         }
 

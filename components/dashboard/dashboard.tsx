@@ -20,6 +20,8 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
     customers: "Customers",
     payouts: "Payouts",
     subscriptions: "Subscriptions",
+    payment_intents: "Payment Intents",
+    disputes: "Disputes",
 };
 
 const navItems = [
@@ -46,9 +48,7 @@ function mapSyncConfigToWorkspace(args: {
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${cfg.spreadsheetId}`;
     const resolvedTitle = sheetTitles[cfg.spreadsheetId];
     const name = resolvedTitle ?? cfg.spreadsheetId;
-
-    const objectsEnabled =
-        cfg.stripeDataSyncMap?.map((o) => STRIPE_OBJECT_LABELS[o.id] ?? o.id) ?? [];
+    const objectsEnabled = cfg.stripeDataSyncMap?.filter((o) => o.enabled).map((o) => (STRIPE_OBJECT_LABELS[o.id] ?? o.id)) ?? [];
 
     let health: Workspace["health"] = "healthy";
     if (cfg.syncStatus === "backfill_running") health = "backfilling" as any;
