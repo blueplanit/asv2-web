@@ -6,10 +6,7 @@ import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { useEffect } from "react";
-import {
-    StripeObject,
-    DEFAULT_ENABLED_STRIPE_OBJECTS,
-  } from "@/lib/schemas/sync-config";
+import { StripeObject, DEFAULT_ENABLED_STRIPE_OBJECTS } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 
