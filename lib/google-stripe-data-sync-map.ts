@@ -190,13 +190,12 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                 },
             });
 
-            // Move to last position
-            const targetIndex = Math.max(0, existingSheets.length + createdCount);
+            // Move to first position
             postRequests.push({
                 updateSheetProperties: {
                     properties: {
                         sheetId: workingSheetId,
-                        index: targetIndex,
+                        index: 0,
                     },
                     fields: "index",
                 },
