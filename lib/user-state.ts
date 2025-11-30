@@ -72,7 +72,7 @@ function computeOnboardingStage(state: {
 
     // Assume there is only one sync config for a user for MVP 
     const userSyncConfig = syncConfigs.length > 0 ? syncConfigs[0] : null;
-    if (hasStripe && hasGoogle && userSyncConfig?.enabledStripeObjects.length === 0 && userSyncConfig?.spreadsheetId) {
+    if (hasStripe && hasGoogle && userSyncConfig?.stripeDataSyncMap?.length === 0 && userSyncConfig?.spreadsheetId) {
         return "sheet_created";
     }
 

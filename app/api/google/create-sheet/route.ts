@@ -9,7 +9,7 @@ import { getStripeAccountIdForUser } from "@/lib/stripe-connection";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).id) {
         return new NextResponse("Unauthorized", { status: 401 });
@@ -34,8 +34,10 @@ export async function POST() {
 
         const drive = google.drive({ version: "v3", auth: oauth2Client });
 
+        const { folderName, workspaceSheetTitle } = await req.json();
+
         // Ensure "Sync" folder exists and get its ID
-        const syncFolderName = "Sync";
+        const syncFolderName = folderName || 'Sync';
         let syncFolderId: string | undefined;
 
         const listRes = await drive.files.list({
@@ -63,18 +65,10 @@ export async function POST() {
         // existing code that creates the spreadsheet
         const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 
-        const title = "Stripe Sync – Workspace"; // or whatever you use
+        const title = workspaceSheetTitle || 'My Stripe Sync – Workspace';
         const sheetsResp = await sheets.spreadsheets.create({
             requestBody: {
                 properties: { title },
-                sheets: [
-                    { properties: { title: "Invoices_raw" } },
-                    { properties: { title: "Charges_raw" } },
-                    { properties: { title: "Customers_raw" } },
-                    { properties: { title: "Payouts_raw" } },
-                    { properties: { title: "Working" } },
-                    { properties: { title: "README" } },
-                ],
             },
         });
 
@@ -82,7 +76,7 @@ export async function POST() {
         const spreadsheetUrl = sheetsResp.data.spreadsheetUrl;
 
         if (!spreadsheetId) {
-            return new NextResponse("Failed to create sheet", { status: 502 });
+            return new NextResponse("Failed to create sheet: No spreadsheetId returned.", { status: 502 });
         }
 
         // move the new spreadsheet into the "Sync" folder
@@ -114,6 +108,6 @@ export async function POST() {
         });
     } catch (err) {
         console.error("Error creating Google Sheet:", err);
-        return new NextResponse("Failed to create sheet", { status: 502 });
+        return new NextResponse(`Failed to create sheet: ${err instanceof Error ? err.message : "Unknown error"}`, { status: 502 });
     }
 }

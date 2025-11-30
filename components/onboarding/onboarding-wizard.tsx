@@ -3,14 +3,22 @@
 
 import * as React from "react";
 import { useState } from "react";
-import { useSearchParams, redirect, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { useEffect } from "react";
-import { StripeObject, DEFAULT_ENABLED_STRIPE_OBJECTS } from "@/lib/schemas/sync-config";
+import {
+    StripeObject,
+    DEFAULT_ENABLED_STRIPE_OBJECTS,
+  } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 
 type StepStatus = "complete" | "current" | "upcoming";
+
+export const WORKSPACE_SHEET_TITLE = "My Stripe Sync – Workspace";
+export const FOLDER_NAME = "Sync";
+const WORKING_SHEET_TITLE = "Working Sheet";
+const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
 
 export type Step = {
     id: number;
@@ -27,27 +35,24 @@ const steps: Step[] = [
         title: "Connect Stripe",
         description: "Connect the Stripe account you want synced to Google Sheets via a secure connection using Stripe Connect OAuth.",
         ctaLabel: "Connect Stripe",
-        helper: "We never see full card numbers—Stripe handles billing data.",
+        helper: "This is a read-only connection to your Stripe account. No two way sync is performed.",
     },
     {
         id: 2,
         title: "Grant Sheets access",
-        description:
-            "Allow AutoSync to create and update Google Sheets files in your Drive. We will not access any existing files you own.",
+        description: "Allow AutoSync to create and update Google Sheets files in your Drive. We will not access any existing files you own.",
         ctaLabel: "Connect Google Sheets",
     },
     {
         id: 3,
         title: "Create your workspace sheet",
-        description:
-            "We’ll create a Google Sheets spreadsheet named “Stripe Sync” in your Drive with protected *_raw tabs and a Working tab for analysis.",
+        description: `We’ll create a new Google Sheets file named “${WORKSPACE_SHEET_TITLE}” in the “${FOLDER_NAME}” folder in your Drive to hold your Stripe data.`,
         ctaLabel: "Create sheet",
     },
     {
         id: 4,
         title: "Choose Stripe data & start your 14-day trial",
-        description:
-            "Pick which Stripe data objects to sync into your newly created Google Sheet. Then, start your initial backfill and ongoing sync.",
+        description: "Pick which Stripe data objects to sync into your newly created Google Sheet. Then, start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
     },
 ];
@@ -57,6 +62,8 @@ export function OnboardingWizard() {
     const searchParams = useSearchParams();
     const { user, refresh } = useUserState();
     const router = useRouter();
+    const serverConfig = user.syncConfigs?.[0];
+
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
@@ -70,10 +77,24 @@ export function OnboardingWizard() {
     const [error, setError] = useState<string | null>(null);
 
     // init selection from server if present, else defaults
-    const serverConfig = user.syncConfigs?.[0];
-    const [enabledStripeObjects, setEnabledStripeObjects] = useState<StripeObject[]>(
-        (serverConfig?.enabledStripeObjects.length > 0 ? serverConfig.enabledStripeObjects as StripeObject[] : [...DEFAULT_ENABLED_STRIPE_OBJECTS]),
-    );
+    const initialStripeSelection: StripeObject[] = React.useMemo(() => {
+        if (
+            serverConfig?.stripeDataSyncMap &&
+            (serverConfig.stripeDataSyncMap as any[]).length > 0
+        ) {
+            return (serverConfig.stripeDataSyncMap as any[])
+                .filter(
+                    (entry) =>
+                        entry.kind === "object_table" &&
+                        entry.enabled &&
+                        typeof entry.primaryStripeObject === "string",
+                )
+                .map((entry) => entry.primaryStripeObject) as StripeObject[];
+        }
+        return [...DEFAULT_ENABLED_STRIPE_OBJECTS] as StripeObject[];
+    }, [serverConfig]);
+
+    const [selectedStripeObjects, setSelectedStripeObjects] = useState<StripeObject[]>(initialStripeSelection);
 
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
@@ -102,17 +123,24 @@ export function OnboardingWizard() {
                     ? "Creating sheet…"
                     : "Starting trial & backfill...";
 
-
     async function createSheet() {
-        const res = await fetch("/api/google/create-sheet", {
-            method: "POST",
-        });
-        if (!res.ok) {
-            return;
-        }
+        try {
+            const res = await fetch("/api/google/create-sheet", {
+                method: "POST",
+                body: JSON.stringify({ folderName: FOLDER_NAME, workspaceSheetTitle: WORKSPACE_SHEET_TITLE }),
+            });
+            if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                setError(text || "Failed to create sheet");
+                return;
+            }
 
-        await refresh(); // now userState has SyncConfig + sheet info
-        return res.json();
+            await refresh(); // now userState has SyncConfig + sheet info
+            return res.json();
+        } catch (e) {
+            setError(`Failed to create sheet: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
+            return false;
+        }
     }
 
     async function saveSyncConfigSelection() {
@@ -121,16 +149,17 @@ export function OnboardingWizard() {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ enabledStripeObjects, syncStatus: "backfill_running" }),
+                body: JSON.stringify({ selectedStripeObjects, syncStatus: "backfill_running", workingSheetTitle: WORKING_SHEET_TITLE, workingSheetMessage: WORKING_SHEET_MESSAGE }),
             });
             if (!res.ok) {
-                setError("Failed to save sync settings");
+                const text = await res.text().catch(() => "");
+                setError(text || "Failed to save sync settings");
                 return false;
             }
             await refresh();
             return true;
-        } catch {
-            setError("Failed to save sync settings");
+        } catch (e) {
+            setError(`Failed to save sync settings: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
             return false;
         }
     }
@@ -202,11 +231,9 @@ export function OnboardingWizard() {
                 const trialOk = await handleStartTrial();
                 // Save sync config selection
                 const saveConfigOk = await saveSyncConfigSelection();
-                if (!trialOk) {
-                    throw new Error("Failed to start trial");
-                }
-                if (!saveConfigOk) {
-                    throw new Error("Failed to save sync config");
+                if (!trialOk || !saveConfigOk) {
+                    setSubmitting(false);
+                    return;
                 }
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
@@ -293,8 +320,8 @@ export function OnboardingWizard() {
                                     </div>
                                     {currentStep.id === 4 && (
                                         <StripeObjectsStep
-                                            value={enabledStripeObjects}
-                                            onChange={setEnabledStripeObjects}
+                                            value={selectedStripeObjects}
+                                            onChange={setSelectedStripeObjects}
                                             disabled={submitting}
                                         />
                                     )}
