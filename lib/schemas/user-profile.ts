@@ -2,4 +2,4 @@
 export {
     UserProfileSchema,
     type UserProfile,
-} from "@blueplanit/asv2-shared-schemas";
+} from "@blueplanit/asv2-shared";

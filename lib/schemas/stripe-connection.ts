@@ -2,4 +2,4 @@
 export {
     StripeConnectionSchema,
     type StripeConnection,
-} from "@blueplanit/asv2-shared-schemas";
+} from "@blueplanit/asv2-shared";

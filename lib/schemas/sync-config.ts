@@ -9,4 +9,4 @@ export {
     SyncConfigSchema,
     type SyncConfig,
     DEFAULT_ENABLED_STRIPE_OBJECTS,
-} from "@blueplanit/asv2-shared-schemas";
+} from "@blueplanit/asv2-shared";

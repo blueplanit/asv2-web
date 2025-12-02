@@ -37,4 +37,4 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 
 ## For shared schemas package
-npm install via "export NPM_TOKEN_PAT=your github user PAT; npm i @blueplanit/asv2-shared-schemas"
+npm install via "export NPM_TOKEN_PAT=your github user PAT; npm i @blueplanit/asv2-shared"
