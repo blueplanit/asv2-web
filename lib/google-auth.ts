@@ -2,20 +2,10 @@
 import { ddb } from "./dynamo";
 import { QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GoogleConnectionSchema } from "@/lib/schemas/google-connection";
+import { type StoredAccessPayload, type StoredRefreshPayload } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-
-export type StoredAccessPayload = {
-    accessToken: string;
-    scope?: string;
-    tokenType?: string;
-    expiresAt?: number;
-};
-
-export type StoredRefreshPayload = {
-    refreshToken: string;
-};
 
 export function decrypt<T = unknown>(cipher: string): T {
     const json = Buffer.from(cipher, "base64").toString("utf8");
