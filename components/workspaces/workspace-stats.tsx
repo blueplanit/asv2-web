@@ -1,42 +1,80 @@
 // components/workspaces/workspace-stats.tsx
+import { SheetTabMetrics, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
+
+// Fallback to 30k rows if not found in TAB_ROW_LIMITS
+const DEFAULT_MAX_ROW_COUNT = 30000;
+
+// display labels for stripe object ids
+const STRIPE_OBJECT_LABELS: Record<string, string> = {
+    invoices: "Invoices",
+    charges: "Charges",
+    customers: "Customers",
+    payouts: "Payouts",
+    subscriptions: "Subscriptions",
+    payment_intents: "Payment Intents",
+    disputes: "Disputes",
+};
 
 type WorkspaceStatsProps = {
-    objectsEnabled: string[];
+    sheetTabMetrics: SheetTabMetrics[];
+    stripeDataSyncMap: StripeDataSyncEntry[];
 };
 
-type MockStat = {
+type TabStat = {
+    sheetId: number;
+    objectId: string;
     label: string;
-    lastSync: number;
-    last24h: number;
-    total: number;
+    rowCount: number;
+    maxRowCount: number;
+    lastObservedAt: string;
 };
 
-// Hardcoded mock stats keyed by display label (matches objectsEnabled entries)
-const MOCK_STATS: Record<string, MockStat> = {
-    Invoices: { label: "Invoices", lastSync: 18, last24h: 94, total: 1420 },
-    Charges: { label: "Charges", lastSync: 32, last24h: 187, total: 3812 },
-    Customers: { label: "Customers", lastSync: 9, last24h: 47, total: 962 },
-    Payouts: { label: "Payouts", lastSync: 3, last24h: 11, total: 184 },
-    Subscriptions: { label: "Subscriptions", lastSync: 7, last24h: 29, total: 536 },
-};
-
-export function WorkspaceStats({ objectsEnabled }: WorkspaceStatsProps) {
+export function WorkspaceStats({ 
+    sheetTabMetrics,
+    stripeDataSyncMap,
+}: WorkspaceStatsProps) {
     const [open, setOpen] = useState(false);
 
-    const rows: MockStat[] = (objectsEnabled.length ? objectsEnabled : Object.keys(MOCK_STATS))
-        .map((label) => MOCK_STATS[label] ?? {
-            label,
-            lastSync: 0,
-            last24h: 0,
-            total: 0,
-        });
+    // Create a map from sheetId to StripeDataSyncEntry for quick lookup
+    const sheetIdToEntry = useMemo(() => {
+        const map = new Map<number, StripeDataSyncEntry>();
+        for (const entry of stripeDataSyncMap) {
+            if (entry.sheetId != null) {
+                map.set(entry.sheetId, entry);
+            }
+        }
+        return map;
+    }, [stripeDataSyncMap]);
 
-    const maxLast24h = rows.length ? Math.max(...rows.map((r) => r.last24h || 1)) : 1;
-    const totalLastSync = rows.reduce((sum, r) => sum + r.lastSync, 0);
-    const totalLast24h = rows.reduce((sum, r) => sum + r.last24h, 0);
-    const totalObjects = rows.length;
+    // Build tab stats from metrics
+    const tabStats: TabStat[] = useMemo(() => {
+        return sheetTabMetrics
+            .map((metric) => {
+                const entry = sheetIdToEntry.get(metric.sheetId);
+                if (!entry) return null;
+
+                const objectId = entry.id;
+                const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
+                const maxRowCount = TAB_ROW_LIMITS[objectId] ?? DEFAULT_MAX_ROW_COUNT;
+
+                return {
+                    sheetId: metric.sheetId,
+                    objectId,
+                    label,
+                    rowCount: metric.rowCount,
+                    maxRowCount,
+                    lastObservedAt: metric.lastObservedAt,
+                };
+            })
+            .filter((stat): stat is TabStat => stat !== null)
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [sheetTabMetrics, sheetIdToEntry]);
+
+    const totalRowCount = tabStats.reduce((sum, stat) => sum + stat.rowCount, 0);
+    const totalTabs = tabStats.length;
 
     return (
         <section className="border-t border-slate-100 pt-4">
@@ -61,58 +99,59 @@ export function WorkspaceStats({ objectsEnabled }: WorkspaceStatsProps) {
                     <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-700">
                         <div>
                             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                Since last sync
+                                Total rows with data
                             </p>
                             <p className="text-sm font-medium text-slate-900">
-                                {totalLastSync} records across {totalObjects} object
-                                {totalObjects === 1 ? "" : "s"}
-                            </p>
-                        </div>
-                        <div className="h-8 w-px bg-slate-200 hidden sm:block" />
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                Last 24 hours
-                            </p>
-                            <p className="text-sm font-medium text-slate-900">
-                                {totalLast24h} records synced
+                                {totalRowCount.toLocaleString()} rows across {totalTabs} sheet tab
+                                {totalTabs === 1 ? "" : "s"}
                             </p>
                         </div>
                     </div>
 
-                    {/* Per-object “bar chart” */}
+                    {/* Per-tab "bar chart" */}
                     <div className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            Breakdown by object (last 24h)
+                            Breakdown by sheet tab
                         </p>
                         <div className="space-y-2">
-                            {rows.map((row) => {
-                                const ratio = maxLast24h ? row.last24h / maxLast24h : 0;
-                                const width = Math.max(6, Math.round(ratio * 100)); // min width so zeros still render
-                                return (
-                                    <div
-                                        key={row.label}
-                                        className="flex flex-col gap-1 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2"
-                                    >
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="font-medium text-slate-800">
-                                                {row.label}
-                                            </span>
-                                            <span className="text-slate-500">
-                                                {row.last24h} in last 24h · {row.total} total
-                                            </span>
+                            {tabStats.length === 0 ? (
+                                <p className="text-xs text-slate-500 py-2">
+                                    No sheet tab metrics available yet.
+                                </p>
+                            ) : (
+                                tabStats.map((stat) => {
+                                    const ratio = stat.maxRowCount > 0 ? stat.rowCount / stat.maxRowCount : 0;
+                                    const width = Math.max(.5, Math.round(ratio * 100)); // min width so zeros still render
+                                    const percentage = stat.maxRowCount > 0 
+                                        ? Math.round((stat.rowCount / stat.maxRowCount) * 100)
+                                        : 0;
+                                    
+                                    return (
+                                        <div
+                                            key={stat.sheetId}
+                                            className="flex flex-col gap-1 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2"
+                                        >
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="font-medium text-slate-800">
+                                                    {stat.label}
+                                                </span>
+                                                <span className="text-slate-500">
+                                                    {percentage}% filled
+                                                </span>
+                                            </div>
+                                            <div className="h-1.5 rounded-full bg-slate-100">
+                                                <div
+                                                    className="h-1.5 rounded-full bg-indigo-500 transition-all"
+                                                    style={{ width: `${width}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-slate-500">
+                                                Last observed: {new Date(stat.lastObservedAt).toLocaleString()}
+                                            </p>
                                         </div>
-                                        <div className="h-1.5 rounded-full bg-slate-100">
-                                            <div
-                                                className="h-1.5 rounded-full bg-indigo-500 transition-all"
-                                                style={{ width: `${width}%` }}
-                                            />
-                                        </div>
-                                        <p className="text-[11px] text-slate-500">
-                                            {row.lastSync} new record{row.lastSync === 1 ? "" : "s"} in the last sync run.
-                                        </p>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>

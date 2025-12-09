@@ -13,6 +13,8 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { WorkspaceStats } from "./workspace-stats";
+import { SheetTabMetrics } from "@blueplanit/asv2-shared";
+import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
 
 
 export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error";
@@ -58,9 +60,17 @@ type Props = {
     workspace: Workspace;
     onSyncNow?: (id: string) => void;
     onTogglePause: (id: string, nextStatus: "paused" | "syncing") => void;
+    sheetTabMetrics: SheetTabMetrics[];
+    stripeDataSyncMap: StripeDataSyncEntry[];
 };
 
-export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
+export function WorkspaceCard({ 
+    workspace, 
+    onSyncNow, 
+    onTogglePause,
+    sheetTabMetrics,
+    stripeDataSyncMap,
+}: Props) {
     const health = HEALTH_LABELS[workspace.health];
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -278,7 +288,10 @@ export function WorkspaceCard({ workspace, onSyncNow, onTogglePause }: Props) {
             </div>
 
             {/* Collapsible sync stats */}
-            <WorkspaceStats objectsEnabled={workspace.objectsEnabled} />
+            <WorkspaceStats
+                sheetTabMetrics={sheetTabMetrics}
+                stripeDataSyncMap={stripeDataSyncMap}
+            />
         </article>
     );
 }
