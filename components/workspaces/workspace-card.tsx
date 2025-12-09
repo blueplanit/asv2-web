@@ -13,9 +13,9 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { WorkspaceStats } from "./workspace-stats";
-import { SheetTabMetrics } from "@blueplanit/asv2-shared";
+import { SheetTabMetrics, TAB_ROW_LIMITS, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
-
+import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 
 export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error";
 
@@ -29,7 +29,7 @@ export type Workspace = {
     lastSyncAt: string | null;
     health: WorkspaceHealth;
     objectsEnabled: string[];
-    syncStatus: "syncing" | "paused" | "backfill_running" | "error" | "onboarding";
+    syncStatus: "syncing" | "paused" | "backfill_running" | "error" | "onboarding" | "retired";
     nameLoading?: boolean;
 };
 
@@ -115,8 +115,63 @@ export function WorkspaceCard({
 
     const showSyncNowButton = workspace.syncStatus !== "backfill_running" && workspace.syncStatus !== "paused" && workspace.syncStatus !== "error";
 
+    // Check if any sheet tab exceeds the warning threshold
+    const exceedsWarningThreshold = (() => {
+        // Create a map from sheetId to StripeDataSyncEntry for quick lookup
+        const sheetIdToEntry = new Map<number, StripeDataSyncEntry>();
+        for (const entry of stripeDataSyncMap) {
+            if (entry.sheetId != null) {
+                sheetIdToEntry.set(entry.sheetId, entry);
+            }
+        }
+
+        // Check if any metric exceeds the threshold
+        for (const metric of sheetTabMetrics) {
+            const entry = sheetIdToEntry.get(metric.sheetId);
+            if (!entry) continue;
+
+            const objectId = entry.id;
+            const maxRowCount = TAB_ROW_LIMITS[objectId] ?? 30000;
+            const warningThreshold = WARN_THRESHOLD * maxRowCount;
+
+            if (metric.rowCount > warningThreshold) {
+                return true;
+            }
+        }
+        return false;
+    })();
+
     return (
         <article className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+
+            {/* Warning CTA if approaching capacity limit */}
+            {exceedsWarningThreshold && (
+                <div className="rounded-2xl border-2 border-red-600 bg-red-50 p-4 shadow-md">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <ExclamationTriangleIcon
+                                className="h-5 w-5 flex-shrink-0 text-red-700"
+                                aria-hidden="true"
+                            />
+                            <div className="flex-1 space-y-1">
+                                <h3 className="text-sm font-semibold text-red-900">
+                                    Spreadsheet approaching capacity limit
+                                </h3>
+                                <p className="text-xs text-red-800">
+                                    One or more sheet tabs are over {Math.round(WARN_THRESHOLD * 100)}% full. Create a new spreadsheet to continue syncing without interruption.
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            onClick={() => console.log("Create new spreadsheet")}
+                            className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors whitespace-nowrap"
+                        >
+                            Create new spreadsheet
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* HEADER ROW */}
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 {/* Left: sheet + account */}
