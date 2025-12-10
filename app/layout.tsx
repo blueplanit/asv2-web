@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Stripe → Google Sheets Onboarding",
-    description: "Guided onboarding for the Stripe to Google Sheets continuous sync workspace.",
+    title: "Stripe → Google Sheets",
+    description: "Sync your Stripe data to your Google Sheets.",
 };
 
 export default function RootLayout({

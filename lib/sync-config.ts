@@ -5,16 +5,14 @@ import {
     SyncConfigSchema,
     type SyncConfig,
     type StripeDataSyncEntry,
-    StripeObject,
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
-// Assume there is only one sync config for a user for MVP 
-export async function getUserSyncConfig(
+export async function getSyncConfigs(
     authUserId: string,
-): Promise<SyncConfig | undefined> {
+): Promise<SyncConfig[]> {
     const res = await ddb.send(
         new QueryCommand({
             TableName: TABLE_NAME,
@@ -23,23 +21,13 @@ export async function getUserSyncConfig(
                 ":pk": `USER#${authUserId}`,
                 ":sk": "SYNC#",
             },
-            Limit: 2, // enough to detect "more than one"
         }),
     );
 
     const items = res.Items ?? [];
-    if (items.length === 0) return undefined;
+    if (items.length === 0) return [];
 
-    if (items.length > 1) {
-        console.error("Invariant violation: multiple sync configs for user", {
-            authUserId,
-            count: items.length,
-        });
-        // You can choose to throw here instead if you want it loud:
-        // throw new Error("Multiple sync configs for user");
-    }
-
-    return SyncConfigSchema.parse(items[0]);
+    return items.map((item) => SyncConfigSchema.parse(item));
 }
 
 
@@ -53,7 +41,7 @@ export async function ensureSyncConfigForSheet(params: {
     const sk = `SYNC#${spreadsheetId}`;
 
     // 1) If any sync config already exists, just return it
-    const existing = await getUserSyncConfig(authUserId);
+    const existing = await getSyncConfig(authUserId, spreadsheetId);
     if (existing) {
         return existing;
     }
@@ -103,6 +91,7 @@ export async function createSyncConfig(params: {
     stripeDataSyncMap?: StripeDataSyncEntry[];
     historyMode?: SyncConfig["historyMode"];
     historySinceDays?: number;
+    syncStatus?: SyncConfig["syncStatus"];
 }) {
     const {
         authUserId,
@@ -111,6 +100,7 @@ export async function createSyncConfig(params: {
         stripeDataSyncMap,
         historyMode = "since",
         historySinceDays = 90,
+        syncStatus = "onboarding",
     } = params;
 
     if (!stripeAccountId) {
@@ -138,6 +128,7 @@ export async function createSyncConfig(params: {
         historyMode,
         historySinceDays,
 
+        syncStatus,
         lastSyncAt: null,
         lastError: null,
 
@@ -221,6 +212,7 @@ export async function updateSyncConfig(params: {
     const res = await ddb.send(
         new UpdateCommand({
             TableName: TABLE_NAME,
+            ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
             Key: {
                 pk: `USER#${authUserId}`,
                 sk: `SYNC#${spreadsheetId}`,
