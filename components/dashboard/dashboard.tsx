@@ -12,7 +12,6 @@ import { BillingBar } from "@/components/account/billing-bar";
 import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
-import { type SheetTabMetrics } from "@blueplanit/asv2-shared";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -113,8 +112,6 @@ export function DashboardClient() {
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
     const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
     const [titlesRequested, setTitlesRequested] = useState(false);
-    const [sheetTabMetrics, setSheetTabMetrics] = useState<Record<string, SheetTabMetrics[]>>({});
-    const [metricsRequested, setMetricsRequested] = useState(false);
 
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -140,10 +137,7 @@ export function DashboardClient() {
         if (titlesRequested) return;
         if (filteredConfigs.length === 0) return;
 
-        const ids = Array.from(
-            new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId)),
-        ).filter((id) => !sheetTitles[id]);
-
+        const ids = Array.from(new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId))).filter((id) => !sheetTitles[id]);
         if (ids.length === 0) return;
 
         setTitlesRequested(true);
@@ -167,49 +161,6 @@ export function DashboardClient() {
         })();
     }, [filteredConfigs, googleConnections.length, sheetTitles, titlesRequested, activeSyncConfig?.spreadsheetId]);
 
-    // Lazy-load sheet tab metrics after initial render
-    useEffect(() => {
-        if (metricsRequested) return;
-        if (filteredConfigs.length === 0) return;
-
-        const ids = Array.from(
-            new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId).filter((id): id is string => !!id)),
-        ).filter((id) => !sheetTabMetrics[id]);
-
-        if (ids.length === 0) return;
-
-        setMetricsRequested(true);
-
-        (async () => {
-            // Fetch metrics for all spreadsheets in parallel for efficiency
-            const promises = ids.map(async (spreadsheetId) => {
-                try {
-                    const res = await fetch("/api/sheet-tab-metrics", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ spreadsheetId }),
-                    });
-                    if (!res.ok) {
-                        console.error(`Failed to fetch metrics for ${spreadsheetId}`);
-                        return { spreadsheetId, metrics: [] as SheetTabMetrics[] };
-                    }
-                    const data = (await res.json()) as { metrics: SheetTabMetrics[] };
-                    return { spreadsheetId, metrics: data.metrics };
-                } catch (err) {
-                    console.error(`Error fetching metrics for ${spreadsheetId}:`, err);
-                    return { spreadsheetId, metrics: [] as SheetTabMetrics[] };
-                }
-            });
-
-            const results = await Promise.all(promises);
-            const newMetrics: Record<string, SheetTabMetrics[]> = {};
-            for (const { spreadsheetId, metrics } of results) {
-                newMetrics[spreadsheetId] = metrics;
-            }
-            setSheetTabMetrics((prev) => ({ ...prev, ...newMetrics }));
-        })();
-    }, [filteredConfigs, sheetTabMetrics, metricsRequested]);
-
     // derive workspace(s) from sync config + stripe connection
     const workspaces: Workspace[] =
         sortedSyncConfigs.length === 0
@@ -231,14 +182,8 @@ export function DashboardClient() {
 
     // console.log("workspaces", workspaces);
 
-    const activeWorkspace =
-        workspaces.find(
-            (ws) => ws.id === activeSyncConfig?.spreadsheetId,
-        ) ?? workspaces[0] ?? null;
-
-    const archivedWorkspaces = workspaces.filter(
-        (ws) => ws.id !== activeWorkspace?.id,
-    );
+    const activeWorkspace = workspaces.find((ws) => ws.id === activeSyncConfig?.spreadsheetId) ?? workspaces[0] ?? null;
+    const archivedWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace?.id);
 
     const isOnboardingDone =
         activeSyncConfig &&
@@ -501,19 +446,9 @@ export function DashboardClient() {
                                                                     id,
                                                                 );
                                                             }}
-                                                            onTogglePause={
-                                                                handleTogglePause
-                                                            }
-                                                            sheetTabMetrics={
-                                                                sheetTabMetrics[
-                                                                activeWorkspace.id
-                                                                ] ?? []
-                                                            }
-                                                            stripeDataSyncMap={
-                                                                syncConfig
-                                                                    ?.stripeDataSyncMap ??
-                                                                []
-                                                            }
+                                                            onTogglePause={handleTogglePause}
+                                                            sheetTabMetrics={user.sheetTabMetrics.filter((metric) => metric.spreadsheetId === activeWorkspace.id) ?? []}
+                                                            stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}
                                                             setTitlesRequested={setTitlesRequested}
                                                         />
                                                     );
@@ -549,19 +484,9 @@ export function DashboardClient() {
                                                                         id,
                                                                     );
                                                                 }}
-                                                                onTogglePause={
-                                                                    handleTogglePause
-                                                                }
-                                                                sheetTabMetrics={
-                                                                    sheetTabMetrics[
-                                                                    ws.id
-                                                                    ] ?? []
-                                                                }
-                                                                stripeDataSyncMap={
-                                                                    syncConfig
-                                                                        ?.stripeDataSyncMap ??
-                                                                    []
-                                                                }
+                                                                onTogglePause={handleTogglePause}
+                                                                sheetTabMetrics={user.sheetTabMetrics.filter((metric) => metric.spreadsheetId === ws.id) ?? []}
+                                                                stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}
                                                             />
                                                         );
                                                     })}

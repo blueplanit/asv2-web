@@ -62,7 +62,7 @@ export function WorkspaceStats({
                     sheetId: metric.sheetId,
                     objectId,
                     label,
-                    rowCount: metric.rowCount,
+                    rowCount: metric.rowCount ?? 0,
                     maxRowCount,
                     lastSyncedAt: metric.lastSyncedAt,
                 };
@@ -134,7 +134,7 @@ export function WorkspaceStats({
                                                     {stat.label}
                                                 </span>
                                                 <span className="text-slate-500">
-                                                    {percentage}% filled
+                                                    {stat.rowCount.toLocaleString()} rows, {percentage}% full
                                                 </span>
                                             </div>
                                             <div className="h-1.5 rounded-full bg-slate-100">
