@@ -1,20 +1,37 @@
 // app/google/connect/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(_req: NextRequest) {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user || !(session.user as any).email) {
+        // If somehow not authenticated here, bounce them to login.
+        return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL));
+    }
+
     const clientId = process.env.GOOGLE_CLIENT_ID!;
     const redirectUri = `${process.env.NEXTAUTH_URL}/api/google/callback`;
+    const loginHint = (session.user as any).email as string;
+
+    const scopes = [
+        "openid",
+        "email",
+        "https://www.googleapis.com/auth/drive.file"
+    ].join(" ");
 
     const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: "code",
-        scope: "https://www.googleapis.com/auth/drive.file",
+        scope: scopes,
         access_type: "offline",
-        prompt: "consent",
-        include_granted_scopes: "true",
-        // TODO: add a real state/CSRF token later
-        state: "dev-placeholder-state",
+        prompt: "consent",              // force consent so we get a refresh token
+        include_granted_scopes: "true", // incremental auth
+        login_hint: loginHint,          // nudge user to pick the same Google account
+        // TODO: add a real state/CSRF token + verification
+        state: 'state'
     });
 
     const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
