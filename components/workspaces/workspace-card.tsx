@@ -67,7 +67,7 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
 type Props = {
     workspace: Workspace;
     onSyncNow?: (id: string) => void;
-    onTogglePause: (id: string, nextStatus: "paused" | "syncing") => void;
+    onTogglePause: (spreadsheetId: string, nextStatus: "paused" | "syncing") => void;
     sheetTabMetrics: SheetTabMetrics[];
     stripeDataSyncMap: StripeDataSyncEntry[];
     setTitlesRequested?: (requested: boolean) => void;
@@ -160,7 +160,7 @@ export function WorkspaceCard({
 
             await refresh();
             if (setTitlesRequested) {
-                setTitlesRequested(false);
+                setTitlesRequested(true);
             }
             setRotateModalOpen(false);
         } catch (e) {

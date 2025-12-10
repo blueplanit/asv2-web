@@ -95,8 +95,9 @@ function getNextOnboardingStep(onboardingStage: string): number {
 
 export function DashboardClient() {
     const { user, refresh } = useUserState();
-    const { onboardingStage, googleConnections, stripeConnections, syncConfigs } = user;
+    const { onboardingStage, stripeConnections, syncConfigs } = user;
 
+    // Newest → oldest
     const sortedSyncConfigs = useMemo(
         () =>
             [...syncConfigs].sort(
@@ -107,7 +108,15 @@ export function DashboardClient() {
         [syncConfigs],
     );
 
-    const activeSyncConfig: SyncConfig | null = sortedSyncConfigs.length > 0 ? sortedSyncConfigs[0] : null; // assume for MVP that there's only one active sync at a time
+    // Prefer the most recent non-retired config as the "active" workspace.
+    // If everything is retired, fall back to the newest one for display.
+    const activeSyncConfig: SyncConfig | null = useMemo(() => {
+        if (sortedSyncConfigs.length === 0) return null;
+        const nonRetired = sortedSyncConfigs.filter(
+            (cfg) => cfg.syncStatus !== "retired",
+        );
+        return nonRetired[0] ?? sortedSyncConfigs[0];
+    }, [sortedSyncConfigs]);
 
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
     const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
@@ -134,10 +143,11 @@ export function DashboardClient() {
 
     // Lazy-load titles after initial render
     useEffect(() => {
-        if (titlesRequested) return;
         if (filteredConfigs.length === 0) return;
 
-        const ids = Array.from(new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId))).filter((id) => !sheetTitles[id]);
+        const ids = Array.from(
+            new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId)),
+        ).filter((id) => !sheetTitles[id]);
         if (ids.length === 0) return;
 
         setTitlesRequested(true);
@@ -158,8 +168,11 @@ export function DashboardClient() {
             } catch (err) {
                 console.error("Error fetching sheet titles:", err);
             }
+            finally {
+                setTitlesRequested(false);
+            }
         })();
-    }, [filteredConfigs, googleConnections.length, sheetTitles, titlesRequested, activeSyncConfig?.spreadsheetId]);
+    }, [filteredConfigs, sheetTitles, titlesRequested]);
 
     // derive workspace(s) from sync config + stripe connection
     const workspaces: Workspace[] =
@@ -220,7 +233,7 @@ export function DashboardClient() {
     })();
 
     async function handleTogglePause(
-        workspaceId: string,
+        spreadsheetId: string,
         nextStatus: "paused" | "syncing",
     ) {
         // for MVP: single sync config per user → just set syncStatus
@@ -228,7 +241,7 @@ export function DashboardClient() {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ syncStatus: nextStatus }),
+                body: JSON.stringify({ syncStatus: nextStatus, spreadsheetId }),
             });
             if (!res.ok) {
                 console.error("Failed to update sync status");
@@ -243,19 +256,13 @@ export function DashboardClient() {
     // Triggered once when redirected from onboarding with ?backfill_started=1, only if the current syncStatus is "backfill_running"
     useEffect(() => {
         const flag = searchParams.get("backfill_started");
-        if (!flag) return;
-        if (!activeWorkspace || !activeSyncConfig) return;
-        if (activeSyncConfig.syncStatus !== "backfill_running") {
-            router.replace("/dashboard", { scroll: false });
-            return;
-        }
+        if (flag !== "1") return;
+        // Show the modal as soon as we detect the flag
+        setBackfillModalOpen(true);
 
-        if (flag === "1") {
-            router.replace("/dashboard", { scroll: false });
-            setBackfillModalOpen(true);
-            return;
-        }
-    }, [searchParams, activeWorkspace, activeSyncConfig, router]);
+        // Clean the URL so refreshes don't re-trigger the param
+        router.replace("/dashboard", { scroll: false });
+    }, [searchParams, router]);
 
     function handleBackfillModalOpenChange(open: boolean) {
         if (!open && activeWorkspace && user.profile?.userId) {
@@ -504,8 +511,7 @@ export function DashboardClient() {
                 </div>
             </main>
 
-            {activeWorkspace &&
-                activeSyncConfig?.syncStatus === "backfill_running" && (
+            {activeWorkspace && (
                     <BackfillIntroModal
                         open={backfillModalOpen}
                         onOpenChange={handleBackfillModalOpenChange}

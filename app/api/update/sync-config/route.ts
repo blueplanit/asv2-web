@@ -6,7 +6,7 @@ import {
     StripeObjectEnum,
     type StripeObject,
 } from "@/lib/schemas/sync-config";
-import { getUserSyncConfig, updateSyncConfig } from "@/lib/sync-config";
+import { getSyncConfig, updateSyncConfig } from "@/lib/sync-config";
 import {
     ensureStripeDataSyncMap,
     applyStripeSelectionToStripeDataSyncMap,
@@ -19,9 +19,10 @@ type Body = {
     selectedStripeObjects?: string[];
     historyMode?: "full" | "since";
     historySinceDays?: number;
-    syncStatus?: "onboarding" | "backfill_running" | "paused" | "error" | "syncing";
+    syncStatus?: "onboarding" | "backfill_running" | "paused" | "error" | "syncing" | "retired";
     workingSheetTitle?: string;
     workingSheetMessage?: string;
+    spreadsheetId?: string;
 } | null;
 
 export async function POST(req: Request) {
@@ -38,8 +39,12 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body;
     const workingSheetTitle = body?.workingSheetTitle;
     const workingSheetMessage = body?.workingSheetMessage;
+    const spreadsheetId = body?.spreadsheetId;
+    if (!spreadsheetId) {
+        return new NextResponse("Spreadsheet ID not found", { status: 400 });
+    }
 
-    const existing = await getUserSyncConfig(authUserId);
+    const existing = await getSyncConfig(authUserId, spreadsheetId);
     if (!existing || !existing.spreadsheetId) {
         return new NextResponse("Sync config not found for user or spreadsheet ID not set", { status: 400 });
     }
@@ -66,28 +71,38 @@ export async function POST(req: Request) {
             : undefined;
     const syncStatus = body?.syncStatus;
 
-    let stripeDataSyncMap = ensureStripeDataSyncMap(existing);
+    // Only compute & touch Sheets if we’re actually changing the selection or working-sheet config.
+    let stripeDataSyncMapToPersist = undefined as typeof existing.stripeDataSyncMap | undefined;
 
-    if (selectedStripeObjects) {
-        stripeDataSyncMap = applyStripeSelectionToStripeDataSyncMap(
+    const hasStripeSelectionChange = !!selectedStripeObjects;
+    const hasWorkingSheetConfigChange = typeof workingSheetTitle === "string" || typeof workingSheetMessage === "string";
+
+    if (hasStripeSelectionChange || hasWorkingSheetConfigChange) {
+        let stripeDataSyncMap = ensureStripeDataSyncMap(existing);
+
+        if (selectedStripeObjects) {
+            stripeDataSyncMap = applyStripeSelectionToStripeDataSyncMap(
+                stripeDataSyncMap,
+                selectedStripeObjects,
+            );
+        }
+
+        // Build Google Sheet tabs based on which stripe to-sync data is enabled from UI
+        stripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
+            authUserId,
+            spreadsheetId: existing.spreadsheetId,
             stripeDataSyncMap,
-            selectedStripeObjects,
-        );
+            workingSheetTitle,
+            workingSheetMessage,
+        });
+        stripeDataSyncMapToPersist = stripeDataSyncMap;
     }
 
-    // Build Google Sheet tabs based on which stripe to-sync data is enabled from UI
-    stripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
-        authUserId,
-        spreadsheetId: existing.spreadsheetId,
-        stripeDataSyncMap,
-        workingSheetTitle,
-        workingSheetMessage,
-    });
-
+    // actually persist the config in db
     const updated = await updateSyncConfig({
         authUserId,
         spreadsheetId: existing.spreadsheetId,
-        stripeDataSyncMap,
+        stripeDataSyncMap: stripeDataSyncMapToPersist,
         historyMode,
         historySinceDays,
         syncStatus,

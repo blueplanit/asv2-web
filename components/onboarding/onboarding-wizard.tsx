@@ -59,7 +59,23 @@ export function OnboardingWizard() {
     const searchParams = useSearchParams();
     const { user, refresh } = useUserState();
     const router = useRouter();
-    const serverConfig = user.syncConfigs?.[0];
+
+    // Find the config that is actually in onboarding (multi-config safe).
+    const onboardingConfig = React.useMemo(
+        () => user.syncConfigs.find((cfg) => cfg.syncStatus === "onboarding") ?? null,
+        [user.syncConfigs],
+    );
+
+     // "Any active config" = user has at least one workspace that is not onboarding/retired.
+     const hasAnyActiveConfig = React.useMemo(
+        () =>
+            user.syncConfigs.some(
+                (cfg) =>
+                    cfg.syncStatus !== "onboarding" &&
+                    cfg.syncStatus !== "retired",
+            ),
+         [user.syncConfigs],
+     );
 
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
@@ -73,13 +89,33 @@ export function OnboardingWizard() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // init selection from server if present, else defaults
+    // If there is no onboarding config but there *is* an active config,
+    // the user is past onboarding → send them to dashboard.
+    useEffect(() => {
+        if (!onboardingConfig && hasAnyActiveConfig && currentStepIndex < steps.length - 1) {
+            router.replace("/dashboard");
+        }
+    }, [onboardingConfig, hasAnyActiveConfig, router, currentStepIndex]);
+
+    // Spreadsheet ID associated with the onboarding config (if any)
+    const serverSpreadsheetId = onboardingConfig?.spreadsheetId ?? null;
+    const [createdSpreadsheetId, setCreatedSpreadsheetId] = useState<string | null>(serverSpreadsheetId);
+
+    // If user refreshes on step 4 and onboardingConfig now has a spreadsheetId,
+    // hydrate local state from server.
+    useEffect(() => {
+        if (onboardingConfig?.spreadsheetId && !createdSpreadsheetId) {
+            setCreatedSpreadsheetId(onboardingConfig.spreadsheetId);
+        }
+    }, [onboardingConfig, createdSpreadsheetId]);
+
+    // init Stripe selection from onboarding config if present, else defaults
     const initialStripeSelection: StripeObject[] = React.useMemo(() => {
         if (
-            serverConfig?.stripeDataSyncMap &&
-            (serverConfig.stripeDataSyncMap as any[]).length > 0
+            onboardingConfig?.stripeDataSyncMap &&
+            (onboardingConfig.stripeDataSyncMap as any[]).length > 0
         ) {
-            return (serverConfig.stripeDataSyncMap as any[])
+            return (onboardingConfig.stripeDataSyncMap as any[])
                 .filter(
                     (entry) =>
                         entry.kind === "object_table" &&
@@ -89,7 +125,7 @@ export function OnboardingWizard() {
                 .map((entry) => entry.primaryStripeObject) as StripeObject[];
         }
         return [...DEFAULT_ENABLED_STRIPE_OBJECTS] as StripeObject[];
-    }, [serverConfig]);
+    }, [onboardingConfig]);
 
     const [selectedStripeObjects, setSelectedStripeObjects] = useState<StripeObject[]>(initialStripeSelection);
 
@@ -97,13 +133,6 @@ export function OnboardingWizard() {
     useEffect(() => {
         setCurrentStepIndex(initialIndex);
     }, [initialIndex]);
-
-    // If onboarding is complete, push to dashboard (client-side)
-    useEffect(() => {
-        if (user.onboardingStage === "ready") {
-            router.replace("/dashboard");
-        }
-    }, []);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
@@ -145,13 +174,19 @@ export function OnboardingWizard() {
         }
     }
 
-    async function saveSyncConfigSelection() {
+    async function saveSyncConfigSelection(spreadsheetId?: string | null) {
         setError(null);
         try {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ selectedStripeObjects, syncStatus: "backfill_running", workingSheetTitle: WORKING_SHEET_TITLE, workingSheetMessage: WORKING_SHEET_MESSAGE }),
+                body: JSON.stringify({ 
+                    selectedStripeObjects, 
+                    syncStatus: "backfill_running", 
+                    workingSheetTitle: WORKING_SHEET_TITLE, 
+                    workingSheetMessage: WORKING_SHEET_MESSAGE,
+                    spreadsheetId,
+                }),
             });
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
@@ -225,14 +260,15 @@ export function OnboardingWizard() {
             // Create sheet
             const createSheetResponse = await createSheet();
             setSubmitting(false);
-            if (!createSheetResponse) return;
+            if (!createSheetResponse || !createSheetResponse.spreadsheetId) return;
+            setCreatedSpreadsheetId(createSheetResponse.spreadsheetId);
         }
         else if (currentStep.id === 4) {
             try {
                 setSubmitting(true);
                 const trialOk = await handleStartTrial();
                 // Save sync config selection
-                const saveConfigOk = await saveSyncConfigSelection();
+                const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
                 if (!trialOk || !saveConfigOk) {
                     setSubmitting(false);
                     return;
@@ -251,8 +287,6 @@ export function OnboardingWizard() {
 
         if (!isLastStep) {
             goToStepByIndex(currentStepIndex + 1);
-        } else {
-            router.replace("/dashboard");
         }
     }
 

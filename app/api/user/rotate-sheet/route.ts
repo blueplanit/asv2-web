@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getUserSyncConfig, updateSyncConfig } from "@/lib/sync-config";
+import { getSyncConfig, updateSyncConfig } from "@/lib/sync-config";
 import { createWorkspaceSheetAndConfig } from "@/lib/workspace-sheet";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
             workingSheetMessage,
             folderName,
         } = body ?? {};
-        const existing = await getUserSyncConfig(authUserId, existingSpreadsheetId);
+        const existing = await getSyncConfig(authUserId, existingSpreadsheetId);
         if (!existing) {
             return new NextResponse("No active sync config to rotate", { status: 400 });
         }
