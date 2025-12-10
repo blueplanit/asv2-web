@@ -173,42 +173,6 @@ export function WorkspaceCard({
         }
     }
 
-
-    async function handleRotateClick() {
-        try {
-            if (!workspace.id) {
-                console.error("Workspace ID is required");
-                return;
-            }
-            if (!workspace.name) {
-                console.error("Workspace name is required");
-                return;
-            }
-
-            const res = await fetch("/api/user/rotate-sheet", {
-                method: "POST",
-                body: JSON.stringify({
-                    folderName: FOLDER_NAME,
-                    workspaceSheetTitle: workspace.name,
-                    workingSheetTitle: WORKING_SHEET_TITLE,
-                    workingSheetMessage: WORKING_SHEET_MESSAGE,
-                    existingSpreadsheetId: workspace.id,
-                }),
-            });
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                console.error("Failed to rotate sheet:", text);
-                return;
-            }
-
-            await refresh(); // now userState has SyncConfig + sheet info
-            return res.json();
-        } catch (e) {
-            console.error("Failed to rotate sheet:", e);
-            return false;
-        }
-    }
-
     const syncStatusLabel = (() => {
         if (isBackfilling) return "Backfilling historical Stripe data into your sheet.";
         if (isPaused) return "Sync is paused. No new Stripe data is being written.";
