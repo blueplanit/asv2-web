@@ -21,7 +21,6 @@ export async function getSyncConfigs(
                 ":pk": `USER#${authUserId}`,
                 ":sk": "SYNC#",
             },
-            Limit: 2, // detect multiple configs
         }),
     );
 
