@@ -18,6 +18,7 @@ import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onboarding/onboarding-wizard";
 import { useUserState } from "../user-state-provider";
+import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 
 export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error" | "retired";
 
@@ -69,21 +70,27 @@ type Props = {
     onTogglePause: (id: string, nextStatus: "paused" | "syncing") => void;
     sheetTabMetrics: SheetTabMetrics[];
     stripeDataSyncMap: StripeDataSyncEntry[];
+    setTitlesRequested?: (requested: boolean) => void;
 };
 
 export const DEFAULT_ROW_CAPACITY = 30_000;
 
-export function WorkspaceCard({ 
-    workspace, 
-    onSyncNow, 
+export function WorkspaceCard({
+    workspace,
+    onSyncNow,
     onTogglePause,
     sheetTabMetrics,
     stripeDataSyncMap,
+    setTitlesRequested = () => {},
 }: Props) {
     const { refresh } = useUserState();
     const health = HEALTH_LABELS[workspace.health];
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
+    const [rotateModalOpen, setRotateModalOpen] = useState(false);
+    const [rotateSubmitting, setRotateSubmitting] = useState(false);
+    const [rotateError, setRotateError] = useState<string | null>(null);
+
 
     const nameLoading = workspace.nameLoading ?? false;
     const isPaused = workspace.syncStatus === "paused";
@@ -116,6 +123,57 @@ export function WorkspaceCard({
         setMenuOpen(false);
     }
 
+    async function handleConfirmRotate() {
+        try {
+            setRotateSubmitting(true);
+            setRotateError(null);
+
+            if (!workspace.id) {
+                setRotateError("Workspace ID is required.");
+                return;
+            }
+            if (!workspace.name) {
+                setRotateError("Workspace name is required.");
+                return;
+            }
+
+            const res = await fetch("/api/user/rotate-sheet", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    folderName: FOLDER_NAME,
+                    workspaceSheetTitle: workspace.name,
+                    workingSheetTitle: WORKING_SHEET_TITLE,
+                    workingSheetMessage: WORKING_SHEET_MESSAGE,
+                    existingSpreadsheetId: workspace.id,
+                }),
+            });
+
+            if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                console.error("Failed to rotate sheet:", text);
+                setRotateError(
+                    "We couldn’t create a new sheet. Please try again or check logs.",
+                );
+                return;
+            }
+
+            await refresh();
+            if (setTitlesRequested) {
+                setTitlesRequested(false);
+            }
+            setRotateModalOpen(false);
+        } catch (e) {
+            console.error("Failed to rotate sheet:", e);
+            setRotateError(
+                "Unexpected error while rotating the sheet. Please try again.",
+            );
+        } finally {
+            setRotateSubmitting(false);
+        }
+    }
+
+
     async function handleRotateClick() {
         try {
             if (!workspace.id) {
@@ -129,13 +187,13 @@ export function WorkspaceCard({
 
             const res = await fetch("/api/user/rotate-sheet", {
                 method: "POST",
-                body: JSON.stringify({ 
-                    folderName: FOLDER_NAME, 
+                body: JSON.stringify({
+                    folderName: FOLDER_NAME,
                     workspaceSheetTitle: workspace.name,
                     workingSheetTitle: WORKING_SHEET_TITLE,
                     workingSheetMessage: WORKING_SHEET_MESSAGE,
                     existingSpreadsheetId: workspace.id,
-                 }),
+                }),
             });
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
@@ -229,7 +287,7 @@ export function WorkspaceCard({
                             </div>
                         </div>
                         <div
-                            onClick={(handleRotateClick)}
+                            onClick={() => setRotateModalOpen(true)}
                             className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors whitespace-nowrap"
                         >
                             Create new spreadsheet
@@ -242,7 +300,7 @@ export function WorkspaceCard({
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 {/* Left: sheet + account */}
                 <div className="min-w-0 flex-1 space-y-1">
-                    
+
                     {/* Sheet name */}
                     {nameLoading ? (
                         <div className="mt-1 h-6 w-64 animate-pulse rounded bg-slate-200" />
@@ -254,16 +312,16 @@ export function WorkspaceCard({
                                 rel="noreferrer"
                                 className="block max-w-full truncate text-lg font-semibold text-indigo-600 hover:underline"
                                 title={workspace.name}
-                            ><span className="flex items-center gap-2 !text-2xl">{workspace.name}
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <ExternalLinkIcon className="h-4 w-4" aria-hidden="true" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Open in Google Sheets</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </span></a></span>
+                            ><span className={`flex items-center gap-2 ${isRetired ? "!text-lg" : "!text-2xl"}`}>{workspace.name}
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <ExternalLinkIcon className="h-4 w-4" aria-hidden="true" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Open in Google Sheets</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </span></a></span>
                     )}
 
                     {/* Stripe account */}
@@ -307,20 +365,20 @@ export function WorkspaceCard({
                         </TooltipContent>
                     </Tooltip>
 
-                    <div className="flex items-center gap-2">
-                        {
-                            showSyncNowButton && !isRetired && (
-                                <button
-                                    type="button"
-                                    onClick={() => onSyncNow?.(workspace.id)}
-                                    className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-                                >
-                                    Sync now
-                                </button>
-                            )
-                        }
+                    {!isRetired && (
+                        <div className="flex items-center gap-2">
+                            {
+                                showSyncNowButton && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onSyncNow?.(workspace.id)}
+                                        className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                                    >
+                                        Sync now
+                                    </button>
+                                )
+                            }
 
-                        {!isRetired && (
                             <button
                                 type="button"
                                 aria-haspopup="menu"
@@ -330,85 +388,97 @@ export function WorkspaceCard({
                             >
                                 <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
                             </button>
-                        )}
 
-                        {menuOpen && (
-                            <div
-                                ref={menuRef}
-                                className="absolute z-20 mt-10 w-48 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
-                            >
-                                <button
-                                    type="button"
-                                    onClick={handlePauseClick}
-                                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                            {menuOpen && (
+                                <div
+                                    ref={menuRef}
+                                    className="absolute z-20 mt-10 w-48 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
                                 >
-                                    {isPaused ? (
-                                        <PlayCircleIcon className="h-4 w-4" aria-hidden="true" />
-                                    ) : (
-                                        <PauseCircleIcon className="h-4 w-4" aria-hidden="true" />
-                                    )}
-                                    <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
-                                </button>
+                                    <button
+                                        type="button"
+                                        onClick={handlePauseClick}
+                                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                                    >
+                                        {isPaused ? (
+                                            <PlayCircleIcon className="h-4 w-4" aria-hidden="true" />
+                                        ) : (
+                                            <PauseCircleIcon className="h-4 w-4" aria-hidden="true" />
+                                        )}
+                                        <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
+                                    </button>
 
-                                {workspace.syncStatus !== "backfill_running" &&
-                                    workspace.health === "paused" && (
-                                        <button
-                                            type="button"
-                                            onClick={handleBackfillClick}
-                                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                                        >
-                                            <ArrowPathIcon
-                                                className="h-4 w-4 text-slate-500"
-                                                aria-hidden="true"
-                                            />
-                                            <span>Start backfill</span>
-                                        </button>
-                                    )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* BODY GRID */}
-            <div className="grid gap-6 md:grid-cols-2">
-                {/* Sync status column */}
-                <div className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Sync status
-                    </h3>
-                    <p className="text-sm text-slate-700">{syncStatusLabel}</p>
-                    <p className="text-xs text-slate-500">
-                        Last sync:{" "}
-                        <span className="font-medium text-slate-800">
-                            {workspace.lastSyncAt ? workspace.lastSyncAt : "Not yet synced"}
-                        </span>
-                    </p>
-                </div>
-
-                {/* Configuration / objects */}
-                <div className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Stripe data synced
-                    </h3>
-                    {workspace.objectsEnabled.length === 0 ? (
-                        <p className="text-sm text-slate-600">
-                            No Stripe objects selected yet. Finish onboarding to choose data.
-                        </p>
-                    ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                            {workspace.objectsEnabled.map((obj) => (
-                                <span
-                                    key={obj}
-                                    className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-700"
-                                >
-                                    {obj}
-                                </span>
-                            ))}
+                                    {workspace.syncStatus !== "backfill_running" &&
+                                        workspace.health === "paused" && (
+                                            <button
+                                                type="button"
+                                                onClick={handleBackfillClick}
+                                                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                                            >
+                                                <ArrowPathIcon
+                                                    className="h-4 w-4 text-slate-500"
+                                                    aria-hidden="true"
+                                                />
+                                                <span>Start backfill</span>
+                                            </button>
+                                        )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* BODY GRID */}
+            {!isRetired && (
+                <div className="grid gap-6 md:grid-cols-2">
+                    {/* Sync status column */}
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Sync status
+                        </h3>
+                        <p className="text-sm text-slate-700">{syncStatusLabel}</p>
+                        <p className="text-xs text-slate-500">
+                            Last sync:{" "}
+                            <span className="font-medium text-slate-800">
+                                {workspace.lastSyncAt ? workspace.lastSyncAt : "Not yet synced"}
+                            </span>
+                        </p>
+                    </div>
+
+                    {/* Configuration / objects */}
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Stripe data synced
+                        </h3>
+                        {workspace.objectsEnabled.length === 0 ? (
+                            <p className="text-sm text-slate-600">
+                                No Stripe objects selected yet. Finish onboarding to choose data.
+                            </p>
+                        ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                                {workspace.objectsEnabled.map((obj) => (
+                                    <span
+                                        key={obj}
+                                        className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-700"
+                                    >
+                                        {obj}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+<RotateSheetModal
+    open={rotateModalOpen}
+    onOpenChange={setRotateModalOpen}
+    onConfirm={handleConfirmRotate}
+    workspaceName={workspace.name}
+    submitting={rotateSubmitting}
+    error={rotateError}
+/>
+
 
             {/* Collapsible sync stats */}
             <WorkspaceStats

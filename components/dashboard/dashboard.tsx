@@ -165,7 +165,7 @@ export function DashboardClient() {
                 console.error("Error fetching sheet titles:", err);
             }
         })();
-    }, [filteredConfigs, googleConnections.length, sheetTitles, titlesRequested]);
+    }, [filteredConfigs, googleConnections.length, sheetTitles, titlesRequested, activeSyncConfig?.spreadsheetId]);
 
     // Lazy-load sheet tab metrics after initial render
     useEffect(() => {
@@ -514,6 +514,7 @@ export function DashboardClient() {
                                                                     ?.stripeDataSyncMap ??
                                                                 []
                                                             }
+                                                            setTitlesRequested={setTitlesRequested}
                                                         />
                                                     );
                                                 })()}
