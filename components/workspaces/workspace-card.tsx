@@ -153,7 +153,7 @@ export function WorkspaceCard({
                 const text = await res.text().catch(() => "");
                 console.error("Failed to rotate sheet:", text);
                 setRotateError(
-                    "We couldn’t create a new sheet. Please try again or check logs.",
+                    "We couldn’t create a new sheet. Please try again or contact support.",
                 );
                 return;
             }
@@ -166,7 +166,7 @@ export function WorkspaceCard({
         } catch (e) {
             console.error("Failed to rotate sheet:", e);
             setRotateError(
-                "Unexpected error while rotating the sheet. Please try again.",
+                "Unexpected error while rotating the sheet. Please try again or contact support.",
             );
         } finally {
             setRotateSubmitting(false);
