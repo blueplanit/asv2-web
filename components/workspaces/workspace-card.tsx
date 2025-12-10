@@ -13,11 +13,13 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { WorkspaceStats } from "./workspace-stats";
-import { SheetTabMetrics, TAB_ROW_LIMITS, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
+import { aggregateSheetMetrics, SheetTabMetrics, TAB_ROW_LIMITS, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onboarding/onboarding-wizard";
+import { useUserState } from "../user-state-provider";
 
-export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error";
+export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error" | "retired";
 
 export type Workspace = {
     id: string;
@@ -54,6 +56,11 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
         color: "bg-red-50 text-red-700 ring-red-100",
         tooltip: "The workspace is in error and not syncing data.",
     },
+    retired: {
+        label: "Retired",
+        color: "bg-slate-50 text-slate-700 ring-slate-100",
+        tooltip: "The workspace is retired and not syncing data.",
+    },
 };
 
 type Props = {
@@ -64,6 +71,8 @@ type Props = {
     stripeDataSyncMap: StripeDataSyncEntry[];
 };
 
+export const DEFAULT_ROW_CAPACITY = 30_000;
+
 export function WorkspaceCard({ 
     workspace, 
     onSyncNow, 
@@ -71,6 +80,7 @@ export function WorkspaceCard({
     sheetTabMetrics,
     stripeDataSyncMap,
 }: Props) {
+    const { refresh } = useUserState();
     const health = HEALTH_LABELS[workspace.health];
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -79,6 +89,7 @@ export function WorkspaceCard({
     const isPaused = workspace.syncStatus === "paused";
     const isBackfilling = workspace.syncStatus === "backfill_running";
     const isError = workspace.syncStatus === "error";
+    const isRetired = workspace.syncStatus === "retired";
 
     // click-outside to close menu
     useEffect(() => {
@@ -105,18 +116,54 @@ export function WorkspaceCard({
         setMenuOpen(false);
     }
 
+    async function handleRotateClick() {
+        try {
+            if (!workspace.id) {
+                console.error("Workspace ID is required");
+                return;
+            }
+            if (!workspace.name) {
+                console.error("Workspace name is required");
+                return;
+            }
+
+            const res = await fetch("/api/user/rotate-sheet", {
+                method: "POST",
+                body: JSON.stringify({ 
+                    folderName: FOLDER_NAME, 
+                    workspaceSheetTitle: workspace.name,
+                    workingSheetTitle: WORKING_SHEET_TITLE,
+                    workingSheetMessage: WORKING_SHEET_MESSAGE,
+                    existingSpreadsheetId: workspace.id,
+                 }),
+            });
+            if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                console.error("Failed to rotate sheet:", text);
+                return;
+            }
+
+            await refresh(); // now userState has SyncConfig + sheet info
+            return res.json();
+        } catch (e) {
+            console.error("Failed to rotate sheet:", e);
+            return false;
+        }
+    }
+
     const syncStatusLabel = (() => {
         if (isBackfilling) return "Backfilling historical Stripe data into your sheet.";
         if (isPaused) return "Sync is paused. No new Stripe data is being written.";
         if (isError) return "Sync is currently failing. Check logs or reconnect.";
         if (workspace.syncStatus === "syncing") return "Sync is active on the regular polling schedule.";
+        if (isRetired) return "Sync is retired and not syncing data.";
         return "Sync will start once setup is complete.";
     })();
 
     const showSyncNowButton = workspace.syncStatus !== "backfill_running" && workspace.syncStatus !== "paused" && workspace.syncStatus !== "error";
 
     // Check if any sheet tab exceeds the warning threshold
-    const exceedsWarningThreshold = (() => {
+    const exceedsTabRowWarningThreshold = (() => {
         // Create a map from sheetId to StripeDataSyncEntry for quick lookup
         const sheetIdToEntry = new Map<number, StripeDataSyncEntry>();
         for (const entry of stripeDataSyncMap) {
@@ -131,7 +178,7 @@ export function WorkspaceCard({
             if (!entry) continue;
 
             const objectId = entry.id;
-            const maxRowCount = TAB_ROW_LIMITS[objectId] ?? 30000;
+            const maxRowCount = metric.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
             const warningThreshold = WARN_THRESHOLD * maxRowCount;
 
             if (metric.rowCount > warningThreshold) {
@@ -141,11 +188,30 @@ export function WorkspaceCard({
         return false;
     })();
 
+    const exceedsSpreadsheetLevelCellBudgetWarningThreshold = (() => {
+        const spreadsheetMetrics = aggregateSheetMetrics(sheetTabMetrics);
+        if (spreadsheetMetrics?.cellUsageRatio && spreadsheetMetrics.cellUsageRatio >= WARN_THRESHOLD) {
+            return true;
+        }
+        return false;
+    })();
+
+    const showLimitWarning = exceedsTabRowWarningThreshold || exceedsSpreadsheetLevelCellBudgetWarningThreshold;
+    const warningMessage = (() => {
+        if (exceedsTabRowWarningThreshold) {
+            return `One or more sheet tabs are over ${Math.round(WARN_THRESHOLD * 100)}% full. Create a new spreadsheet to continue syncing without interruption.`;
+        }
+        if (exceedsSpreadsheetLevelCellBudgetWarningThreshold) {
+            return `The spreadsheet is over ${Math.round(WARN_THRESHOLD * 100)}% full and nearing the budgeted limit. Create a new spreadsheet to continue syncing without interruption.`;
+        }
+        return "";
+    })();
+
     return (
         <article className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
 
             {/* Warning CTA if approaching capacity limit */}
-            {exceedsWarningThreshold && (
+            {showLimitWarning && !isRetired && (
                 <div className="rounded-2xl border-2 border-red-600 bg-red-50 p-4 shadow-md">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-start gap-3">
@@ -158,12 +224,12 @@ export function WorkspaceCard({
                                     Spreadsheet approaching capacity limit
                                 </h3>
                                 <p className="text-xs text-red-800">
-                                    One or more sheet tabs are over {Math.round(WARN_THRESHOLD * 100)}% full. Create a new spreadsheet to continue syncing without interruption.
+                                    {warningMessage}
                                 </p>
                             </div>
                         </div>
                         <div
-                            onClick={() => console.log("Create new spreadsheet")}
+                            onClick={(handleRotateClick)}
                             className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors whitespace-nowrap"
                         >
                             Create new spreadsheet
@@ -243,7 +309,7 @@ export function WorkspaceCard({
 
                     <div className="flex items-center gap-2">
                         {
-                            showSyncNowButton && (
+                            showSyncNowButton && !isRetired && (
                                 <button
                                     type="button"
                                     onClick={() => onSyncNow?.(workspace.id)}
@@ -254,15 +320,17 @@ export function WorkspaceCard({
                             )
                         }
 
-                        <button
-                            type="button"
-                            aria-haspopup="menu"
-                            aria-expanded={menuOpen}
-                            onClick={() => setMenuOpen((v) => !v)}
-                            className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                        >
-                            <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
-                        </button>
+                        {!isRetired && (
+                            <button
+                                type="button"
+                                aria-haspopup="menu"
+                                aria-expanded={menuOpen}
+                                onClick={() => setMenuOpen((v) => !v)}
+                                className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                            >
+                                <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        )}
 
                         {menuOpen && (
                             <div

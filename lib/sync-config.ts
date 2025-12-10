@@ -5,7 +5,6 @@ import {
     SyncConfigSchema,
     type SyncConfig,
     type StripeDataSyncEntry,
-    StripeObject,
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
 
@@ -14,14 +13,17 @@ const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 // Assume there is only one sync config for a user for MVP 
 export async function getUserSyncConfig(
     authUserId: string,
+    spreadsheetId?: string,
 ): Promise<SyncConfig | undefined> {
+    const sk = spreadsheetId ? `SYNC#${spreadsheetId}` : "SYNC#";
+    const keyConditionExpression = spreadsheetId ? `pk = :pk AND sk = :sk` : `pk = :pk AND begins_with(sk, :sk)`;
     const res = await ddb.send(
         new QueryCommand({
             TableName: TABLE_NAME,
-            KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
+            KeyConditionExpression: keyConditionExpression,
             ExpressionAttributeValues: {
                 ":pk": `USER#${authUserId}`,
-                ":sk": "SYNC#",
+                ":sk": sk,
             },
             Limit: 2, // enough to detect "more than one"
         }),
@@ -103,6 +105,7 @@ export async function createSyncConfig(params: {
     stripeDataSyncMap?: StripeDataSyncEntry[];
     historyMode?: SyncConfig["historyMode"];
     historySinceDays?: number;
+    syncStatus?: SyncConfig["syncStatus"];
 }) {
     const {
         authUserId,
@@ -111,6 +114,7 @@ export async function createSyncConfig(params: {
         stripeDataSyncMap,
         historyMode = "since",
         historySinceDays = 90,
+        syncStatus = "onboarding",
     } = params;
 
     if (!stripeAccountId) {
@@ -138,6 +142,7 @@ export async function createSyncConfig(params: {
         historyMode,
         historySinceDays,
 
+        syncStatus,
         lastSyncAt: null,
         lastError: null,
 

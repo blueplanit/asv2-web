@@ -12,7 +12,7 @@ import { BillingBar } from "@/components/account/billing-bar";
 import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
-import type { SheetTabMetrics } from "@blueplanit/asv2-shared";
+import { type SheetTabMetrics } from "@blueplanit/asv2-shared";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -55,6 +55,7 @@ function mapSyncConfigToWorkspace(args: {
     if (cfg.syncStatus === "backfill_running") health = "backfilling" as any;
     else if (cfg.syncStatus === "paused") health = "paused" as any;
     else if (cfg.syncStatus === "error") health = "error" as any;
+    else if (cfg.syncStatus === "retired") health = "retired" as any;
 
     const lastSyncAt = cfg.lastSyncAt ?? null;
 
@@ -96,6 +97,19 @@ function getNextOnboardingStep(onboardingStage: string): number {
 export function DashboardClient() {
     const { user, refresh } = useUserState();
     const { onboardingStage, googleConnections, stripeConnections, syncConfigs } = user;
+
+    const sortedSyncConfigs = useMemo(
+        () =>
+            [...syncConfigs].sort(
+                (a, b) =>
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime(),
+            ),
+        [syncConfigs],
+    );
+
+    const activeSyncConfig: SyncConfig | null = sortedSyncConfigs.length > 0 ? sortedSyncConfigs[0] : null; // assume for MVP that there's only one active sync at a time
+
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
     const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
     const [titlesRequested, setTitlesRequested] = useState(false);
@@ -106,10 +120,6 @@ export function DashboardClient() {
     const router = useRouter();
 
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
-
-    // MVP: assume at most one sync config
-    const userSyncConfig: SyncConfig | null =
-        syncConfigs.length > 0 ? syncConfigs[0] : null;
 
     const filteredConfigs = useMemo(
         () =>
@@ -202,9 +212,9 @@ export function DashboardClient() {
 
     // derive workspace(s) from sync config + stripe connection
     const workspaces: Workspace[] =
-        syncConfigs.length === 0
+        sortedSyncConfigs.length === 0
             ? []
-            : syncConfigs.map((cfg) => {
+            : sortedSyncConfigs.map((cfg) => {
                 const stripeConn = stripeConnections.find(
                     (c) => c.stripeAccountId === cfg.stripeAccountId,
                 );
@@ -219,9 +229,23 @@ export function DashboardClient() {
                 });
             }).filter((ws) => ws !== null);
 
+    // console.log("workspaces", workspaces);
 
-    const primaryWorkspace = workspaces[0] ?? null;
-    const isOnboardingDone = userSyncConfig && (userSyncConfig.syncStatus === "syncing" || userSyncConfig.syncStatus === "backfill_running" || userSyncConfig.syncStatus === "paused");
+    const activeWorkspace =
+        workspaces.find(
+            (ws) => ws.id === activeSyncConfig?.spreadsheetId,
+        ) ?? workspaces[0] ?? null;
+
+    const archivedWorkspaces = workspaces.filter(
+        (ws) => ws.id !== activeWorkspace?.id,
+    );
+
+    const isOnboardingDone =
+        activeSyncConfig &&
+        (activeSyncConfig.syncStatus === "syncing" ||
+            activeSyncConfig.syncStatus === "backfill_running" ||
+            activeSyncConfig.syncStatus === "paused");
+
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;
 
@@ -275,24 +299,22 @@ export function DashboardClient() {
     useEffect(() => {
         const flag = searchParams.get("backfill_started");
         if (!flag) return;
-        if (!primaryWorkspace || !userSyncConfig) return;
-        if (userSyncConfig.syncStatus !== "backfill_running") {
-            // Clean URL and mark processed; nothing to show.
+        if (!activeWorkspace || !activeSyncConfig) return;
+        if (activeSyncConfig.syncStatus !== "backfill_running") {
             router.replace("/dashboard", { scroll: false });
             return;
         }
 
         if (flag === "1") {
-            // Clean the URL so refreshes don't re-trigger the param
             router.replace("/dashboard", { scroll: false });
             setBackfillModalOpen(true);
             return;
         }
-    }, [searchParams]);
+    }, [searchParams, activeWorkspace, activeSyncConfig, router]);
 
     function handleBackfillModalOpenChange(open: boolean) {
-        if (!open && primaryWorkspace && user.profile?.userId) {
-            const storageKey = `backfillIntroDismissed:${user.profile.userId}:${primaryWorkspace.id}`;
+        if (!open && activeWorkspace && user.profile?.userId) {
+            const storageKey = `backfillIntroDismissed:${user.profile.userId}:${activeWorkspace.id}`;
             try {
                 if (typeof window !== "undefined") {
                     window.localStorage.setItem(storageKey, "1");
@@ -457,21 +479,95 @@ export function DashboardClient() {
                                         </div>
                                     </div>
                                 ) : (
-                                    workspaces.map((ws) => {
-                                        const syncConfig = syncConfigs.find((cfg) => cfg.spreadsheetId === ws.id);
-                                        return (
-                                            <WorkspaceCard
-                                                key={ws.id}
-                                                workspace={ws}
-                                                onSyncNow={(id) => {
-                                                    console.log("Sync now for workspace", id);
-                                                }}
-                                                onTogglePause={handleTogglePause}
-                                                sheetTabMetrics={sheetTabMetrics[ws.id] ?? []}
-                                                stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}
-                                            />
-                                        );
-                                    })
+                                    <>
+                                        {activeWorkspace && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Current workspace
+                                                </p>
+                                                {(() => {
+                                                    const syncConfig = syncConfigs.find(
+                                                        (cfg) =>
+                                                            cfg.spreadsheetId ===
+                                                            activeWorkspace.id,
+                                                    );
+                                                    return (
+                                                        <WorkspaceCard
+                                                            key={activeWorkspace.id}
+                                                            workspace={activeWorkspace}
+                                                            onSyncNow={(id) => {
+                                                                console.log(
+                                                                    "Sync now for workspace",
+                                                                    id,
+                                                                );
+                                                            }}
+                                                            onTogglePause={
+                                                                handleTogglePause
+                                                            }
+                                                            sheetTabMetrics={
+                                                                sheetTabMetrics[
+                                                                activeWorkspace.id
+                                                                ] ?? []
+                                                            }
+                                                            stripeDataSyncMap={
+                                                                syncConfig
+                                                                    ?.stripeDataSyncMap ??
+                                                                []
+                                                            }
+                                                        />
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+
+                                        {archivedWorkspaces.length > 0 && (
+                                            <div className="space-y-2 pt-4 border-t border-slate-100">
+                                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Previous workspaces
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    Older sheets remain available for
+                                                    historical analysis. New syncs run
+                                                    only against your current workspace
+                                                    above.
+                                                </p>
+                                                <div className="mt-2 space-y-3">
+                                                    {archivedWorkspaces.map((ws) => {
+                                                        const syncConfig = syncConfigs.find(
+                                                            (cfg) =>
+                                                                cfg.spreadsheetId ===
+                                                                ws.id,
+                                                        );
+                                                        return (
+                                                            <WorkspaceCard
+                                                                key={ws.id}
+                                                                workspace={ws}
+                                                                onSyncNow={(id) => {
+                                                                    console.log(
+                                                                        "Sync now for workspace",
+                                                                        id,
+                                                                    );
+                                                                }}
+                                                                onTogglePause={
+                                                                    handleTogglePause
+                                                                }
+                                                                sheetTabMetrics={
+                                                                    sheetTabMetrics[
+                                                                    ws.id
+                                                                    ] ?? []
+                                                                }
+                                                                stripeDataSyncMap={
+                                                                    syncConfig
+                                                                        ?.stripeDataSyncMap ??
+                                                                    []
+                                                                }
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </section>
 
@@ -482,15 +578,17 @@ export function DashboardClient() {
                 </div>
             </main>
 
-            {primaryWorkspace && userSyncConfig?.syncStatus === "backfill_running" && (
-                <BackfillIntroModal
-                    open={backfillModalOpen}
-                    onOpenChange={handleBackfillModalOpenChange}
-                    sheetUrl={primaryWorkspace.sheetUrl}
-                    workspaceName={primaryWorkspace.name}
-                    nameLoading={primaryWorkspace.nameLoading ?? false}
-                />
-            )}
+            {activeWorkspace &&
+                activeSyncConfig?.syncStatus === "backfill_running" && (
+                    <BackfillIntroModal
+                        open={backfillModalOpen}
+                        onOpenChange={handleBackfillModalOpenChange}
+                        sheetUrl={activeWorkspace.sheetUrl}
+                        workspaceName={activeWorkspace.name}
+                        nameLoading={activeWorkspace.nameLoading ?? false}
+                    />
+                )}
+
         </div>
     );
 }

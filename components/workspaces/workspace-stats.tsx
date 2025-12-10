@@ -3,9 +3,7 @@ import { SheetTabMetrics, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useState, useMemo } from "react";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
-
-// Fallback to 30k rows if not found in TAB_ROW_LIMITS
-const DEFAULT_MAX_ROW_COUNT = 30000;
+import { DEFAULT_ROW_CAPACITY } from "./workspace-card";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -29,7 +27,7 @@ type TabStat = {
     label: string;
     rowCount: number;
     maxRowCount: number;
-    lastObservedAt: string;
+    lastSyncedAt: string;
 };
 
 export function WorkspaceStats({ 
@@ -58,7 +56,7 @@ export function WorkspaceStats({
 
                 const objectId = entry.id;
                 const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
-                const maxRowCount = TAB_ROW_LIMITS[objectId] ?? DEFAULT_MAX_ROW_COUNT;
+                const maxRowCount = metric.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
 
                 return {
                     sheetId: metric.sheetId,
@@ -66,7 +64,7 @@ export function WorkspaceStats({
                     label,
                     rowCount: metric.rowCount,
                     maxRowCount,
-                    lastObservedAt: metric.lastObservedAt,
+                    lastSyncedAt: metric.lastSyncedAt,
                 };
             })
             .filter((stat): stat is TabStat => stat !== null)
@@ -146,7 +144,7 @@ export function WorkspaceStats({
                                                 />
                                             </div>
                                             <p className="text-[11px] text-slate-500">
-                                                Last observed: {new Date(stat.lastObservedAt).toLocaleString()}
+                                                Last synced: {new Date(stat.lastSyncedAt).toLocaleString()}
                                             </p>
                                         </div>
                                     );

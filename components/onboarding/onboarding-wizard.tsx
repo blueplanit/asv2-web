@@ -14,8 +14,8 @@ type StepStatus = "complete" | "current" | "upcoming";
 
 export const WORKSPACE_SHEET_TITLE = "My Stripe Sync – Workspace";
 export const FOLDER_NAME = "Sync";
-const WORKING_SHEET_TITLE = "Working Sheet";
-const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
+export const WORKING_SHEET_TITLE = "Working Sheet";
+export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
 
 export type Step = {
     id: number;
@@ -124,7 +124,12 @@ export function OnboardingWizard() {
         try {
             const res = await fetch("/api/google/create-sheet", {
                 method: "POST",
-                body: JSON.stringify({ folderName: FOLDER_NAME, workspaceSheetTitle: WORKSPACE_SHEET_TITLE }),
+                body: JSON.stringify({ 
+                    folderName: FOLDER_NAME, 
+                    workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
+                    workingSheetTitle: WORKING_SHEET_TITLE,
+                    workingSheetMessage: WORKING_SHEET_MESSAGE,
+                 }),
             });
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
