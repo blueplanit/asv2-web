@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { StripeObject, DEFAULT_ENABLED_STRIPE_OBJECTS } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
+import { Snackbar } from "@/components/ui/snackbar";
 
 type StepStatus = "complete" | "current" | "upcoming";
 
@@ -37,7 +38,7 @@ const steps: Step[] = [
     {
         id: 2,
         title: "Grant Sheets access",
-        description: "Allow AutoSync to create and update Google Sheets files in your Drive. We will not access any existing files you own.",
+        description: "Allow AutoSync to create and update Google Sheets files in your Drive.",
         ctaLabel: "Connect Google Sheets",
     },
     {
@@ -66,16 +67,16 @@ export function OnboardingWizard() {
         [user.syncConfigs],
     );
 
-     // "Any active config" = user has at least one workspace that is not onboarding/retired.
-     const hasAnyActiveConfig = React.useMemo(
+    // "Any active config" = user has at least one workspace that is not onboarding/retired.
+    const hasAnyActiveConfig = React.useMemo(
         () =>
             user.syncConfigs.some(
                 (cfg) =>
                     cfg.syncStatus !== "onboarding" &&
                     cfg.syncStatus !== "retired",
             ),
-         [user.syncConfigs],
-     );
+        [user.syncConfigs],
+    );
 
     // Derive initial step from ?step= query, default to 1
     const initialIndex = React.useMemo(() => {
@@ -88,6 +89,8 @@ export function OnboardingWizard() {
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
+    const [snackbarDescription, setSnackbarDescription] = useState<string>()
 
     // If there is no onboarding config but there *is* an active config,
     // the user is past onboarding → send them to dashboard.
@@ -96,6 +99,25 @@ export function OnboardingWizard() {
             router.replace("/dashboard");
         }
     }, [onboardingConfig, hasAnyActiveConfig, router, currentStepIndex]);
+
+    useEffect(() => {
+        const mismatch = searchParams.get("googleMismatch");
+        if (mismatch === "1") {
+            const expectedEmail = searchParams.get("expectedEmail");
+            const actualEmail = searchParams.get("actualEmail");
+
+            const description =
+                expectedEmail && actualEmail
+                    ? `You're signed in as ${expectedEmail} but tried to connect ${actualEmail}. Please choose the same Google account you signed up with on the next screen.`
+                    : "Please choose the same Google account you signed up with on the Google consent screen.";
+
+            setSnackbarDescription(description);
+            setSnackbarOpen(true);
+
+            // Strip the mismatch params so refreshes don't retrigger the snackbar
+            router.replace("/onboarding?step=2", { scroll: false });
+        }
+    }, [searchParams, router]);
 
     // Spreadsheet ID associated with the onboarding config (if any)
     const serverSpreadsheetId = onboardingConfig?.spreadsheetId ?? null;
@@ -153,12 +175,12 @@ export function OnboardingWizard() {
         try {
             const res = await fetch("/api/google/create-sheet", {
                 method: "POST",
-                body: JSON.stringify({ 
-                    folderName: FOLDER_NAME, 
+                body: JSON.stringify({
+                    folderName: FOLDER_NAME,
                     workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
                     workingSheetTitle: WORKING_SHEET_TITLE,
                     workingSheetMessage: WORKING_SHEET_MESSAGE,
-                 }),
+                }),
             });
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
@@ -180,10 +202,10 @@ export function OnboardingWizard() {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    selectedStripeObjects, 
-                    syncStatus: "backfill_running", 
-                    workingSheetTitle: WORKING_SHEET_TITLE, 
+                body: JSON.stringify({
+                    selectedStripeObjects,
+                    syncStatus: "backfill_running",
+                    workingSheetTitle: WORKING_SHEET_TITLE,
                     workingSheetMessage: WORKING_SHEET_MESSAGE,
                     spreadsheetId,
                 }),
@@ -293,8 +315,8 @@ export function OnboardingWizard() {
     function handleBack() {
         if (isFirstStep) return;
         goToStepByIndex(currentStepIndex - 1);
-      }
-    
+    }
+
 
     return (
         <main className="mx-auto flex max-w-6xl flex-1 flex-col px-6 pb-16 pt-8">
@@ -394,7 +416,7 @@ export function OnboardingWizard() {
                                         {currentStep.id === 4 && (
                                             <p className="text-[11px] text-slate-500 text-right sm:text-left max-w-xs">
                                                 <span className="inline-flex items-center gap-2  text-[11px] font-medium text-emerald-700 ">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Your 14-day free trial starts after this. No card required!
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Your 14-day free trial starts after this. No card required!
                                                 </span>
                                             </p>
                                         )}
@@ -402,14 +424,27 @@ export function OnboardingWizard() {
                                 </div>
 
                                 {currentStep.id === 2 && (
-                                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-900">
-                                        <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
-                                            Permissions
-                                        </span>
-                                        We never access existing files you own; new sheets are
-                                        created in your Drive with you as the owner. AutoSync only has access to the files you create within our app.
+                                    <div className="space-y-3">
+                                        {user.profile?.email && (
+                                            <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                <span className="truncate">
+                                                    You&apos;re signed in as{" "}
+                                                    <span className="font-semibold">
+                                                        {user.profile.email}
+                                                    </span>
+                                                    . Please choose the same account on the next screen.
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-900">
+                                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
+                                                Permissions
+                                            </span>
+                                            We will not access, edit, or delete any existing files you own. We only have access to the files created within our app.
+                                        </div>
                                     </div>
-                                )}                            
+                                )}
 
                                 {error && (
                                     <p className="text-sm text-red-600 mt-2">
@@ -421,6 +456,15 @@ export function OnboardingWizard() {
                         </div>
                     </section>
                 </main>
+                <Snackbar
+                    open={snackbarOpen}
+                    onClose={() => setSnackbarOpen(false)}
+                    variant="warning"
+                    title="Please connect the same Google account"
+                    description={snackbarDescription}
+                    animated
+                    autoHideMs={10000}
+                />
             </div>
         </main>
     );
