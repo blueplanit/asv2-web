@@ -30,7 +30,7 @@ export type OnboardingStage =
     | "stripe_connected"       // stripe connected, no google
     | "google_connected"       // google connected, no stripe
     | "connections_linked"     // both connected, no sync config
-    | "sheet_created"          // sync config exists, onboarding state
+    | "sheet_created"          // at least one onboarding sync config with a sheet created
     | "ready";                 // at least one sync config active
 
 export type UserState = {
@@ -54,31 +54,59 @@ function computeOnboardingStage(state: {
 
     const hasStripe = stripeConnections.length > 0;
     const hasGoogle = googleConnections.length > 0;
-    const hasSyncConfig = syncConfigs.length > 0;
 
-    if (!hasStripe && !hasGoogle && !hasSyncConfig) {
+    // Ignore retired configs for onboarding state
+    const nonRetiredConfigs = syncConfigs.filter(
+        (cfg) => cfg.syncStatus !== "retired",
+    );
+
+    const hasAnyConfig = nonRetiredConfigs.length > 0;
+    const onboardingConfigs = nonRetiredConfigs.filter(
+        (cfg) => cfg.syncStatus === "onboarding",
+    );
+    const activeConfigs = nonRetiredConfigs.filter(
+        (cfg) =>
+            cfg.syncStatus === "syncing" ||
+            cfg.syncStatus === "backfill_running" ||
+            cfg.syncStatus === "paused",
+    );
+
+    // No configs yet
+    if (!hasAnyConfig) {
+        if (!hasStripe && !hasGoogle) return "account_only";
+        if (hasStripe && !hasGoogle) return "stripe_connected";
+        if (!hasStripe && hasGoogle) return "google_connected";
+        if (hasStripe && hasGoogle) return "connections_linked";
         return "account_only";
     }
 
-    if (hasStripe && !hasGoogle && !hasSyncConfig) {
-        return "stripe_connected";
-    }
+    // At least one onboarding config → sheet created but not fully configured
+    if (onboardingConfigs.length > 0) {
+        const anySheetCreated = onboardingConfigs.some(
+            (cfg) =>
+                cfg.spreadsheetId &&
+                (!cfg.stripeDataSyncMap ||
+                    cfg.stripeDataSyncMap.length === 0),
+        );
 
-    if (!hasStripe && hasGoogle && !hasSyncConfig) {
-        return "google_connected";
-    }
+        if (anySheetCreated) {
+            return "sheet_created";
+        }
 
-    if (hasStripe && hasGoogle && !hasSyncConfig) {
+        // Defensive fallback: we have an onboarding config but no sheet info yet
         return "connections_linked";
     }
 
-    // Assume there is only one sync config for a user for MVP 
-    const userSyncConfig = syncConfigs.length > 0 ? syncConfigs[0] : null;
-    if (hasStripe && hasGoogle && userSyncConfig?.stripeDataSyncMap?.length === 0 && userSyncConfig?.spreadsheetId) {
-        return "sheet_created";
+    // At least one active (non-onboarding, non-retired) config → ready
+    if (activeConfigs.length > 0) {
+        return "ready";
     }
 
-    return "ready";
+    // Only retired configs left → treat as "connections linked" (no current workspace)
+    if (hasStripe && hasGoogle) return "connections_linked";
+    if (hasStripe && !hasGoogle) return "stripe_connected";
+    if (!hasStripe && hasGoogle) return "google_connected";
+    return "account_only";
 }
 
 // Main loader: one query, then fan-out by `sk` prefix
