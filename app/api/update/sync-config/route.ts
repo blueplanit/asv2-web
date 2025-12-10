@@ -12,6 +12,7 @@ import {
     applyStripeSelectionToStripeDataSyncMap,
 } from "@/lib/stripe-data-sync-map-helpers";
 import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google-stripe-data-sync-map";
+import { SyncStatus } from "@/lib/types/sync-status";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ type Body = {
     selectedStripeObjects?: string[];
     historyMode?: "full" | "since";
     historySinceDays?: number;
-    syncStatus?: "onboarding" | "backfill_running" | "paused" | "error" | "syncing" | "retired";
+    syncStatus?: SyncStatus;
     workingSheetTitle?: string;
     workingSheetMessage?: string;
     spreadsheetId?: string;

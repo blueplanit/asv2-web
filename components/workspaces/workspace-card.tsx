@@ -19,8 +19,7 @@ import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onboarding/onboarding-wizard";
 import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
-
-export type WorkspaceHealth = "healthy" | "backfilling" | "paused" | "error" | "retired";
+import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
 
 export type Workspace = {
     id: string;
@@ -32,7 +31,7 @@ export type Workspace = {
     lastSyncAt: string | null;
     health: WorkspaceHealth;
     objectsEnabled: string[];
-    syncStatus: "syncing" | "paused" | "backfill_running" | "error" | "onboarding" | "retired";
+    syncStatus: SyncStatus;
     nameLoading?: boolean;
 };
 
