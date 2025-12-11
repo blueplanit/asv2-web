@@ -1,3 +1,4 @@
+import { ensureAppUserForGoogleLogin } from "@/lib/user-profile";
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
@@ -23,19 +24,31 @@ export const authOptions: NextAuthOptions = {
     callbacks: {
         async jwt({ token, account, profile }) {
             // First time (on sign-in) we have account + profile
-            if (account && profile) {
-              // Google subject (stable per Google account)
-              token.googleUserId = (profile as any).sub;
+            if (account?.provider === "google" && profile) {
+                const googleUserId = (profile as any).sub as string;
+                const email = (profile as any).email as string;
+
+                (token as any).googleUserId = googleUserId;
+
+                if (!(token as any).userId) {
+                    const { userId } = await ensureAppUserForGoogleLogin({
+                        googleUserId,
+                        email,
+                    });
+                    (token as any).userId = userId;
+                }
             }
             return token;
-          },
+        },
         async session({ session, token }) {
-            // expose a stable authUserId to your app
+            // expose a stable userId to app
             if (session.user && token.sub) {
                 // @ts-expect-error augmenting session type
                 session.user.id = token.sub;
                 // @ts-expect-error custom field
                 session.user.googleUserId = (token as any).googleUserId;
+
+                (session.user as any).userId = (token as any).userId;
             }
             return session;
         },

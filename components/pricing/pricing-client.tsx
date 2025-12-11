@@ -1,7 +1,6 @@
 // components/pricing/pricing-client.tsx
 "use client";
 // at the top of pricing-client.tsx
-import { CheckCircle2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";

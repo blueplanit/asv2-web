@@ -8,14 +8,14 @@ import { isStripeSubscriptionEntitled } from "./subscription-entitlement";
 
 export async function confirmCheckoutSessionAndActivateUser(
     sessionId: string,
-    authUserId: string,
+    userId: string,
 ) {
     const session = await stripeBilling.checkout.sessions.retrieve(sessionId, {
         expand: ["subscription", "line_items.data.price"],
     });
 
     // Security: metadata must match the logged-in user
-    if (session.metadata?.authUserId !== authUserId) {
+    if (session.metadata?.userId !== userId) {
         throw new Error("Checkout session does not belong to this user");
     }
 
@@ -46,7 +46,7 @@ export async function confirmCheckoutSessionAndActivateUser(
     const newSubscriptionId = subscription.id;
     const stripeCustomerId = session.customer as string;
 
-    const currentProfile = await getUserProfile(authUserId);
+    const currentProfile = await getUserProfile(userId);
     const previousSubscriptionId = currentProfile?.subscriptionId;
 
     // Use metadata priceId first, then fall back to subscription/line_items
@@ -79,7 +79,7 @@ export async function confirmCheckoutSessionAndActivateUser(
     // Update Database (Optimistic)
     // We catch conditional errors just in case, but usually we overwrite
     try {
-        await updateUserSubscriptionStatusToActive(authUserId, subParams, previousSubscriptionId);
+        await updateUserSubscriptionStatusToActive(userId, subParams, previousSubscriptionId);
     } catch (err: any) {
         // If ConditionalCheckFailed, the webhook likely already updated the DB.
         // We can safely return here, OR proceed to check cancellation just to be safe.

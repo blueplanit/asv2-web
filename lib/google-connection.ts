@@ -9,20 +9,20 @@ import {
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function putGoogleConnection(params: {
-    authUserId: string;
+    userId: string;
     googleUserId: string;
     email: string;
     accessTokenEncrypted: string;
     refreshTokenEncrypted: string;
 }) {
-    const { authUserId, googleUserId, email, accessTokenEncrypted, refreshTokenEncrypted } = params;
+    const { userId, googleUserId, email, accessTokenEncrypted, refreshTokenEncrypted } = params;
     const now = new Date().toISOString();
 
     const item: GoogleConnection = GoogleConnectionSchema.parse({
-        pk: `USER#${authUserId}`,
+        pk: `USER#${userId}`,
         sk: `GOOGLE#${googleUserId}`,
         type: "GoogleConnection",
-        userId: authUserId,
+        userId: userId,
         googleUserId,
         email,
         status: "connected",
@@ -42,12 +42,12 @@ export async function putGoogleConnection(params: {
     return item;
 }
 
-export async function getGoogleConnection(authUserId: string, googleUserId: string) {
+export async function getGoogleConnection(userId: string, googleUserId: string) {
     const res = await ddb.send(
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${authUserId}`,
+                pk: `USER#${userId}`,
                 sk: `GOOGLE#${googleUserId}`,
             },
         }),
