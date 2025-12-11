@@ -12,7 +12,7 @@ import { getStripeAccountIdForUser } from "@/lib/stripe-connection";
 import { createSyncConfig, ensureSyncConfigForSheet } from "@/lib/sync-config";
 
 type CreateWorkspaceSheetParams = {
-    authUserId: string;
+    userId: string;
     folderName?: string;
     workspaceSheetTitle?: string;
     workingSheetTitle?: string;
@@ -25,7 +25,7 @@ export async function createWorkspaceSheetAndConfig(
     params: CreateWorkspaceSheetParams,
 ) {
     const {
-        authUserId,
+        userId,
         folderName,
         workspaceSheetTitle,
         workingSheetTitle,
@@ -34,7 +34,7 @@ export async function createWorkspaceSheetAndConfig(
     } = params;
 
     // 1) Google auth
-    const { accessToken } = await getGoogleAccessTokenForUser(authUserId);
+    const { accessToken } = await getGoogleAccessTokenForUser(userId);
     const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID!,
         process.env.GOOGLE_CLIENT_SECRET!,
@@ -93,7 +93,7 @@ export async function createWorkspaceSheetAndConfig(
     }
 
     // 4) Derive Stripe account for config
-    const stripeAccountId = baseSyncConfig?.stripeAccountId ?? (await getStripeAccountIdForUser(authUserId));
+    const stripeAccountId = baseSyncConfig?.stripeAccountId ?? (await getStripeAccountIdForUser(userId));
 
     if (!stripeAccountId) {
         throw new Error("Stripe account ID not found for user");
@@ -103,7 +103,7 @@ export async function createWorkspaceSheetAndConfig(
 
     if (!baseSyncConfig) { // first-time onboarding and new sheet
         syncConfig = await ensureSyncConfigForSheet({
-            authUserId,
+            userId,
             spreadsheetId,
             stripeAccountId,
         });
@@ -128,7 +128,7 @@ export async function createWorkspaceSheetAndConfig(
 
     // 6) Ensure tabs exist and are protected, plus Working Sheet
     const boundStripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
-        authUserId,
+        userId,
         spreadsheetId,
         stripeDataSyncMap,
         workingSheetTitle,
@@ -137,7 +137,7 @@ export async function createWorkspaceSheetAndConfig(
 
     // 7) Create SyncConfig for this sheet
     syncConfig = await createSyncConfig({
-        authUserId,
+        userId,
         spreadsheetId,
         stripeAccountId,
         stripeDataSyncMap: boundStripeDataSyncMap,

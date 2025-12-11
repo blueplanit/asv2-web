@@ -5,18 +5,14 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
 import { encrypt } from "@/lib/google-auth";
 
-import { ddb } from "@/lib/dynamo";
-import { GetCommand } from "@aws-sdk/lib-dynamodb";
-import { UserProfileSchema } from "@/lib/schemas/user-profile";
-
-const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
-
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).id) {
+    if (!session?.user || !(session.user as any).userId) {
         return new Response("Unauthorized", { status: 401 });
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
+    const sessionGoogleUserId = (session.user as any).googleUserId as string | undefined;
+    const sessionEmail = session.user.email ?? "";
 
     const url = new URL(req.url);
     const searchParams = url.searchParams;
@@ -103,58 +99,29 @@ export async function GET(req: NextRequest) {
     const googleUserId = userinfo.sub;
     const email = userinfo.email;
 
-    // 3) Load canonical profile + enforce same Google identity
-    const profileRes = await ddb.send(
-        new GetCommand({
-            TableName: TABLE_NAME,
-            Key: {
-                pk: `USER#${authUserId}`,
-                sk: "PROFILE",
-            },
-        }),
-    );
-
-    if (!profileRes.Item) {
-        console.error("User profile not found for authUserId", authUserId);
-        const errorUrl = new URL(
-            "/onboarding?step=2&googleError=1",
-            process.env.NEXTAUTH_URL,
-        );
-        return NextResponse.redirect(errorUrl);
-    }
-
-    const profile = UserProfileSchema.parse(profileRes.Item);
-
-    // Prefer strict check on googleUserId; fall back to email if needed
-    const hasProfileGoogleId = Boolean(profile.googleUserId);
-    const idsMismatch =
-        hasProfileGoogleId && profile.googleUserId !== googleUserId;
-    const emailsMismatch =
-        !hasProfileGoogleId &&
-        profile.email &&
-        profile.email.toLowerCase() !== email.toLowerCase();
-
-    if (idsMismatch || emailsMismatch) {
+    // Enforce that the Sheets OAuth account matches the login Google account.
+    // We compare the Google "sub" from the userinfo call with the one stored in the session.
+    if (sessionGoogleUserId && sessionGoogleUserId !== googleUserId) {
         console.error("Google account mismatch during Sheets connect", {
-            authUserId,
-            expectedGoogleUserId: profile.googleUserId,
-            expectedEmail: profile.email,
+            userId,
+            expectedGoogleUserId: sessionGoogleUserId,
+            expectedEmail: sessionEmail,
             actualGoogleUserId: googleUserId,
             actualEmail: email,
         });
 
         const mismatchUrl = new URL(
-            `/onboarding?step=2&googleMismatch=1`,
+            "/onboarding?step=2&googleMismatch=1",
             process.env.NEXTAUTH_URL,
         );
-        // Optional: pass expected/actual emails to show in UI (URL-encoded)
-        mismatchUrl.searchParams.set("expectedEmail", profile.email);
+        // Pass expected/actual emails for better UX in the snackbar / helper copy.
+        mismatchUrl.searchParams.set("expectedEmail", sessionEmail);
         mismatchUrl.searchParams.set("actualEmail", email);
 
         return NextResponse.redirect(mismatchUrl);
     }
 
-    // 4) Encrypt tokens for storage
+    // 3) Encrypt tokens for storage
     const accessTokenEncrypted = encrypt({
         accessToken,
         scope: tokenJson.scope,
@@ -168,16 +135,16 @@ export async function GET(req: NextRequest) {
         refreshToken,
     });
 
-    // 5) Write GoogleConnection item into DynamoDB
+    // 4) Write GoogleConnection item into DynamoDB
     await putGoogleConnection({
-        authUserId,
+        userId,
         googleUserId,
         email,
         accessTokenEncrypted,
         refreshTokenEncrypted,
     });
 
-    // 6) Back to onboarding, step 3 (Create sheet)
+    // 5) Back to onboarding, step 3 (Create sheet)
     const onboardingUrl = new URL("/onboarding?step=3", process.env.NEXTAUTH_URL);
     return NextResponse.redirect(onboardingUrl);
 }

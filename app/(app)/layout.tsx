@@ -10,9 +10,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (!session?.user || !(session.user as any).id) {
         redirect("/login");
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
-    const userState = await loadUserState(authUserId);
+    const userState = await loadUserState(userId);
     return (
         <UserStateProvider initialState={userState}>
             <AppShell>{children}</AppShell>

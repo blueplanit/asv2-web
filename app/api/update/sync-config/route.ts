@@ -28,13 +28,13 @@ type Body = {
 
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).id) {
+    if (!session?.user || !(session.user as any).userId) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
-    if (!authUserId) {
-        return new NextResponse("Auth user ID not found", { status: 400 });
+    if (!userId) {
+        return new NextResponse("User ID not found", { status: 400 });
     }
 
     const body = (await req.json().catch(() => null)) as Body;
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
         return new NextResponse("Spreadsheet ID not found", { status: 400 });
     }
 
-    const existing = await getSyncConfig(authUserId, spreadsheetId);
+    const existing = await getSyncConfig(userId, spreadsheetId);
     if (!existing || !existing.spreadsheetId) {
         return new NextResponse("Sync config not found for user or spreadsheet ID not set", { status: 400 });
     }
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
 
         // Build Google Sheet tabs based on which stripe to-sync data is enabled from UI
         stripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
-            authUserId,
+            userId,
             spreadsheetId: existing.spreadsheetId,
             stripeDataSyncMap,
             workingSheetTitle,
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
 
     // actually persist the config in db
     const updated = await updateSyncConfig({
-        authUserId,
+        userId,
         spreadsheetId: existing.spreadsheetId,
         stripeDataSyncMap: stripeDataSyncMapToPersist,
         historyMode,

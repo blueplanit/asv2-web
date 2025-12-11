@@ -18,7 +18,7 @@ export function encrypt(raw: unknown): string {
 }
 
 // Assumes exactly one GoogleConnection per user for now
-export async function getGoogleAccessTokenForUser(authUserId: string): Promise<{
+export async function getGoogleAccessTokenForUser(userId: string): Promise<{
     accessToken: string;
     googleUserId: string;
     email: string;
@@ -29,7 +29,7 @@ export async function getGoogleAccessTokenForUser(authUserId: string): Promise<{
             TableName: TABLE_NAME,
             KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
             ExpressionAttributeValues: {
-                ":pk": `USER#${authUserId}`,
+                ":pk": `USER#${userId}`,
                 ":sk": "GOOGLE#",
             },
             Limit: 1,

@@ -9,8 +9,8 @@ import {
     type BillingInterval,
 } from "@/lib/stripe-billing";
 import {
-    getUserProfile,
     updateUserSubscriptionStatusToActive,
+    getUserProfile,
 } from "@/lib/user-profile";
 import { ensureStripeCustomerId } from "@/lib/ensure-stripe-customer";
 import { getSubscriptionPeriodEnd } from "@/lib/billing-period";
@@ -25,10 +25,10 @@ type Body = {
 
 export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).id) {
+    if (!session?.user || !(session.user as any).userId) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
     const body = (await req.json().catch(() => null)) as Body | null;
     const planId: BillingPlanId = (body?.planId ?? "pro") as BillingPlanId;
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         return new NextResponse("Unknown plan/interval", { status: 400 });
     }
 
-    const profile = await getUserProfile(authUserId);
+    const profile = await getUserProfile(userId);
     if (!profile) {
         return new NextResponse("User profile not found", { status: 400 });
     }
@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         return new NextResponse("Subscription already active", { status: 409 });
     }
 
+    // console.log("user profile", profile);
     // Check if they have already trialed
     if (profile.subscriptionId || profile.subscriptionCustomerId) {
         // If they have a customer ID, they've likely interacted with billing before.
@@ -56,14 +57,14 @@ export async function POST(req: NextRequest) {
         return new NextResponse("Trial already used. Please upgrade to a paid plan.", { status: 403 });
     }
 
-    const stripeCustomerId = await ensureStripeCustomerId(authUserId);
+    const stripeCustomerId = await ensureStripeCustomerId(userId);
 
     if (!stripeCustomerId) {
         return new NextResponse("Failed to create/get Stripe customer", { status: 500 });
     }
 
     const metadata = {
-        authUserId,
+        userId,
         planId,
         interval,
         priceId,
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     const previousSubscriptionId = profile.subscriptionId ?? null;
 
     try {
-        await updateUserSubscriptionStatusToActive(authUserId, {
+        await updateUserSubscriptionStatusToActive(userId, {
             subscriptionId: subscription.id,
             stripeCustomerId,
             planId,

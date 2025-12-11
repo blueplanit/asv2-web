@@ -247,7 +247,7 @@ export function OnboardingWizard() {
                 return;
             }
             // Optional: show trial end date from data.trialEndsAt
-            console.log("start trial resp data", data);
+            // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
             return false;

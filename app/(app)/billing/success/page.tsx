@@ -15,14 +15,14 @@ export default async function BillingSuccessPage(props: {
     if (!session?.user || !(session.user as any).id) {
         redirect("/login");
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
     const { session_id } = await props.searchParams;
     const sessionId = session_id;
 
     if (sessionId) {
         try {
-            await confirmCheckoutSessionAndActivateUser(sessionId, authUserId);
+            await confirmCheckoutSessionAndActivateUser(sessionId, userId);
         } catch (err) {
             console.error("Error confirming checkout session:", err);
             // optional: render a soft error
@@ -36,8 +36,7 @@ export default async function BillingSuccessPage(props: {
                     Subscription activated
                 </h1>
                 <p className="text-sm text-slate-600">
-                    Your subscription is now active. You can finish setting up your workspace and
-                    start syncing data.
+                    Your subscription is now active. Cancel anytime from your account page.
                 </p>
                 <a
                     href="/dashboard"

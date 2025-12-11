@@ -9,18 +9,18 @@ import {
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function putStripeConnection(params: {
-    authUserId: string;
+    userId: string;
     stripeAccountId: string;
     businessName: string;
 }) {
-    const { authUserId, stripeAccountId, businessName } = params;
+    const { userId, stripeAccountId, businessName } = params;
     const now = new Date().toISOString();
 
     const item: StripeConnection = StripeConnectionSchema.parse({
-        pk: `USER#${authUserId}`,
+        pk: `USER#${userId}`,
         sk: `STRIPE#${stripeAccountId}`,
         type: "StripeConnection",
-        userId: authUserId,
+        userId: userId,
         stripeAccountId,
         businessName,
         status: "connected",
@@ -38,12 +38,12 @@ export async function putStripeConnection(params: {
     return item;
 }
 
-export async function getStripeConnection(authUserId: string, stripeAccountId: string) {
+export async function getStripeConnection(userId: string, stripeAccountId: string) {
     const res = await ddb.send(
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${authUserId}`,
+                pk: `USER#${userId}`,
                 sk: `STRIPE#${stripeAccountId}`,
             },
         }),
@@ -55,14 +55,14 @@ export async function getStripeConnection(authUserId: string, stripeAccountId: s
 
 // Assumes exactly one StripeConnection per user for now    
 export async function getStripeAccountIdForUser(
-    authUserId: string,
+    userId: string,
 ): Promise<string | undefined> {
     const res = await ddb.send(
         new QueryCommand({
             TableName: TABLE_NAME,
             KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
             ExpressionAttributeValues: {
-                ":pk": `USER#${authUserId}`,
+                ":pk": `USER#${userId}`,
                 ":sk": "STRIPE#",
             },
             Limit: 1,

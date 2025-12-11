@@ -110,8 +110,12 @@ function computeOnboardingStage(state: {
 }
 
 // Main loader: one query, then fan-out by `sk` prefix
-export async function loadUserState(authUserId: string): Promise<UserState> {
-    const pk = `USER#${authUserId}`;
+export async function loadUserState(userId: string): Promise<UserState> {
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
+
+    const pk = `USER#${userId}`;
 
     const res = await ddb.send(
         new QueryCommand({

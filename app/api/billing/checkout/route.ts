@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     if (!session?.user || !(session.user as any).id) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
     const body = (await req.json().catch(() => null)) as Body | null;
     if (!body || !body.planId || !body.interval) {
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         return new NextResponse("Unknown plan/interval", { status: 400 });
     }
 
-    const userProfile = await getUserProfile(authUserId);
+    const userProfile = await getUserProfile(userId);
     if (!userProfile) {
         return new NextResponse("User profile not found", { status: 400 });
     }
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const successUrl = `${process.env.NEXTAUTH_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.NEXTAUTH_URL}/pricing?canceled=1`;
     const metadata = {
-        authUserId,
+        userId,
         planId,
         interval,
         priceId,

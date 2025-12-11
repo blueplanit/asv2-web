@@ -11,14 +11,14 @@ import {
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function getSyncConfigs(
-    authUserId: string,
+    userId: string,
 ): Promise<SyncConfig[]> {
     const res = await ddb.send(
         new QueryCommand({
             TableName: TABLE_NAME,
             KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
             ExpressionAttributeValues: {
-                ":pk": `USER#${authUserId}`,
+                ":pk": `USER#${userId}`,
                 ":sk": "SYNC#",
             },
         }),
@@ -32,28 +32,30 @@ export async function getSyncConfigs(
 
 
 export async function ensureSyncConfigForSheet(params: {
-    authUserId: string;
+    userId: string;
     spreadsheetId: string;
     stripeAccountId: string;
 }) {
-    const { authUserId, spreadsheetId, stripeAccountId } = params;
-    const pk = `USER#${authUserId}`;
+    const { userId, spreadsheetId, stripeAccountId } = params;
+    const pk = `USER#${userId}`;
     const sk = `SYNC#${spreadsheetId}`;
+    
+    if (!userId) {
+        throw new Error("Auth user ID is required");
+    }
+
+    if (!spreadsheetId) {
+        throw new Error("Spreadsheet ID is required");
+    }
 
     // 1) If any sync config already exists, just return it
-    const existing = await getSyncConfig(authUserId, spreadsheetId);
+    const existing = await getSyncConfig(userId, spreadsheetId);
     if (existing) {
         return existing;
     }
 
     if (!stripeAccountId) {
         throw new Error("Stripe account ID is required");
-    }
-    if (!spreadsheetId) {
-        throw new Error("Spreadsheet ID is required");
-    }
-    if (!authUserId) {
-        throw new Error("Auth user ID is required");
     }
 
     // 2) Otherwise create a minimal config; other fields remain unset
@@ -63,7 +65,7 @@ export async function ensureSyncConfigForSheet(params: {
         pk,
         sk,
         type: "SyncConfig",
-        userId: authUserId,
+        userId: userId,
         spreadsheetId,
         stripeAccountId,
         lastSyncAt: null,
@@ -85,7 +87,7 @@ export async function ensureSyncConfigForSheet(params: {
 
 // Create initial config when spreadsheet is created
 export async function createSyncConfig(params: {
-    authUserId: string;
+    userId: string;
     spreadsheetId: string;
     stripeAccountId: string;
     stripeDataSyncMap?: StripeDataSyncEntry[];
@@ -94,7 +96,7 @@ export async function createSyncConfig(params: {
     syncStatus?: SyncConfig["syncStatus"];
 }) {
     const {
-        authUserId,
+        userId,
         spreadsheetId,
         stripeAccountId,
         stripeDataSyncMap,
@@ -109,18 +111,18 @@ export async function createSyncConfig(params: {
     if (!spreadsheetId) {
         throw new Error("Spreadsheet ID is required");
     }
-    if (!authUserId) {
+    if (!userId) {
         throw new Error("Auth user ID is required");
     }
 
     const now = new Date().toISOString();
 
     const item: SyncConfig = SyncConfigSchema.parse({
-        pk: `USER#${authUserId}`,
+        pk: `USER#${userId}`,
         sk: `SYNC#${spreadsheetId}`,
         type: "SyncConfig",
 
-        userId: authUserId,
+        userId: userId,
         spreadsheetId,
         stripeAccountId,
 
@@ -147,12 +149,12 @@ export async function createSyncConfig(params: {
     return item;
 }
 
-export async function getSyncConfig(authUserId: string, spreadsheetId: string) {
+export async function getSyncConfig(userId: string, spreadsheetId: string) {
     const res = await ddb.send(
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${authUserId}`,
+                pk: `USER#${userId}`,
                 sk: `SYNC#${spreadsheetId}`,
             },
         }),
@@ -164,7 +166,7 @@ export async function getSyncConfig(authUserId: string, spreadsheetId: string) {
 
 // For toggling which Stripe objects are enabled, or history settings, from the UI
 export async function updateSyncConfig(params: {
-    authUserId: string;
+    userId: string;
     spreadsheetId: string;
     stripeDataSyncMap?: StripeDataSyncEntry[];
     historyMode?: SyncConfig["historyMode"] | null;
@@ -172,7 +174,7 @@ export async function updateSyncConfig(params: {
     syncStatus?: SyncConfig["syncStatus"];
 }) {
     const {
-        authUserId,
+        userId,
         spreadsheetId,
         stripeDataSyncMap,
         historyMode,
@@ -214,7 +216,7 @@ export async function updateSyncConfig(params: {
             TableName: TABLE_NAME,
             ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
             Key: {
-                pk: `USER#${authUserId}`,
+                pk: `USER#${userId}`,
                 sk: `SYNC#${spreadsheetId}`,
             },
             UpdateExpression,

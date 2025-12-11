@@ -7,9 +7,11 @@
 ////////////////////////////////////////////////////////////////////////////
 
 import { ddb } from "./dynamo";
-import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { UserProfileSchema, type UserProfile } from "./schemas/user-profile";
+import { ulid } from "ulid";
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
+const GOOGLE_ID_GSI_NAME = "GOOGLE_GSI"; // must match CDK definition
 
 export type UpdateUserSubscriptionParams = {
     subscriptionId: string;
@@ -21,11 +23,11 @@ export type UpdateUserSubscriptionParams = {
 };
 
 export async function updateUserSubscriptionStatusToActive(
-    authUserId: string,
+    userId: string,
     params: UpdateUserSubscriptionParams,
     expectedCurrentSubscriptionId?: string | null,
 ) {
-    const pk = `USER#${authUserId}`;
+    const pk = `USER#${userId}`;
     const now = new Date().toISOString();
 
     const {
@@ -102,11 +104,11 @@ export async function updateUserSubscriptionStatusToActive(
 }
 
 export async function updateUserSubscriptionStatusToInactive(
-    authUserId: string,
+    userId: string,
     rawStatus?: string, // e.g. Stripe subscription.status ("canceled", "unpaid", etc.)
     expectedSubscriptionId?: string,
 ) {
-    const pk = `USER#${authUserId}`;
+    const pk = `USER#${userId}`;
     const now = new Date().toISOString();
 
     let updateExpr =
@@ -143,8 +145,8 @@ export async function updateUserSubscriptionStatusToInactive(
 }
 
 
-export async function getUserProfile(authUserId: string) {
-    const pk = `USER#${authUserId}`;
+export async function getUserProfile(userId: string) {
+    const pk = `USER#${userId}`;
 
     const res = await ddb.send(
         new GetCommand({
@@ -158,49 +160,86 @@ export async function getUserProfile(authUserId: string) {
     return parsed; // typed UserProfile
 }
 
-export async function createUserProfile(
-    authUserId: string,
-    email: string,
-    googleUserId: string
-): Promise<UserProfile> {
+export async function getUserProfileByGoogleUserId(
+    googleUserId: string,
+): Promise<UserProfile | undefined> {
+    // 1) Query GSI to find the base-table key
+    const res = await ddb.send(
+        new QueryCommand({
+            TableName: TABLE_NAME,
+            IndexName: GOOGLE_ID_GSI_NAME,
+            KeyConditionExpression: "GOOGLE_GSI_PK = :gpk",
+            ExpressionAttributeValues: {
+                ":gpk": `GOOGLE#${googleUserId}`,
+            },
+            Limit: 1,
+        }),
+    );
+
+    const indexItem = res.Items?.[0];
+    if (!indexItem) return undefined;
+
+    const { pk, sk } = indexItem;
+
+    // 2) Fetch full item from base table
+    const getRes = await ddb.send(
+        new GetCommand({
+            TableName: TABLE_NAME,
+            Key: { pk, sk },
+        }),
+    );
+
+    if (!getRes.Item) return undefined;
+    return UserProfileSchema.parse(getRes.Item);
+}
+
+async function createUserProfileForGoogleLogin(params: {
+    googleUserId: string;
+    email: string;
+}): Promise<UserProfile> {
+    const { googleUserId, email } = params;
     const now = new Date().toISOString();
-    const pk = `USER#${authUserId}`;
+    const userId = ulid();
+    if (!googleUserId) {
+        throw new Error("Google user ID is required");
+    }
 
     const item: UserProfile = {
-        pk,
+        pk: `USER#${userId}`,
         sk: "PROFILE",
-        userId: authUserId,
+        userId: userId,
         email,
         googleUserId,
         createdAt: now,
-        subscriptionStatus: "inactive",
         updatedAt: now,
-    };
+        subscriptionStatus: "inactive",
+        // optionally set GOOGLE_GSI_PK, etc.
+        GOOGLE_GSI_PK: `GOOGLE#${googleUserId}`,
+    } as any;
 
-    // validate before write (optional if you're confident)
     UserProfileSchema.parse(item);
 
     await ddb.send(
         new PutCommand({
             TableName: TABLE_NAME,
             Item: item,
-            ConditionExpression: "attribute_not_exists(pk)", // avoid overwrite
-        })
+            ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
+        }),
     );
 
     return item;
 }
 
-export async function ensureUserProfile(authUserId: string, email: string, googleUserId: string) {
-    const existing = await getUserProfile(authUserId);
-    if (existing) return existing;
-    try {
-        return await createUserProfile(authUserId, email, googleUserId);
-    } catch (err: any) {
-        // If two requests race, a conditional failure is fine; just read again
-        if (err.name === "ConditionalCheckFailedException") {
-            return (await getUserProfile(authUserId))!;
-        }
-        throw err;
+// Main entry point from auth callback
+export async function ensureAppUserForGoogleLogin(params: {
+    googleUserId: string;
+    email: string;
+}): Promise<{ userId: string }> {
+    const existing = await getUserProfileByGoogleUserId(params.googleUserId);
+    if (existing) {
+        return { userId: existing.userId };
     }
+
+    const created = await createUserProfileForGoogleLogin(params);
+    return { userId: created.userId };
 }

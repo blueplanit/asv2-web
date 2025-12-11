@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).id) {
+    if (!session?.user || !(session.user as any).userId) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
     const body = (await req.json().catch(() => null)) as
         | { spreadsheetIds?: string[] }
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     try {
-        const { accessToken } = await getGoogleAccessTokenForUser(authUserId);
+        const { accessToken } = await getGoogleAccessTokenForUser(userId);
 
         const oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID!,

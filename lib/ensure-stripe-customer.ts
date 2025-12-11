@@ -10,8 +10,8 @@ import { getUserProfile } from "@/lib/user-profile";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
-export async function ensureStripeCustomerId(authUserId: string): Promise<string> {
-    const profile = await getUserProfile(authUserId);
+export async function ensureStripeCustomerId(userId: string): Promise<string> {
+    const profile = await getUserProfile(userId);
     if (!profile) throw new Error("User profile not found");
 
     if (profile.subscriptionCustomerId) {
@@ -21,7 +21,7 @@ export async function ensureStripeCustomerId(authUserId: string): Promise<string
     const customer = await stripeBilling.customers.create({
         email: profile.email,
         metadata: {
-            authUserId,
+            userId,
         },
     });
 

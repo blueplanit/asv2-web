@@ -14,7 +14,7 @@ export async function GET(req: Request) {
         if (!session?.user || !(session.user as any).id) {
           return new Response("Unauthorized", { status: 401 });
         }
-        const authUserId = (session.user as any).id as string;
+        const userId_ = (session.user as any).userId as string;
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
         const { searchParams } = new URL(req.url);
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
         // identify who is currently logged in
         // this should match what you used in makeState()
         // e.g. from NextAuth, a session cookie, etc.
-        const { ok, userId } = await verifyState(state, authUserId);
+        const { ok, userId } = await verifyState(state, userId_);
         // console.log("verifyState", ok, userId);
 
         if (!ok || !userId) {
@@ -53,7 +53,7 @@ export async function GET(req: Request) {
             accountProfile.settings?.dashboard?.display_name ?? "";
 
         await putStripeConnection({
-            authUserId,
+            userId,
             stripeAccountId: connectedAccountId,
             businessName,
         });

@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).id) {
+    if (!session?.user || !(session.user as any).userId) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
-    const authUserId = (session.user as any).id as string;
+    const userId = (session.user as any).userId as string;
 
     try {
         const body = await req.json().catch(() => ({}));
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
             workingSheetMessage,
             folderName,
         } = body ?? {};
-        const existing = await getSyncConfig(authUserId, existingSpreadsheetId);
+        const existing = await getSyncConfig(userId, existingSpreadsheetId);
         if (!existing) {
             return new NextResponse("No active sync config to rotate", { status: 400 });
         }
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         const newWorkspaceSheetTitle = `${workspaceSheetTitle} (New)`
         const { spreadsheetId, spreadsheetUrl, syncConfig: newConfig } =
             await createWorkspaceSheetAndConfig({
-                authUserId,
+                userId,
                 folderName,
                 workspaceSheetTitle: newWorkspaceSheetTitle,
                 workingSheetTitle,
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
         // 2) Mark old config as paused (or archived)
         await updateSyncConfig({
-            authUserId,
+            userId,
             spreadsheetId: existingSpreadsheetId,
             syncStatus: "retired",
         });

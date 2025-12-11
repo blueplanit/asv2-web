@@ -12,13 +12,13 @@ function titleForEntry(entry: StripeDataSyncEntry): string {
 }
 
 export async function ensureSheetTabsForStripeDataSyncMap(params: {
-    authUserId: string;
+    userId: string;
     spreadsheetId: string;
     stripeDataSyncMap: StripeDataSyncEntry[];
     workingSheetTitle?: string;
     workingSheetMessage?: string;
 }): Promise<StripeDataSyncEntry[]> {
-    const { authUserId, spreadsheetId } = params;
+    const { userId, spreadsheetId } = params;
     let {workingSheetTitle, workingSheetMessage} = params;
     workingSheetTitle = workingSheetTitle || "Working Sheet";
     workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
@@ -28,11 +28,11 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
 
         if (stripeDataSyncMap.length === 0) return stripeDataSyncMap;
         if (!spreadsheetId) throw new Error("Spreadsheet ID is required");
-        if (!authUserId) throw new Error("Auth user ID is required");
+        if (!userId) throw new Error("User ID is required");
 
         // 1) Get Google access token for this user
         const { accessToken } = await getGoogleAccessTokenForUser(
-            authUserId,
+            userId,
         );
 
         // 2) Build OAuth2 client using googleapis

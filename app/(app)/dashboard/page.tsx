@@ -11,8 +11,8 @@ export default async function DashboardPage() {
         redirect("/login");
     }
 
-    const authUserId = (session.user as any).id as string;
-    const userState = await loadUserState(authUserId);
+    const userId = (session.user as any).userId as string;
+    const userState = await loadUserState(userId);
 
     // If they’re already done, send them straight to dashboard
     if (userState.onboardingStage === "account_only") {
