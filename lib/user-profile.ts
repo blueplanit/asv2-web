@@ -200,6 +200,9 @@ async function createUserProfileForGoogleLogin(params: {
     const { googleUserId, email } = params;
     const now = new Date().toISOString();
     const userId = ulid();
+    if (!googleUserId) {
+        throw new Error("Google user ID is required");
+    }
 
     const item: UserProfile = {
         pk: `USER#${userId}`,
