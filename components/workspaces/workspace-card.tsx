@@ -403,7 +403,7 @@ export function WorkspaceCard({
                         <p className="text-xs text-slate-500">
                             Last sync:{" "}
                             <span className="font-medium text-slate-800">
-                                {workspace.lastSyncAt ? workspace.lastSyncAt : "Not yet synced"}
+                                {workspace.lastSyncAt ? new Date(workspace.lastSyncAt).toLocaleString() : "Not yet synced"}
                             </span>
                         </p>
                     </div>
