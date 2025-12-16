@@ -1,3 +1,5 @@
+// app/api/stripe/connect/route.ts
+import "server-only";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { makeState } from "@/lib/oauthState";

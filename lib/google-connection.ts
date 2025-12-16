@@ -9,18 +9,20 @@ import {
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function putGoogleConnection(params: {
+    pk: string;
+    sk: string;
     userId: string;
     googleUserId: string;
     email: string;
     accessTokenEncrypted: string;
     refreshTokenEncrypted: string;
 }) {
-    const { userId, googleUserId, email, accessTokenEncrypted, refreshTokenEncrypted } = params;
+    const { pk, sk, userId, googleUserId, email, accessTokenEncrypted, refreshTokenEncrypted } = params;
     const now = new Date().toISOString();
 
     const item: GoogleConnection = GoogleConnectionSchema.parse({
-        pk: `USER#${userId}`,
-        sk: `GOOGLE#${googleUserId}`,
+        pk: pk,
+        sk: sk,
         type: "GoogleConnection",
         userId: userId,
         googleUserId,

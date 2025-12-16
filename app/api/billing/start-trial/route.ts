@@ -1,4 +1,5 @@
 // app/api/billing/start-trial/route.ts
+import "server-only";
 import { NextResponse, NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
