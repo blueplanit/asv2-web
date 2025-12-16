@@ -1,21 +1,23 @@
 // lib/google-auth.ts (server-only)
+import "server-only";
 import { ddb } from "./dynamo";
 import { QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GoogleConnectionSchema } from "@/lib/schemas/google-connection";
-import { type StoredAccessPayload, type StoredRefreshPayload } from "@blueplanit/asv2-shared";
+import {
+    type StoredAccessPayload,
+    type StoredRefreshPayload,
+    createTokenCipher,
+    parseKeyringJson,
+    googleConnectionAad,
+} from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-
-export function decrypt<T = unknown>(cipher: string): T {
-    const json = Buffer.from(cipher, "base64").toString("utf8");
-    return JSON.parse(json) as T;
+const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
+if (!TOKEN_CIPHER_KEYRING_JSON) {
+  throw new Error("Missing ASV2_TOKEN_CIPHER_KEYRING_JSON");
 }
-
-// NOTE: still using the same toy encrypt; in real life use KMS/etc.
-export function encrypt(raw: unknown): string {
-    return Buffer.from(JSON.stringify(raw)).toString("base64");
-}
+const tokenCipher = createTokenCipher(parseKeyringJson(TOKEN_CIPHER_KEYRING_JSON));
 
 // Assumes exactly one GoogleConnection per user for now
 export async function getGoogleAccessTokenForUser(userId: string): Promise<{
@@ -42,11 +44,15 @@ export async function getGoogleAccessTokenForUser(userId: string): Promise<{
 
     const item = GoogleConnectionSchema.parse(res.Items[0]);
 
-    const accessPayload = decrypt<StoredAccessPayload>(
+    const aad = googleConnectionAad(item);
+
+    const accessPayload = await tokenCipher.decrypt<StoredAccessPayload>(
         item.accessTokenEncrypted,
+        { purpose: "google_access_v1", aad },
     );
-    const refreshPayload = decrypt<StoredRefreshPayload>(
+    const refreshPayload = await tokenCipher.decrypt<StoredRefreshPayload>(
         item.refreshTokenEncrypted,
+        { purpose: "google_refresh_v1", aad },
     );
 
     let { accessToken, expiresAt } = accessPayload;
@@ -103,7 +109,10 @@ export async function getGoogleAccessTokenForUser(userId: string): Promise<{
             expiresAt,
         };
 
-        const newAccessTokenEncrypted = encrypt(newAccessPayload);
+        const newAccessTokenEncrypted = await tokenCipher.encrypt<StoredAccessPayload>(
+            newAccessPayload,
+            { purpose: "google_access_v1", aad },
+        );
 
         // 3) Persist updated access token back to Dynamo
         await ddb.send(

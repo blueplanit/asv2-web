@@ -1,9 +1,16 @@
 // app/api/google/callback/route.ts
+export const runtime = "nodejs";
+import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
-import { encrypt } from "@/lib/google-auth";
+import { createTokenCipher, googleConnectionAad, parseKeyringJson } from "@blueplanit/asv2-shared";
+
+// add (module-level cipher)
+const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
+if (!TOKEN_CIPHER_KEYRING_JSON) throw new Error("Missing ASV2_TOKEN_CIPHER_KEYRING_JSON");
+const tokenCipher = createTokenCipher(parseKeyringJson(TOKEN_CIPHER_KEYRING_JSON));
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -122,21 +129,28 @@ export async function GET(req: NextRequest) {
     }
 
     // 3) Encrypt tokens for storage
-    const accessTokenEncrypted = encrypt({
-        accessToken,
-        scope: tokenJson.scope,
-        tokenType: tokenJson.token_type,
-        expiresAt: tokenJson.expires_in
-            ? Date.now() + tokenJson.expires_in * 1000
-            : undefined,
-    });
+    const pk = `USER#${userId}`;
+    const sk = `GOOGLE#${googleUserId}`;
+    const aad = googleConnectionAad({ userId, googleUserId, pk, sk });
+    const accessTokenEncrypted = await tokenCipher.encrypt(
+        {
+            accessToken,
+            scope: tokenJson.scope,
+            tokenType: tokenJson.token_type,
+            expiresAt: tokenJson.expires_in ? Date.now() + tokenJson.expires_in * 1000 : undefined,
+        },
+        { purpose: "google_access_v1", aad },
+    );
 
-    const refreshTokenEncrypted = encrypt({
-        refreshToken,
-    });
+    const refreshTokenEncrypted = await tokenCipher.encrypt(
+        { refreshToken },
+        { purpose: "google_refresh_v1", aad },
+    );
 
     // 4) Write GoogleConnection item into DynamoDB
     await putGoogleConnection({
+        pk,
+        sk,
         userId,
         googleUserId,
         email,
