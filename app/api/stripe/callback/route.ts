@@ -1,3 +1,5 @@
+// app/api/stripe/callback/route.ts
+import "server-only";
 import Stripe from "stripe";
 import { verifyState } from "@/lib/oauthState";
 import { redirect } from "next/navigation";
