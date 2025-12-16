@@ -202,7 +202,8 @@ export function DashboardClient() {
         activeSyncConfig &&
         (activeSyncConfig.syncStatus === "syncing" ||
             activeSyncConfig.syncStatus === "backfill_running" ||
-            activeSyncConfig.syncStatus === "paused");
+            activeSyncConfig.syncStatus === "paused" ||
+            activeSyncConfig.syncStatus === "error");
 
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;
