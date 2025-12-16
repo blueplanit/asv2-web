@@ -30,11 +30,19 @@ export const authOptions: NextAuthOptions = {
 
                 (token as any).googleUserId = googleUserId;
 
-                if (!(token as any).userId) {
-                    const { userId } = await ensureAppUserForGoogleLogin({
-                        googleUserId,
-                        email,
-                    });
+                const { userId } = await ensureAppUserForGoogleLogin({
+                    googleUserId,
+                    email,
+                });
+                (token as any).userId = userId;
+                return token;
+            }
+            if (!(token as any).userId) {
+                const googleUserId = (token as any).googleUserId as string | undefined;
+                const email = (token as any).email as string | undefined;
+
+                if (googleUserId && email) {
+                    const { userId } = await ensureAppUserForGoogleLogin({ googleUserId, email });
                     (token as any).userId = userId;
                 }
             }
