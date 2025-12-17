@@ -15,7 +15,7 @@ type Body = {
 
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
-    if (!session?.user || !(session.user as any).id) {
+    if (!session?.user || !(session.user as any).userId) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
     const userId = (session.user as any).userId as string;
