@@ -44,7 +44,7 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
     backfilling: {
         label: "Backfilling",
         color: "bg-amber-50 text-amber-700 ring-amber-100",
-        tooltip: "The workspace is backfilling data from your Stripe account. This may take a while depending on the amount of data you have.",
+        tooltip: "The workspace is backfilling data from your Stripe account. This may take some time depending on the amount of data you have.",
     },
     paused: {
         label: "Paused",
@@ -342,7 +342,7 @@ export function WorkspaceCard({
                                 )
                             }
 
-                            <button
+                            {workspace.syncStatus !== "backfill_running" && <button
                                 type="button"
                                 aria-haspopup="menu"
                                 aria-expanded={menuOpen}
@@ -351,6 +351,7 @@ export function WorkspaceCard({
                             >
                                 <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
                             </button>
+                            }
 
                             {menuOpen && (
                                 <div
