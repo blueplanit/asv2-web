@@ -370,21 +370,6 @@ export function WorkspaceCard({
                                         )}
                                         <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
                                     </button>
-
-                                    {/* {workspace.syncStatus !== "backfill_running" &&
-                                        workspace.health === "paused" && (
-                                            <button
-                                                type="button"
-                                                onClick={handleBackfillClick}
-                                                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                                            >
-                                                <ArrowPathIcon
-                                                    className="h-4 w-4 text-slate-500"
-                                                    aria-hidden="true"
-                                                />
-                                                <span>Start backfill</span>
-                                            </button>
-                                        )} */}
                                 </div>
                             )}
                         </div>
