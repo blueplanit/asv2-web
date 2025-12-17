@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     console.log('Stripe Connect callback invoked');
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user || !(session.user as any).id) {
+        if (!session?.user || !(session.user as any).userId) {
           return new Response("Unauthorized", { status: 401 });
         }
         const userId_ = (session.user as any).userId as string;

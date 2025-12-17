@@ -44,10 +44,10 @@ export function BackfillIntroModal({
                         <ExternalLinkIcon className="h-4 w-4 cursor-pointer" aria-hidden="true" /></span>}</span>
                     </h2>
                     <p className="text-sm text-slate-700">
-                        We’re pulling your recent Stripe history into the new Google Sheet (may take a few minutes depending on volume).
+                        Loading your Stripe history into the new Google Sheet may take a few minutes depending on volume.
                     </p>
                     <p className="text-xs text-slate-500">
-                        You can safely leave this page. Syncing will continue in the background.
+                        You can safely leave this page.
                     </p>
                 </div>
 

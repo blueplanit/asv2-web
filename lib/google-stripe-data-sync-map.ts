@@ -5,6 +5,7 @@ import type {
 } from "./schemas/sync-config";
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
+import { APP_NAME } from "./constants";
 
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
@@ -21,7 +22,7 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
     const { userId, spreadsheetId } = params;
     let {workingSheetTitle, workingSheetMessage} = params;
     workingSheetTitle = workingSheetTitle || "Working Sheet";
-    workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
+    workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
 
     try {
         let { stripeDataSyncMap } = params;
@@ -136,8 +137,8 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         range: {
                             sheetId: entry.sheetId,
                         },
-                        warningOnly: false,
-                        editors: {},
+                        warningOnly: true,
+                        description: `This tab is managed by ${APP_NAME}. Editing here may break your sync. Use the 'Working Sheet' tab for your own analysis.`,
                     },
                 },
             });

@@ -16,7 +16,7 @@ type StepStatus = "complete" | "current" | "upcoming";
 export const WORKSPACE_SHEET_TITLE = "My Stripe Sync – Workspace";
 export const FOLDER_NAME = "Sync";
 export const WORKING_SHEET_TITLE = "Working Sheet";
-export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. Reference the protected *_raw (DO NOT EDIT) tabs with formulas. You can edit anything here.";
+export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
 
 export type Step = {
     id: number;

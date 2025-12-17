@@ -16,8 +16,9 @@ export async function putGoogleConnection(params: {
     email: string;
     accessTokenEncrypted: string;
     refreshTokenEncrypted: string;
+    googleProjectShard: string;
 }) {
-    const { pk, sk, userId, googleUserId, email, accessTokenEncrypted, refreshTokenEncrypted } = params;
+    const { pk, sk, userId, googleUserId, email, accessTokenEncrypted, refreshTokenEncrypted, googleProjectShard } = params;
     const now = new Date().toISOString();
 
     const item: GoogleConnection = GoogleConnectionSchema.parse({
@@ -32,6 +33,7 @@ export async function putGoogleConnection(params: {
         refreshTokenEncrypted,
         createdAt: now,
         updatedAt: now,
+        googleProjectShard,
     });
 
     await ddb.send(

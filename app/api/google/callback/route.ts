@@ -7,6 +7,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
 import { createTokenCipher, googleConnectionAad, parseKeyringJson } from "@blueplanit/asv2-shared";
 
+import {
+    GOOGLE_DEFAULT_PROJECT_SHARD,
+    getGoogleClientConfigForShard,
+} from "@/lib/google-oauth-sharding";
+
 // add (module-level cipher)
 const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
 if (!TOKEN_CIPHER_KEYRING_JSON) throw new Error("Missing ASV2_TOKEN_CIPHER_KEYRING_JSON");
@@ -26,6 +31,7 @@ export async function GET(req: NextRequest) {
 
     const code = searchParams.get("code");
     const error = searchParams.get("error");
+    const rawState = searchParams.get("state");
 
     if (error || !code) {
         const errorUrl = new URL(
@@ -35,12 +41,28 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(errorUrl);
     }
 
+    let googleProjectShard = GOOGLE_DEFAULT_PROJECT_SHARD;
+    if (rawState) {
+        try {
+            const decoded = JSON.parse(
+                Buffer.from(rawState, "base64url").toString("utf8"),
+            ) as { shard?: string };
+            if (decoded.shard && typeof decoded.shard === "string") {
+                googleProjectShard = decoded.shard;
+            }
+        } catch {
+            // ignore parse errors; use default shard
+        }
+    }
+    // get clientId/secret for chosen shard
+    const { clientId, clientSecret } = getGoogleClientConfigForShard(googleProjectShard);
+
     // 1) Exchange code for tokens
     const tokenEndpoint = "https://oauth2.googleapis.com/token";
     const body = new URLSearchParams({
         code,
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: `${process.env.NEXTAUTH_URL}/api/google/callback`,
         grant_type: "authorization_code",
     });
@@ -156,6 +178,7 @@ export async function GET(req: NextRequest) {
         email,
         accessTokenEncrypted,
         refreshTokenEncrypted,
+        googleProjectShard,
     });
 
     // 5) Back to onboarding, step 3 (Create sheet)
