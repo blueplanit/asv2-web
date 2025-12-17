@@ -5,6 +5,7 @@ import type {
 } from "./schemas/sync-config";
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
+import { APP_NAME } from "./constants";
 
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
@@ -136,8 +137,8 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         range: {
                             sheetId: entry.sheetId,
                         },
-                        warningOnly: false,
-                        editors: {},
+                        warningOnly: true,
+                        description: `This tab is managed by ${APP_NAME}. Editing here may break your sync. Use the 'Working Sheet' tab for your own analysis.`,
                     },
                 },
             });

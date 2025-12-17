@@ -370,7 +370,7 @@ export function WorkspaceCard({
                                         <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
                                     </button>
 
-                                    {workspace.syncStatus !== "backfill_running" &&
+                                    {/* {workspace.syncStatus !== "backfill_running" &&
                                         workspace.health === "paused" && (
                                             <button
                                                 type="button"
@@ -383,7 +383,7 @@ export function WorkspaceCard({
                                                 />
                                                 <span>Start backfill</span>
                                             </button>
-                                        )}
+                                        )} */}
                                 </div>
                             )}
                         </div>
