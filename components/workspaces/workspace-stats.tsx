@@ -49,26 +49,25 @@ export function WorkspaceStats({
 
     // Build tab stats from metrics
     const tabStats: TabStat[] = useMemo(() => {
-        return sheetTabState
-            .map((metric) => {
-                const entry = sheetIdToEntry.get(metric.sheetId);
-                if (!entry) return null;
+        const stats: TabStat[] = [];
+        for (const state of sheetTabState) {
+            const entry = sheetIdToEntry.get(state.sheetId);
+            if (!entry) continue;
 
-                const objectId = entry.id;
-                const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
-                const maxRowCount = metric.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
+            const objectId = entry.id;
+            const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
+            const maxRowCount = state.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
 
-                return {
-                    sheetId: metric.sheetId,
-                    objectId,
-                    label,
-                    rowCount: metric.rowCount ?? 0,
-                    maxRowCount,
-                    lastSyncedAt: metric.lastSyncedAt,
-                };
-            })
-            .filter((stat): stat is TabStat => stat !== null)
-            .sort((a, b) => a.label.localeCompare(b.label));
+            stats.push({
+                sheetId: state.sheetId,
+                objectId: String(objectId),
+                label,
+                rowCount: state.rowCount ?? 0,
+                maxRowCount,
+                lastSyncedAt: state.lastSyncedAt,
+            });
+        }
+        return stats.sort((a, b) => a.label.localeCompare(b.label));
     }, [sheetTabState, sheetIdToEntry]);
 
     const totalRowCount = tabStats.reduce((sum, stat) => sum + stat.rowCount, 0);
