@@ -82,7 +82,7 @@ export function WorkspaceCard({
     stripeDataSyncMap,
     setTitlesRequested = () => {},
 }: Props) {
-    const { refresh } = useUserState();
+    const { user, refresh } = useUserState();
     const health = HEALTH_LABELS[workspace.health];
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +140,7 @@ export function WorkspaceCard({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    userState: user,
                     folderName: FOLDER_NAME,
                     workspaceSheetTitle: workspace.name,
                     workingSheetTitle: WORKING_SHEET_TITLE,
