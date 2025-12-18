@@ -16,11 +16,11 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json().catch(() => ({}));
-        const { folderName, workspaceSheetTitle, workingSheetTitle, workingSheetMessage } = body ?? {};
+        const { folderName, workspaceSheetTitle, workingSheetTitle, workingSheetMessage, userState } = body ?? {};
 
         const { spreadsheetId, spreadsheetUrl, syncConfig } =
             await createWorkspaceSheetAndConfig({
-                userId,
+                userState,
                 folderName,
                 workspaceSheetTitle,
                 workingSheetTitle,

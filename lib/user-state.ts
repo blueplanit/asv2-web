@@ -21,7 +21,7 @@ import {
     SyncConfigSchema,
     type SyncConfig,
 } from "@/lib/schemas/sync-config";
-import { SheetTabMetrics, SheetTabMetricsSchema } from "@blueplanit/asv2-shared";
+import { SheetTabState, SheetTabStateSchema } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
@@ -39,7 +39,7 @@ export type UserState = {
     stripeConnections: StripeConnection[];
     syncConfigs: SyncConfig[];
     onboardingStage: OnboardingStage;
-    sheetTabMetrics: SheetTabMetrics[];
+    sheetTabState: SheetTabState[];
 };
 
 function computeOnboardingStage(state: {
@@ -133,7 +133,7 @@ export async function loadUserState(userId: string): Promise<UserState> {
     const googleConnections: GoogleConnection[] = [];
     const stripeConnections: StripeConnection[] = [];
     const syncConfigs: SyncConfig[] = [];
-    const sheetTabMetrics: SheetTabMetrics[] = [];
+    const sheetTabState: SheetTabState[] = [];
 
     for (const raw of items) {
         const sk = raw.sk as string;
@@ -146,8 +146,8 @@ export async function loadUserState(userId: string): Promise<UserState> {
             stripeConnections.push(StripeConnectionSchema.parse(raw));
         } else if (sk.startsWith("SYNC#")) {
             syncConfigs.push(SyncConfigSchema.parse(raw));
-        } else if (sk.startsWith("SHEET_TAB_METRICS#")) {
-            sheetTabMetrics.push(SheetTabMetricsSchema.parse(raw));
+        } else if (sk.startsWith("SHEET_TAB_STATE#")) {
+            sheetTabState.push(SheetTabStateSchema.parse(raw));
         }
     }
 
@@ -164,7 +164,7 @@ export async function loadUserState(userId: string): Promise<UserState> {
         stripeConnections,
         syncConfigs,
         onboardingStage,
-        sheetTabMetrics,
+        sheetTabState,
     };
 }
 

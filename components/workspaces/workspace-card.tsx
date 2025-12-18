@@ -13,7 +13,7 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { WorkspaceStats } from "./workspace-stats";
-import { aggregateSheetMetrics, SheetTabMetrics, TAB_ROW_LIMITS, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
+import { aggregateSheetMetrics, SheetTabState, TAB_ROW_LIMITS, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onboarding/onboarding-wizard";
@@ -67,7 +67,7 @@ type Props = {
     workspace: Workspace;
     onSyncNow?: (id: string) => void;
     onTogglePause: (spreadsheetId: string, nextStatus: "paused" | "syncing") => void;
-    sheetTabMetrics: SheetTabMetrics[];
+    sheetTabState: SheetTabState[];
     stripeDataSyncMap: StripeDataSyncEntry[];
     setTitlesRequested?: (requested: boolean) => void;
 };
@@ -78,7 +78,7 @@ export function WorkspaceCard({
     workspace,
     onSyncNow,
     onTogglePause,
-    sheetTabMetrics,
+    sheetTabState,
     stripeDataSyncMap,
     setTitlesRequested = () => {},
 }: Props) {
@@ -194,7 +194,7 @@ export function WorkspaceCard({
         }
 
         // Check if any metric exceeds the threshold
-        for (const metric of sheetTabMetrics) {
+        for (const metric of sheetTabState) {
             const entry = sheetIdToEntry.get(metric.sheetId);
             if (!entry) continue;
 
@@ -210,7 +210,7 @@ export function WorkspaceCard({
     })();
 
     const exceedsSpreadsheetLevelCellBudgetWarningThreshold = (() => {
-        const spreadsheetMetrics = aggregateSheetMetrics(sheetTabMetrics);
+        const spreadsheetMetrics = aggregateSheetMetrics(sheetTabState);
         if (spreadsheetMetrics?.cellUsageRatio && spreadsheetMetrics.cellUsageRatio >= WARN_THRESHOLD) {
             return true;
         }
@@ -431,7 +431,7 @@ export function WorkspaceCard({
 
             {/* Collapsible sync stats */}
             <WorkspaceStats
-                sheetTabMetrics={sheetTabMetrics}
+                sheetTabState={sheetTabState}
                 stripeDataSyncMap={stripeDataSyncMap}
             />
         </article>

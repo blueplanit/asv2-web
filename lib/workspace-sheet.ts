@@ -10,9 +10,11 @@ import {
 } from "@/lib/schemas/sync-config";
 import { getStripeAccountIdForUser } from "@/lib/stripe-connection";
 import { createSyncConfig, ensureSyncConfigForSheet } from "@/lib/sync-config";
+import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
+import { UserState } from "./user-state";
 
 type CreateWorkspaceSheetParams = {
-    userId: string;
+    userState: UserState;
     folderName?: string;
     workspaceSheetTitle?: string;
     workingSheetTitle?: string;
@@ -25,7 +27,7 @@ export async function createWorkspaceSheetAndConfig(
     params: CreateWorkspaceSheetParams,
 ) {
     const {
-        userId,
+        userState,
         folderName,
         workspaceSheetTitle,
         workingSheetTitle,
@@ -33,11 +35,31 @@ export async function createWorkspaceSheetAndConfig(
         baseSyncConfig,
     } = params;
 
+    const userId = userState.profile?.userId;
+
+    if (!userId) {
+        throw new Error("User ID not found");
+    }
+
     // 1) Google auth
     const { accessToken } = await getGoogleAccessTokenForUser(userId);
+    const googleUserId = userState.profile?.googleUserId;
+
+    if (!googleUserId) {
+        throw new Error("Google User ID not found");
+    }
+
+    const googleProjectShard = userState.googleConnections.find(connection => connection.googleUserId === googleUserId)?.googleProjectShard ?? GOOGLE_DEFAULT_PROJECT_SHARD;
+
+    const { clientId, clientSecret } = getGoogleClientConfigForShard(googleProjectShard);
+
+    if (!clientId || !clientSecret) {
+        throw new Error("Google Client ID or Secret not found");
+    }
+
     const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID!,
-        process.env.GOOGLE_CLIENT_SECRET!,
+        clientId,
+        clientSecret,
     );
     oauth2Client.setCredentials({ access_token: accessToken });
 

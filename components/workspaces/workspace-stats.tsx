@@ -1,5 +1,5 @@
 // components/workspaces/workspace-stats.tsx
-import { SheetTabMetrics, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
+import { SheetTabState, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useState, useMemo } from "react";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
@@ -17,7 +17,7 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
 };
 
 type WorkspaceStatsProps = {
-    sheetTabMetrics: SheetTabMetrics[];
+    sheetTabState: SheetTabState[];
     stripeDataSyncMap: StripeDataSyncEntry[];
 };
 
@@ -31,7 +31,7 @@ type TabStat = {
 };
 
 export function WorkspaceStats({ 
-    sheetTabMetrics,
+    sheetTabState,
     stripeDataSyncMap,
 }: WorkspaceStatsProps) {
     const [open, setOpen] = useState(false);
@@ -49,7 +49,7 @@ export function WorkspaceStats({
 
     // Build tab stats from metrics
     const tabStats: TabStat[] = useMemo(() => {
-        return sheetTabMetrics
+        return sheetTabState
             .map((metric) => {
                 const entry = sheetIdToEntry.get(metric.sheetId);
                 if (!entry) return null;
@@ -69,7 +69,7 @@ export function WorkspaceStats({
             })
             .filter((stat): stat is TabStat => stat !== null)
             .sort((a, b) => a.label.localeCompare(b.label));
-    }, [sheetTabMetrics, sheetIdToEntry]);
+    }, [sheetTabState, sheetIdToEntry]);
 
     const totalRowCount = tabStats.reduce((sum, stat) => sum + stat.rowCount, 0);
     const totalTabs = tabStats.length;
