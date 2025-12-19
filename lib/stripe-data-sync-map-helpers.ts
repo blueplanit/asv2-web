@@ -4,6 +4,7 @@ import type {
     DataSyncEntryId,
 } from "./schemas/sync-config";
 import { buildDefaultStripeDataSyncMap } from "./schemas/sync-config";
+import { getLatestSchemaVersion } from "@blueplanit/asv2-shared";
 
 
 export function ensureStripeDataSyncMap(cfg: SyncConfig): StripeDataSyncEntry[] {
@@ -21,9 +22,11 @@ export function applyStripeSelectionToStripeDataSyncMap(
 
     return stripeDataSyncMap.map((entry) => {
         if (entry.kind === "object_table" && entry.id) {
+            const latestSchemaVersion = getLatestSchemaVersion(entry.id);
             return {
                 ...entry,
                 enabled: selected.has(entry.id),
+                schemaVersion: latestSchemaVersion,
             };
         }
         return entry;

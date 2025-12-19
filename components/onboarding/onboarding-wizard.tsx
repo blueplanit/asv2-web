@@ -10,7 +10,7 @@ import { DataSyncEntryId, DATA_SYNC_ENTRY_IDS } from "@/lib/schemas/sync-config"
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
-import { SheetTabState, StripeDataSyncEntry } from "@blueplanit/asv2-shared";
+import { StripeDataSyncEntry } from "@blueplanit/asv2-shared";
 
 type StepStatus = "complete" | "current" | "upcoming";
 type InitSheetTabStates = Array<{
