@@ -1,5 +1,6 @@
 // app/blog/[slug]/page.tsx
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import {
     getAllBlogPostSlugs,
     getBlogPostBySlug,
@@ -7,18 +8,52 @@ import {
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";
-import {
-    type Document,
-} from "@contentful/rich-text-types";
+import { type Document } from "@contentful/rich-text-types";
 import {
     contentfulRichTextOptions,
-    type ContentfulRichTextDocument,
-  } from "@/lib/contentful-rich-text";
+} from "@/lib/contentful-rich-text";
+import { APP_NAME } from "@/lib/constants";
 
 export const revalidate = 60;
+
 export async function generateStaticParams() {
     const slugs = await getAllBlogPostSlugs();
     return slugs.map((slug) => ({ slug }));
+}
+
+// SEO metadata: use excerpt as meta description
+export async function generateMetadata(
+    { params }: { params: { slug: string } }
+): Promise<Metadata> {
+    const post = await getBlogPostBySlug(params.slug);
+
+    if (!post) {
+        return {
+            title: `Post not found | ${APP_NAME} Blog`,
+            description: "This blog post could not be found.",
+        };
+    }
+
+    const title = `${post.title} | ${APP_NAME} Blog`;
+    const description =
+        post.excerpt ||
+        "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.";
+
+    return {
+        title,
+        description,
+        openGraph: {
+            title,
+            description,
+            type: "article",
+            url: `/blog/${params.slug}`,
+        },
+        twitter: {
+            card: "summary",
+            title,
+            description,
+        },
+    };
 }
 
 export default async function BlogPostPage({
