@@ -14,6 +14,7 @@ import {
 } from "@/lib/stripe-data-sync-map-helpers";
 import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google-stripe-data-sync-map";
 import { SyncStatus } from "@/lib/types/sync-status";
+import { UserState } from "@/lib/user-state";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,7 @@ type Body = {
     workingSheetTitle?: string;
     workingSheetMessage?: string;
     spreadsheetId?: string;
+    userState: UserState;
 } | null;
 
 export async function POST(req: Request) {
@@ -45,6 +47,11 @@ export async function POST(req: Request) {
     if (!spreadsheetId) {
         return new NextResponse("Spreadsheet ID not found", { status: 400 });
     }
+    const userState = body?.userState;
+    if (!userState) {
+        return new NextResponse("User state not found", { status: 400 });
+    }
+
 
     const existing = await getSyncConfig(userId, spreadsheetId);
     if (!existing || !existing.spreadsheetId) {
@@ -91,7 +98,7 @@ export async function POST(req: Request) {
 
         // Build Google Sheet tabs based on which stripe to-sync data is enabled from UI
         stripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
-            userId,
+            userState,
             spreadsheetId: existing.spreadsheetId,
             stripeDataSyncMap,
             workingSheetTitle,

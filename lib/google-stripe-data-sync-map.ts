@@ -6,6 +6,7 @@ import type {
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 import { APP_NAME } from "./constants";
+import { UserState } from "./user-state";
 
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
@@ -13,13 +14,13 @@ function titleForEntry(entry: StripeDataSyncEntry): string {
 }
 
 export async function ensureSheetTabsForStripeDataSyncMap(params: {
-    userId: string;
+        userState: UserState;
     spreadsheetId: string;
     stripeDataSyncMap: StripeDataSyncEntry[];
     workingSheetTitle?: string;
     workingSheetMessage?: string;
 }): Promise<StripeDataSyncEntry[]> {
-    const { userId, spreadsheetId } = params;
+    const { userState, spreadsheetId } = params;
     let {workingSheetTitle, workingSheetMessage} = params;
     workingSheetTitle = workingSheetTitle || "Working Sheet";
     workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
@@ -29,17 +30,18 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
 
         if (stripeDataSyncMap.length === 0) return stripeDataSyncMap;
         if (!spreadsheetId) throw new Error("Spreadsheet ID is required");
+        const userId = userState.profile?.userId;
         if (!userId) throw new Error("User ID is required");
 
         // 1) Get Google access token for this user
-        const { accessToken } = await getGoogleAccessTokenForUser(
-            userId,
+        const { accessToken, clientId, clientSecret } = await getGoogleAccessTokenForUser(
+            userState,
         );
 
         // 2) Build OAuth2 client using googleapis
         const oauth2Client = new google.auth.OAuth2(
-            process.env.GOOGLE_CLIENT_ID!,
-            process.env.GOOGLE_CLIENT_SECRET!,
+            clientId,
+            clientSecret,
         );
 
         oauth2Client.setCredentials({

@@ -10,6 +10,9 @@ import {
     parseKeyringJson,
     googleConnectionAad,
 } from "@blueplanit/asv2-shared";
+import { getGoogleClientConfigForShard } from "./google-oauth-sharding";
+import { UserState } from "./user-state";
+import { GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -20,11 +23,22 @@ if (!TOKEN_CIPHER_KEYRING_JSON) {
 const tokenCipher = createTokenCipher(parseKeyringJson(TOKEN_CIPHER_KEYRING_JSON));
 
 // Assumes exactly one GoogleConnection per user for now
-export async function getGoogleAccessTokenForUser(userId: string): Promise<{
+export async function getGoogleAccessTokenForUser(userState: UserState): Promise<{
     accessToken: string;
     googleUserId: string;
     email: string;
+    clientId: string;
+    clientSecret: string;
 }> {
+    const userId = userState.profile?.userId;
+    if (!userId) {
+        throw new Error("User ID not found");
+    }
+
+    const googleUserId = userState.profile?.googleUserId;
+    const googleProjectShard = userState.googleConnections.find(connection => connection.googleUserId === googleUserId)?.googleProjectShard ?? GOOGLE_DEFAULT_PROJECT_SHARD;
+    const { clientId, clientSecret } = getGoogleClientConfigForShard(googleProjectShard);
+
     // 1) Load GoogleConnection for this user
     const res = await ddb.send(
         new QueryCommand({
@@ -65,8 +79,8 @@ export async function getGoogleAccessTokenForUser(userId: string): Promise<{
     if (!accessToken || aboutToExpire) {
         // 2) Refresh access token
         const body = new URLSearchParams({
-            client_id: process.env.GOOGLE_CLIENT_ID!,
-            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+            client_id: clientId,
+            client_secret: clientSecret,
             refresh_token: refreshToken,
             grant_type: "refresh_token",
         });
@@ -136,5 +150,7 @@ export async function getGoogleAccessTokenForUser(userId: string): Promise<{
         accessToken,
         googleUserId: item.googleUserId,
         email: item.email,
+        clientId,
+        clientSecret,
     };
 }

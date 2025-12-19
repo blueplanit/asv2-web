@@ -3,7 +3,7 @@ import { SheetTabState, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useState, useMemo } from "react";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
-import { DEFAULT_ROW_CAPACITY } from "./workspace-card";
+import { DEFAULT_ROW_CAPACITY } from "@/lib/constants";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {

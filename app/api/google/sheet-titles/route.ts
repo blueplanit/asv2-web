@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { google } from "googleapis";
 import { getGoogleAccessTokenForUser } from "@/lib/google-auth";
+import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "@/lib/google-oauth-sharding";
+import { UserState } from "@/lib/user-state";
 
 export const runtime = "nodejs";
 
@@ -16,7 +18,7 @@ export async function POST(req: Request) {
     const userId = (session.user as any).userId as string;
 
     const body = (await req.json().catch(() => null)) as
-        | { spreadsheetIds?: string[] }
+        | { spreadsheetIds?: string[]; userState?: UserState }
         | null;
 
     const spreadsheetIds = Array.from(
@@ -27,12 +29,25 @@ export async function POST(req: Request) {
         return NextResponse.json({ titles: {} });
     }
 
+    const userState = body?.userState;
+    if (!userState) {
+        return new NextResponse("User state not found", { status: 400 });
+    }
+
+    const googleUserId = userState.profile?.googleUserId;
+    if (!googleUserId) {
+        return new NextResponse("Google user ID not found", { status: 400 });
+    }
+
     try {
-        const { accessToken } = await getGoogleAccessTokenForUser(userId);
+        const { accessToken } = await getGoogleAccessTokenForUser(userState);
+
+        const googleProjectShard = userState.googleConnections.find(connection => connection.googleUserId === googleUserId)?.googleProjectShard ?? GOOGLE_DEFAULT_PROJECT_SHARD;
+        const { clientId, clientSecret } = getGoogleClientConfigForShard(googleProjectShard);
 
         const oauth2Client = new google.auth.OAuth2(
-            process.env.GOOGLE_CLIENT_ID!,
-            process.env.GOOGLE_CLIENT_SECRET!,
+            clientId,
+            clientSecret,
         );
 
         oauth2Client.setCredentials({ access_token: accessToken });

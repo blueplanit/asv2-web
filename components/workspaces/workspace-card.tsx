@@ -3,7 +3,6 @@ import {
     EllipsisHorizontalIcon,
     PauseCircleIcon,
     PlayCircleIcon,
-    ArrowPathIcon,
 } from "@heroicons/react/20/solid";
 import {
     Tooltip,
@@ -20,6 +19,7 @@ import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onbo
 import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
+import { DEFAULT_ROW_CAPACITY } from "@/lib/constants";
 
 export type Workspace = {
     id: string;
@@ -72,7 +72,6 @@ type Props = {
     setTitlesRequested?: (requested: boolean) => void;
 };
 
-export const DEFAULT_ROW_CAPACITY = 30_000;
 
 export function WorkspaceCard({
     workspace,
