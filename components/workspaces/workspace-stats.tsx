@@ -64,7 +64,7 @@ export function WorkspaceStats({
                 label,
                 rowCount: state.rowCount ?? 0,
                 maxRowCount,
-                lastSyncedAt: state.lastSyncedAt,
+                lastSyncedAt: state.lastSyncedAt ?? "",
             });
         }
         return stats.sort((a, b) => a.label.localeCompare(b.label));
