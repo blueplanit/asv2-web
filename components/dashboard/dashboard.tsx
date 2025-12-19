@@ -455,7 +455,7 @@ export function DashboardClient() {
                                                                 );
                                                             }}
                                                             onTogglePause={handleTogglePause}
-                                                            sheetTabMetrics={user.sheetTabMetrics.filter((metric) => metric.spreadsheetId === activeWorkspace.id) ?? []}
+                                                            sheetTabState={user.sheetTabState.filter((metric) => metric.spreadsheetId === activeWorkspace.id) ?? []}
                                                             stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}
                                                             setTitlesRequested={setTitlesRequested}
                                                         />
@@ -493,7 +493,7 @@ export function DashboardClient() {
                                                                     );
                                                                 }}
                                                                 onTogglePause={handleTogglePause}
-                                                                sheetTabMetrics={user.sheetTabMetrics.filter((metric) => metric.spreadsheetId === ws.id) ?? []}
+                                                                sheetTabState={user.sheetTabState.filter((metric) => metric.spreadsheetId === ws.id) ?? []}
                                                                 stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}
                                                             />
                                                         );

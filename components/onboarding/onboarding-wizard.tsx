@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { useEffect } from "react";
-import { StripeObject, DEFAULT_ENABLED_STRIPE_OBJECTS } from "@/lib/schemas/sync-config";
+import { DataSyncEntryId, DATA_SYNC_ENTRY_IDS } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
@@ -132,7 +132,7 @@ export function OnboardingWizard() {
     }, [onboardingConfig, createdSpreadsheetId]);
 
     // init Stripe selection from onboarding config if present, else defaults
-    const initialStripeSelection: StripeObject[] = React.useMemo(() => {
+    const initialStripeDataSyncEntries: DataSyncEntryId[] = React.useMemo(() => {
         if (
             onboardingConfig?.stripeDataSyncMap &&
             (onboardingConfig.stripeDataSyncMap as any[]).length > 0
@@ -142,14 +142,14 @@ export function OnboardingWizard() {
                     (entry) =>
                         entry.kind === "object_table" &&
                         entry.enabled &&
-                        typeof entry.primaryStripeObject === "string",
+                        typeof entry.id === "string",
                 )
-                .map((entry) => entry.primaryStripeObject) as StripeObject[];
+                .map((entry) => entry.id) as DataSyncEntryId[];
         }
-        return [...DEFAULT_ENABLED_STRIPE_OBJECTS] as StripeObject[];
+        return [...DATA_SYNC_ENTRY_IDS] as DataSyncEntryId[];
     }, [onboardingConfig]);
 
-    const [selectedStripeObjects, setSelectedStripeObjects] = useState<StripeObject[]>(initialStripeSelection);
+    const [selectedDataSyncEntries, setSelectedDataSyncEntries] = useState<DataSyncEntryId[]>(initialStripeDataSyncEntries);
 
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
@@ -176,6 +176,7 @@ export function OnboardingWizard() {
             const res = await fetch("/api/google/create-sheet", {
                 method: "POST",
                 body: JSON.stringify({
+                    userState: user,
                     folderName: FOLDER_NAME,
                     workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
                     workingSheetTitle: WORKING_SHEET_TITLE,
@@ -203,7 +204,7 @@ export function OnboardingWizard() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    selectedStripeObjects,
+                    selectedDataSyncEntries,
                     syncStatus: "backfill_running",
                     workingSheetTitle: WORKING_SHEET_TITLE,
                     workingSheetMessage: WORKING_SHEET_MESSAGE,
@@ -378,8 +379,8 @@ export function OnboardingWizard() {
                                     </div>
                                     {currentStep.id === 4 && (
                                         <StripeObjectsStep
-                                            value={selectedStripeObjects}
-                                            onChange={setSelectedStripeObjects}
+                                            value={selectedDataSyncEntries}
+                                            onChange={setSelectedDataSyncEntries}
                                             disabled={submitting}
                                         />
                                     )}

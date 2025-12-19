@@ -1,5 +1,5 @@
 // components/workspaces/workspace-stats.tsx
-import { SheetTabMetrics, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
+import { SheetTabState, TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useState, useMemo } from "react";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
@@ -17,7 +17,7 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
 };
 
 type WorkspaceStatsProps = {
-    sheetTabMetrics: SheetTabMetrics[];
+    sheetTabState: SheetTabState[];
     stripeDataSyncMap: StripeDataSyncEntry[];
 };
 
@@ -31,7 +31,7 @@ type TabStat = {
 };
 
 export function WorkspaceStats({ 
-    sheetTabMetrics,
+    sheetTabState,
     stripeDataSyncMap,
 }: WorkspaceStatsProps) {
     const [open, setOpen] = useState(false);
@@ -49,27 +49,26 @@ export function WorkspaceStats({
 
     // Build tab stats from metrics
     const tabStats: TabStat[] = useMemo(() => {
-        return sheetTabMetrics
-            .map((metric) => {
-                const entry = sheetIdToEntry.get(metric.sheetId);
-                if (!entry) return null;
+        const stats: TabStat[] = [];
+        for (const state of sheetTabState) {
+            const entry = sheetIdToEntry.get(state.sheetId);
+            if (!entry) continue;
 
-                const objectId = entry.id;
-                const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
-                const maxRowCount = metric.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
+            const objectId = entry.id;
+            const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
+            const maxRowCount = state.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
 
-                return {
-                    sheetId: metric.sheetId,
-                    objectId,
-                    label,
-                    rowCount: metric.rowCount ?? 0,
-                    maxRowCount,
-                    lastSyncedAt: metric.lastSyncedAt,
-                };
-            })
-            .filter((stat): stat is TabStat => stat !== null)
-            .sort((a, b) => a.label.localeCompare(b.label));
-    }, [sheetTabMetrics, sheetIdToEntry]);
+            stats.push({
+                sheetId: state.sheetId,
+                objectId: String(objectId),
+                label,
+                rowCount: state.rowCount ?? 0,
+                maxRowCount,
+                lastSyncedAt: state.lastSyncedAt ?? "",
+            });
+        }
+        return stats.sort((a, b) => a.label.localeCompare(b.label));
+    }, [sheetTabState, sheetIdToEntry]);
 
     const totalRowCount = tabStats.reduce((sum, stat) => sum + stat.rowCount, 0);
     const totalTabs = tabStats.length;

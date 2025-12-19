@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
-    StripeObjectEnum,
-    type StripeObject,
+    DataSyncEntryIdEnum,
+    type DataSyncEntryId,
 } from "@/lib/schemas/sync-config";
 import { getSyncConfig, updateSyncConfig } from "@/lib/sync-config";
 import {
@@ -18,7 +18,7 @@ import { SyncStatus } from "@/lib/types/sync-status";
 export const runtime = "nodejs";
 
 type Body = {
-    selectedStripeObjects?: string[];
+    selectedDataSyncEntries?: string[];
     historyMode?: "full" | "since";
     historySinceDays?: number;
     syncStatus?: SyncStatus;
@@ -52,16 +52,16 @@ export async function POST(req: Request) {
     }
 
     // Validate against enum — no arbitrary strings
-    let selectedStripeObjects: StripeObject[] | undefined;
-    if (body?.selectedStripeObjects) {
+    let selectedDataSyncEntries: DataSyncEntryId[] | undefined;
+    if (body?.selectedDataSyncEntries) {
         try {
-            selectedStripeObjects = body.selectedStripeObjects.map((v) =>
-                StripeObjectEnum.parse(v),
-            ) as StripeObject[];
+            selectedDataSyncEntries = body.selectedDataSyncEntries.map((v) =>
+                DataSyncEntryIdEnum.parse(v),
+            ) as DataSyncEntryId[];
         } catch {
             return new NextResponse("Invalid stripe object selection", { status: 400 });
         }
-        if (selectedStripeObjects.length === 0) {
+        if (selectedDataSyncEntries.length === 0) {
             return new NextResponse("At least one object must be selected", { status: 400 });
         }
     }
@@ -76,16 +76,16 @@ export async function POST(req: Request) {
     // Only compute & touch Sheets if we’re actually changing the selection or working-sheet config.
     let stripeDataSyncMapToPersist = undefined as typeof existing.stripeDataSyncMap | undefined;
 
-    const hasStripeSelectionChange = !!selectedStripeObjects;
+    const hasStripeSelectionChange = !!selectedDataSyncEntries;
     const hasWorkingSheetConfigChange = typeof workingSheetTitle === "string" || typeof workingSheetMessage === "string";
 
     if (hasStripeSelectionChange || hasWorkingSheetConfigChange) {
         let stripeDataSyncMap = ensureStripeDataSyncMap(existing);
 
-        if (selectedStripeObjects) {
+        if (selectedDataSyncEntries) {
             stripeDataSyncMap = applyStripeSelectionToStripeDataSyncMap(
                 stripeDataSyncMap,
-                selectedStripeObjects,
+                selectedDataSyncEntries,
             );
         }
 

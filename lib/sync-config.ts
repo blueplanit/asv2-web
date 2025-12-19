@@ -225,5 +225,7 @@ export async function updateSyncConfig(params: {
         }),
     );
 
+    console.log("updateSyncConfig res", res.Attributes);
+
     return SyncConfigSchema.parse(res.Attributes!);
 }

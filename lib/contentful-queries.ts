@@ -1,14 +1,18 @@
 // lib/contentful-queries.ts
 import { contentfulClient, BlogPostFields, PageFields } from "./contentful";
+const isProd = process.env.NODE_ENV === "production";
+
 
 // All blog posts
 export async function getAllBlogPosts(): Promise<BlogPostFields[]> {
     const res = await contentfulClient.getEntries({
         content_type: "blogPostASv2", // content type ID you created
         order: ["-fields.publishDate"],
+        ...(isProd ? { "fields.showInProduction": true } : {}),
     });
 
-    return res.items.map((item) => item.fields as BlogPostFields);
+    return res.items.map((item) => item.fields as BlogPostFields)
+        .filter((post) => (isProd ? post.showInProduction : true));
 }
 
 // All blog post slugs
@@ -16,9 +20,12 @@ export async function getAllBlogPostSlugs(): Promise<string[]> {
     const res = await contentfulClient.getEntries({
         content_type: "blogPostASv2",
         select: ["fields.slug"],
+        ...(isProd ? { "fields.showInProduction": true } : {}),
     });
 
-    return res.items.map((item) => item.fields as BlogPostFields).map((item) => item.slug);
+    return res.items.map((item) => item.fields as BlogPostFields)
+        .filter((post) => (isProd ? post.showInProduction : true))
+        .map((post) => post.slug);
 }
 
 // Single blog post by slug
@@ -28,10 +35,15 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | 
         limit: 1,
         "fields.slug": slug,
         include: 10,
+        ...(isProd ? { "fields.showInProduction": true } : {}),
     });
 
     if (!res.items.length) return null;
-    return res.items[0].fields as BlogPostFields;
+    const post = res.items[0].fields as BlogPostFields;
+
+    if (isProd && !post.showInProduction) return null;
+
+    return post;
 }
 
 // CMS Page by slug (terms/privacy/about/etc.)

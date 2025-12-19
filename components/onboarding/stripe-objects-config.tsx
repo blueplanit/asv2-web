@@ -2,8 +2,8 @@
 "use client";
 
 import {
-    DEFAULT_ENABLED_STRIPE_OBJECTS,
-    type StripeObject,
+    DATA_SYNC_ENTRY_IDS,
+    type DataSyncEntryId,
 } from "@/lib/schemas/sync-config";
 import {
     Tooltip,
@@ -11,7 +11,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const OBJECTS: { id: StripeObject; label: string; note: string }[] = [
+const OBJECTS: { id: DataSyncEntryId; label: string; note: string }[] = [
     { id: "invoices", label: "Invoices", note: "Status, amounts, and payments" },
     { id: "charges", label: "Charges", note: "Card + ACH charges" },
     { id: "customers", label: "Customers", note: "Identifiers and emails" },
@@ -19,20 +19,21 @@ const OBJECTS: { id: StripeObject; label: string; note: string }[] = [
     { id: "subscriptions", label: "Subscriptions", note: "Plans, status, billing" },
     { id: "payment_intents", label: "Payment Intents", note: "Authorizations and captures" },
     { id: "disputes", label: "Disputes", note: "Disputed transactions" },
+    { id: "invoice_line_items", label: "Invoice Line Items", note: "Line items for each invoice" },
 ];
 
 export function StripeObjectsStep(props: {
-    value: StripeObject[];
-    onChange: (next: StripeObject[]) => void;
+    value: DataSyncEntryId[];
+    onChange: (next: DataSyncEntryId[]) => void;
     disabled?: boolean;
 }) {
     const { value, onChange, disabled } = props;
 
     // Ensure caller can initialize with [] and we still show defaults
-    const selected = value.length ? value : [...DEFAULT_ENABLED_STRIPE_OBJECTS];
+    const selected = value.length ? value : [...DATA_SYNC_ENTRY_IDS];
     const allSelected = selected.length === OBJECTS.length;
 
-    function toggleObject(id: StripeObject) {
+    function toggleObject(id: DataSyncEntryId) {
         if (disabled) return;
         const isSelected = selected.includes(id);
 
@@ -48,7 +49,7 @@ export function StripeObjectsStep(props: {
 
     function resetToRecommended() {
         if (disabled) return;
-        onChange([...DEFAULT_ENABLED_STRIPE_OBJECTS]);
+        onChange([...DATA_SYNC_ENTRY_IDS]);
     }
 
     const reccomendedBtnText = allSelected ? "Recommended options" : "Sync all data";

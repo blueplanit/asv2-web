@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     try {
         const body = await req.json().catch(() => ({}));
         const {
+            userState,
             existingSpreadsheetId,
             workspaceSheetTitle,
             workingSheetTitle,
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
         const newWorkspaceSheetTitle = `${workspaceSheetTitle} (New)`
         const { spreadsheetId, spreadsheetUrl, syncConfig: newConfig } =
             await createWorkspaceSheetAndConfig({
-                userId,
+                userState,
                 folderName,
                 workspaceSheetTitle: newWorkspaceSheetTitle,
                 workingSheetTitle,
