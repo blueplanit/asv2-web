@@ -5,9 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { ddb } from "@/lib/dynamo";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { SheetTabState, SheetTabStateSchema, sheetTabStateSk, sheetTabStatePk } from "@blueplanit/asv2-shared";
+import { SheetTabState, SheetTabStateSchema, sheetTabStateSk, sheetTabStatePk, getLatestSchemaVersion } from "@blueplanit/asv2-shared";
 import { DataSyncEntryIdEnum, type DataSyncEntryId } from "@/lib/schemas/sync-config";
-import { TAB_ROW_LIMITS } from "@blueplanit/asv2-shared";
+import { TAB_ROW_LIMITS, getTabColumnCount } from "@blueplanit/asv2-shared";
 import { DEFAULT_ROW_CAPACITY } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -70,6 +70,8 @@ export async function POST(req: Request) {
 
         // Construct the sort key: SHEET_TAB_STATE#${spreadsheetId}#${sheetId}#${dataSyncEntryId}
         const sk = sheetTabStateSk(spreadsheetId, sheetId, dataSyncEntryId);
+        const schemaVersion = getLatestSchemaVersion(dataSyncEntryId);
+        const columnCount = getTabColumnCount(dataSyncEntryId, schemaVersion);
 
         // Build the SheetTabState item with proper initialization
         const item: SheetTabState = SheetTabStateSchema.parse({
@@ -79,8 +81,9 @@ export async function POST(req: Request) {
             userId,
             spreadsheetId,
             sheetId,
-            columnCount: 1,
+            columnCount,
             dataSyncEntryId: validatedDataSyncEntryId,
+            appliedSchemaVersion: schemaVersion,
             rowCount: rowCount ?? 0,
             rowCapacity: rowCapacity ?? TAB_ROW_LIMITS[dataSyncEntryId] ?? DEFAULT_ROW_CAPACITY,
             lastSyncedAt: lastSyncedAt ?? null,
