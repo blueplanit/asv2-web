@@ -17,7 +17,6 @@ type InitSheetTabStates = Array<{
     sheetId: number;
     dataSyncEntryId: DataSyncEntryId;
     rowCount?: number;
-    rowCapacity?: number;
     lastSyncedAt?: string | null;
 }>;
 
@@ -227,8 +226,6 @@ export function OnboardingWizard() {
             }
             const data = await res.json();
 
-            console.log("syncConfig", data);
-
             if (data?.syncConfig?.spreadsheetId) {
                 await initSheetTabState(data.syncConfig.spreadsheetId, data.syncConfig.stripeDataSyncMap);
             }
@@ -239,37 +236,6 @@ export function OnboardingWizard() {
         } catch (e) {
             setError(`Failed to save sync settings: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
             return false;
-        }
-    }
-
-    async function initSheetTabState(spreadsheetId: string, stripeDataSyncEntries: StripeDataSyncEntry[]) {
-        try {
-            const initSheetTabStates: InitSheetTabStates = stripeDataSyncEntries
-                .filter((entry) => entry.enabled)
-                .map((entry) => ({
-                    sheetId: entry.sheetId!,
-                    dataSyncEntryId: entry.id as DataSyncEntryId,
-                }));
-
-            const res = await fetch("/api/update/sheet-tab-state", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    spreadsheetId,
-                    initSheetTabStates,
-                })
-            })
-
-            if (!res.ok) {
-                const message = await res.text();
-                throw new Error(message || "Failed to init sheet tab state");
-            }
-
-            const data = await res.json();
-            console.log("init sheet tab state data", data);
-        }
-        catch (e) {
-            console.warn("Failed to init sheet tab state", e);
         }
     }
 
@@ -518,4 +484,36 @@ export function OnboardingWizard() {
             </div>
         </main>
     );
+}
+
+
+export async function initSheetTabState(spreadsheetId: string, stripeDataSyncEntries: StripeDataSyncEntry[]) {
+    try {
+        const initSheetTabStates: InitSheetTabStates = stripeDataSyncEntries
+            .filter((entry) => entry.enabled)
+            .map((entry) => ({
+                sheetId: entry.sheetId!,
+                dataSyncEntryId: entry.id as DataSyncEntryId,
+            }));
+
+        const res = await fetch("/api/update/sheet-tab-state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                spreadsheetId,
+                initSheetTabStates,
+            })
+        })
+
+        if (!res.ok) {
+            const message = await res.text();
+            throw new Error(message || "Failed to init sheet tab state");
+        }
+
+        const data = await res.json();
+        console.log("init sheet tab state data", data);
+    }
+    catch (e) {
+        console.warn("Failed to init sheet tab state", e);
+    }
 }

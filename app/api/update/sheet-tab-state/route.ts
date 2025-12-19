@@ -8,7 +8,6 @@ import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { SheetTabState, SheetTabStateSchema, sheetTabStateSk, sheetTabStatePk, getLatestSchemaVersion } from "@blueplanit/asv2-shared";
 import { DataSyncEntryIdEnum, type DataSyncEntryId } from "@/lib/schemas/sync-config";
 import { getTabColumnCount } from "@blueplanit/asv2-shared";
-import { DEFAULT_ROW_CAPACITY } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -20,7 +19,6 @@ type Body = {
         sheetId: number;
         dataSyncEntryId: DataSyncEntryId;
         rowCount?: number;
-        rowCapacity?: number;
         lastSyncedAt?: string | null;
     }>;
 } | null;
@@ -51,7 +49,7 @@ export async function POST(req: Request) {
 
     // Validate and build all items first
     for (const stateInput of body.initSheetTabStates) {
-        const { sheetId, dataSyncEntryId, rowCount, rowCapacity, lastSyncedAt } = stateInput;
+        const { sheetId, dataSyncEntryId, rowCount, lastSyncedAt } = stateInput;
 
         if (typeof sheetId !== "number") {
             return new NextResponse("sheetId must be a number for all sheetTabStates", { status: 400 });

@@ -15,11 +15,10 @@ import { WorkspaceStats } from "./workspace-stats";
 import { aggregateSheetMetrics, SheetTabState, SYNCED_CELL_BUDGET, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
-import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onboarding/onboarding-wizard";
+import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE, initSheetTabState } from "../onboarding/onboarding-wizard";
 import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
-import { DEFAULT_ROW_CAPACITY } from "@/lib/constants";
 
 export type Workspace = {
     id: string;
@@ -155,6 +154,11 @@ export function WorkspaceCard({
                     "We couldn’t create a new sheet. Please try again or contact support.",
                 );
                 return;
+            }
+            
+            const data = await res.json();
+            if (data?.newSyncConfig?.spreadsheetId) {
+                await initSheetTabState(data.newSyncConfig.spreadsheetId, data.newSyncConfig.stripeDataSyncMap);
             }
 
             await refresh();
