@@ -81,7 +81,7 @@ export async function POST(req: Request) {
             sheetId,
             columnCount: 1,
             dataSyncEntryId: validatedDataSyncEntryId,
-            rowCount: rowCount ?? 1,
+            rowCount: rowCount ?? 0,
             rowCapacity: rowCapacity ?? TAB_ROW_LIMITS[dataSyncEntryId] ?? DEFAULT_ROW_CAPACITY,
             lastSyncedAt: lastSyncedAt ?? null,
             createdAt: now,
