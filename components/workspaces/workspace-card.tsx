@@ -9,10 +9,10 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { WorkspaceStats } from "./workspace-stats";
-import { aggregateSheetMetrics, SheetTabState, TAB_ROW_LIMITS, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
+import { aggregateSheetMetrics, SheetTabState, SYNCED_CELL_BUDGET, WARN_THRESHOLD } from "@blueplanit/asv2-shared";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE } from "../onboarding/onboarding-wizard";
@@ -79,7 +79,7 @@ export function WorkspaceCard({
     onTogglePause,
     sheetTabState,
     stripeDataSyncMap,
-    setTitlesRequested = () => {},
+    setTitlesRequested = () => { },
 }: Props) {
     const { user, refresh } = useUserState();
     const health = HEALTH_LABELS[workspace.health];
@@ -184,55 +184,33 @@ export function WorkspaceCard({
     const showSyncNowButton = workspace.syncStatus !== "backfill_running" && workspace.syncStatus !== "paused" && workspace.syncStatus !== "error";
 
     // Check if any sheet tab exceeds the warning threshold
-    const exceedsTabRowWarningThreshold = (() => {
-        // Create a map from sheetId to StripeDataSyncEntry for quick lookup
-        const sheetIdToEntry = new Map<number, StripeDataSyncEntry>();
-        for (const entry of stripeDataSyncMap) {
-            if (entry.sheetId != null) {
-                sheetIdToEntry.set(entry.sheetId, entry);
-            }
-        }
+    const spreadsheetCapacity = useMemo(() => {
+        const m = aggregateSheetMetrics(sheetTabState);
+        const usedCells = m?.totalCellsUsed ?? 0;
+        const ratio = SYNCED_CELL_BUDGET > 0 ? usedCells / SYNCED_CELL_BUDGET : 0;
+        return {
+            usedCells,
+            ratio,
+            exceedsWarn: ratio >= WARN_THRESHOLD,
+        };
+    }, [sheetTabState]);
 
-        // Check if any metric exceeds the threshold
-        for (const metric of sheetTabState) {
-            const entry = sheetIdToEntry.get(metric.sheetId);
-            if (!entry) continue;
-
-            const objectId = entry.id;
-            const maxRowCount = metric.rowCapacity ?? TAB_ROW_LIMITS[objectId] ?? DEFAULT_ROW_CAPACITY;
-            const warningThreshold = WARN_THRESHOLD * maxRowCount;
-
-            if (metric.rowCount > warningThreshold) {
-                return true;
-            }
+    const showLimitWarning = spreadsheetCapacity.exceedsWarn && !isRetired;
+    const warningMessage = useMemo(() => {
+        const pct = Math.round(WARN_THRESHOLD * 100);
+        const usedPct = Math.round((spreadsheetCapacity.ratio || 0) * 100);
+        if (usedPct >= pct) {
+            return `Your spreadsheet is at ${usedPct}% of the synced cell budget. Create a new spreadsheet to avoid sync interruptions.`;
+        } else {
+            return `Your spreadsheet is at ${usedPct}% of the synced cell budget. Create a new spreadsheet before it reaches ${pct}% to avoid sync interruptions.`;
         }
-        return false;
-    })();
-
-    const exceedsSpreadsheetLevelCellBudgetWarningThreshold = (() => {
-        const spreadsheetMetrics = aggregateSheetMetrics(sheetTabState);
-        if (spreadsheetMetrics?.cellUsageRatio && spreadsheetMetrics.cellUsageRatio >= WARN_THRESHOLD) {
-            return true;
-        }
-        return false;
-    })();
-
-    const showLimitWarning = exceedsTabRowWarningThreshold || exceedsSpreadsheetLevelCellBudgetWarningThreshold;
-    const warningMessage = (() => {
-        if (exceedsTabRowWarningThreshold) {
-            return `One or more sheet tabs are over ${Math.round(WARN_THRESHOLD * 100)}% full. Create a new spreadsheet to continue syncing without interruption.`;
-        }
-        if (exceedsSpreadsheetLevelCellBudgetWarningThreshold) {
-            return `The spreadsheet is over ${Math.round(WARN_THRESHOLD * 100)}% full and nearing the budgeted limit. Create a new spreadsheet to continue syncing without interruption.`;
-        }
-        return "";
-    })();
+    }, [spreadsheetCapacity.ratio]);
 
     return (
         <article className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
 
             {/* Warning CTA if approaching capacity limit */}
-            {showLimitWarning && !isRetired && (
+            {showLimitWarning && (
                 <div className="rounded-2xl border-2 border-red-600 bg-red-50 p-4 shadow-md">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-start gap-3">
@@ -419,14 +397,14 @@ export function WorkspaceCard({
                 </div>
             )}
 
-<RotateSheetModal
-    open={rotateModalOpen}
-    onOpenChange={setRotateModalOpen}
-    onConfirm={handleConfirmRotate}
-    workspaceName={workspace.name}
-    submitting={rotateSubmitting}
-    error={rotateError}
-/>
+            <RotateSheetModal
+                open={rotateModalOpen}
+                onOpenChange={setRotateModalOpen}
+                onConfirm={handleConfirmRotate}
+                workspaceName={workspace.name}
+                submitting={rotateSubmitting}
+                error={rotateError}
+            />
 
 
             {/* Collapsible sync stats */}

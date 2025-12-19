@@ -7,7 +7,7 @@ import { ddb } from "@/lib/dynamo";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { SheetTabState, SheetTabStateSchema, sheetTabStateSk, sheetTabStatePk, getLatestSchemaVersion } from "@blueplanit/asv2-shared";
 import { DataSyncEntryIdEnum, type DataSyncEntryId } from "@/lib/schemas/sync-config";
-import { TAB_ROW_LIMITS, getTabColumnCount } from "@blueplanit/asv2-shared";
+import { getTabColumnCount } from "@blueplanit/asv2-shared";
 import { DEFAULT_ROW_CAPACITY } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -85,7 +85,6 @@ export async function POST(req: Request) {
             dataSyncEntryId: validatedDataSyncEntryId,
             appliedSchemaVersion: schemaVersion,
             rowCount: rowCount ?? 0,
-            rowCapacity: rowCapacity ?? TAB_ROW_LIMITS[dataSyncEntryId] ?? DEFAULT_ROW_CAPACITY,
             lastSyncedAt: lastSyncedAt ?? null,
             createdAt: now,
             updatedAt: now,
