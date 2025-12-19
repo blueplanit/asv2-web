@@ -12,6 +12,7 @@ export const contentfulClient = createClient({
 });
 
 export type BlogPostFields = {
+    showInProduction?: boolean;
     title: string;
     slug: string;
     excerpt?: string;
