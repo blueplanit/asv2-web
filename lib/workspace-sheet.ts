@@ -42,7 +42,7 @@ export async function createWorkspaceSheetAndConfig(
     }
 
     // 1) Google auth
-    const { accessToken } = await getGoogleAccessTokenForUser(userId);
+    const { accessToken } = await getGoogleAccessTokenForUser(userState);
     const googleUserId = userState.profile?.googleUserId;
 
     if (!googleUserId) {
@@ -150,7 +150,7 @@ export async function createWorkspaceSheetAndConfig(
 
     // 6) Ensure tabs exist and are protected, plus Working Sheet
     const boundStripeDataSyncMap = await ensureSheetTabsForStripeDataSyncMap({
-        userId,
+        userState,
         spreadsheetId,
         stripeDataSyncMap,
         workingSheetTitle,

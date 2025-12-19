@@ -35,19 +35,16 @@ export function BackfillIntroModal({
             <div className="relative z-50 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
                 <div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
-                        Initial backfill started
+                        Onboarding complete!
                     </p>
                     <h2 className="text-lg font-semibold text-slate-900">
-                        We’re loading your Stripe data into{" "}
+                        Nice! We’re loading your Stripe data into{" "}
                         <span className="text-indigo-700">{nameLoading ? <div className="mt-1 h-6 w-64 animate-pulse rounded bg-slate-200" /> : 
                         <span className="flex items-center gap-1"><a href={sheetUrl} target="_blank" rel="noreferrer" className="hover:underline">{workspaceName}</a>
                         <ExternalLinkIcon className="h-4 w-4 cursor-pointer" aria-hidden="true" /></span>}</span>
                     </h2>
                     <p className="text-sm text-slate-700">
-                        Loading your Stripe history into the new Google Sheet may take a few minutes depending on volume.
-                    </p>
-                    <p className="text-xs text-slate-500">
-                        You can safely leave this page.
+                        This may take a few minutes depending on volume. You can safely leave this page.
                     </p>
                 </div>
 
