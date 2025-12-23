@@ -72,6 +72,8 @@ function mapSyncConfigToWorkspace(args: {
         objectsEnabled,
         syncStatus: cfg.syncStatus,
         nameLoading,
+        nextSyncAt: cfg.nextSyncAt ?? null,
+        nextSyncReason: cfg.nextSyncReason ?? null,
     };
 }
 // Map your onboarding stage → the next step id in /onboarding
@@ -157,7 +159,10 @@ export function DashboardClient() {
                 const res = await fetch("/api/google/sheet-titles", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ spreadsheetIds: ids }),
+                    body: JSON.stringify({ 
+                        spreadsheetIds: ids, 
+                        userState: user,
+                    }),
                 });
                 if (!res.ok) {
                     console.error("Failed to fetch sheet titles");
@@ -242,7 +247,7 @@ export function DashboardClient() {
             const res = await fetch("/api/update/sync-config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ syncStatus: nextStatus, spreadsheetId }),
+                body: JSON.stringify({ syncStatus: nextStatus, spreadsheetId, userState: user }),
             });
             if (!res.ok) {
                 console.error("Failed to update sync status");

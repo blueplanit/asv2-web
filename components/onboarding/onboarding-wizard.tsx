@@ -10,8 +10,15 @@ import { DataSyncEntryId, DATA_SYNC_ENTRY_IDS } from "@/lib/schemas/sync-config"
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
+import { StripeDataSyncEntry } from "@blueplanit/asv2-shared";
 
 type StepStatus = "complete" | "current" | "upcoming";
+type InitSheetTabStates = Array<{
+    sheetId: number;
+    dataSyncEntryId: DataSyncEntryId;
+    rowCount?: number;
+    lastSyncedAt?: string | null;
+}>;
 
 export const WORKSPACE_SHEET_TITLE = "My Stripe Sync – Workspace";
 export const FOLDER_NAME = "Sync";
@@ -209,6 +216,7 @@ export function OnboardingWizard() {
                     workingSheetTitle: WORKING_SHEET_TITLE,
                     workingSheetMessage: WORKING_SHEET_MESSAGE,
                     spreadsheetId,
+                    userState: user,
                 }),
             });
             if (!res.ok) {
@@ -216,7 +224,14 @@ export function OnboardingWizard() {
                 setError(text || "Failed to save sync settings");
                 return false;
             }
+            const data = await res.json();
+
+            if (data?.syncConfig?.spreadsheetId) {
+                await initSheetTabState(data.syncConfig.spreadsheetId, data.syncConfig.stripeDataSyncMap);
+            }
+
             await refresh();
+            // initSheetTabState(spreadsheetId, selectedDataSyncEntries);
             return true;
         } catch (e) {
             setError(`Failed to save sync settings: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
@@ -469,4 +484,36 @@ export function OnboardingWizard() {
             </div>
         </main>
     );
+}
+
+
+export async function initSheetTabState(spreadsheetId: string, stripeDataSyncEntries: StripeDataSyncEntry[]) {
+    try {
+        const initSheetTabStates: InitSheetTabStates = stripeDataSyncEntries
+            .filter((entry) => entry.enabled)
+            .map((entry) => ({
+                sheetId: entry.sheetId!,
+                dataSyncEntryId: entry.id as DataSyncEntryId,
+            }));
+
+        const res = await fetch("/api/update/sheet-tab-state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                spreadsheetId,
+                initSheetTabStates,
+            })
+        })
+
+        if (!res.ok) {
+            const message = await res.text();
+            throw new Error(message || "Failed to init sheet tab state");
+        }
+
+        const data = await res.json();
+        console.log("init sheet tab state data", data);
+    }
+    catch (e) {
+        console.warn("Failed to init sheet tab state", e);
+    }
 }

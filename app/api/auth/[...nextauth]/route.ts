@@ -2,12 +2,18 @@ import "server-only";
 import { ensureAppUserForGoogleLogin } from "@/lib/user-profile";
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { getGoogleClientConfigForShard } from "@/lib/google-oauth-sharding";
+
+
+// Keep login on one shard unless truly need to shard login too.
+const GOOGLE_AUTH_SHARD_SIGNUP = "gcp-0";
+const { clientId, clientSecret } = getGoogleClientConfigForShard(GOOGLE_AUTH_SHARD_SIGNUP);
 
 export const authOptions: NextAuthOptions = {
     providers: [
         GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            clientId: clientId,
+            clientSecret: clientSecret,
             authorization: {
                 params: {
                     scope: [
