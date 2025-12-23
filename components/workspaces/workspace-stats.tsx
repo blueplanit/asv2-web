@@ -92,7 +92,7 @@ export function WorkspaceStats({ sheetTabState, stripeDataSyncMap }: WorkspaceSt
                 onClick={() => setOpen((v) => !v)}
                 className="cursor-pointer flex w-full items-center justify-between gap-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
             >
-                <span>Sync details</span>
+                <span>Details</span>
                 <span className="inline-flex items-center gap-2 text-[11px] font-normal normal-case text-slate-500">
                     {open ? "Hide" : "Show"} details
                     <ChevronDownIcon
