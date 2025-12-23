@@ -72,6 +72,8 @@ function mapSyncConfigToWorkspace(args: {
         objectsEnabled,
         syncStatus: cfg.syncStatus,
         nameLoading,
+        nextSyncAt: cfg.nextSyncAt ?? null,
+        nextSyncReason: cfg.nextSyncReason ?? null,
     };
 }
 // Map your onboarding stage → the next step id in /onboarding

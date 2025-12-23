@@ -32,6 +32,8 @@ export type Workspace = {
     objectsEnabled: string[];
     syncStatus: SyncStatus;
     nameLoading?: boolean;
+    nextSyncAt: string | null;
+    nextSyncReason: "manual_trigger" | "scheduled_sync" | "error" | "syncing" | "retired" | null;
 };
 
 const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; tooltip: string }> = {
@@ -88,7 +90,6 @@ export function WorkspaceCard({
     const [rotateSubmitting, setRotateSubmitting] = useState(false);
     const [rotateError, setRotateError] = useState<string | null>(null);
 
-
     const nameLoading = workspace.nameLoading ?? false;
     const isPaused = workspace.syncStatus === "paused";
     const isBackfilling = workspace.syncStatus === "backfill_running";
@@ -119,6 +120,63 @@ export function WorkspaceCard({
         console.log("Backfill requested for workspace", workspace.id);
         setMenuOpen(false);
     }
+
+    function formatNextSyncLabel(nextSyncAtIso: string): string {
+        const ts = Date.parse(nextSyncAtIso);
+        if (!Number.isFinite(ts)) return "Next sync: Scheduled";
+
+        const now = Date.now();
+        const diffMs = ts - now;
+
+        if (diffMs <= 0) return "Next sync: Soon";
+
+        const diffMin = Math.round(diffMs / 60_000);
+        // Prefer relative for near-term, absolute for later
+        if (diffMin <= 90) return `Next sync in ${diffMin} minutes`;
+
+        return `Next sync at ${new Date(ts).toLocaleString()}`;
+    }
+
+    // Derive next-sync UI text based on syncStatus + nextSyncAt/Reason
+    const nextSyncText = useMemo(() => {
+        if (isRetired) return null;
+
+        if (isPaused) return "Next sync: Paused";
+        if (isBackfilling) return "Next sync: After backfill completes";
+
+        if (isError) {
+            // If backend schedules retries via nextSyncAt, show it; otherwise say not scheduled
+            if (workspace.nextSyncAt) {
+                return formatNextSyncLabel(workspace.nextSyncAt).replace("Next sync", "Next retry");
+            }
+            return "Next retry: Not scheduled";
+        }
+
+        if (workspace.nextSyncAt) {
+            const base = formatNextSyncLabel(workspace.nextSyncAt);
+
+            // Optional: keep reason out of UI; or tweak copy for manual triggers
+            if (workspace.nextSyncReason === "manual_trigger") {
+                return base.replace("Next sync", "Next sync (manual)");
+            }
+
+            return base;
+        }
+
+        // If we don't have nextSyncAt, be explicit
+        if (workspace.syncStatus === "syncing") return "Next sync: Scheduled";
+        if (workspace.syncStatus === "onboarding") return "Next sync: Not scheduled yet";
+
+        return null;
+    }, [
+        workspace.nextSyncAt,
+        workspace.nextSyncReason,
+        workspace.syncStatus,
+        isPaused,
+        isBackfilling,
+        isError,
+        isRetired,
+    ]);
 
     async function handleConfirmRotate() {
         try {
@@ -155,7 +213,7 @@ export function WorkspaceCard({
                 );
                 return;
             }
-            
+
             const data = await res.json();
             if (data?.newSyncConfig?.spreadsheetId) {
                 await initSheetTabState(data.newSyncConfig.spreadsheetId, data.newSyncConfig.stripeDataSyncMap);
@@ -374,6 +432,19 @@ export function WorkspaceCard({
                                 {workspace.lastSyncAt ? new Date(workspace.lastSyncAt).toLocaleString() : "Not yet synced"}
                             </span>
                         </p>
+
+                        {nextSyncText && (
+                            <p className="text-xs text-slate-500">
+                                <span className="font-medium text-slate-800">{nextSyncText}</span>
+                                {/* Optional: tiny hint for transparency */}
+                                {workspace.nextSyncReason && (
+                                    <span className="ml-2 text-[11px] text-slate-400">
+                                        {/* comment: reason is mostly for debugging; hide if you prefer */}
+                                        ({workspace.nextSyncReason})
+                                    </span>
+                                )}
+                            </p>
+                        )}
                     </div>
 
                     {/* Configuration / objects */}
