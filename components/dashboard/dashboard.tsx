@@ -146,6 +146,7 @@ export function DashboardClient() {
     // Lazy-load titles after initial render
     useEffect(() => {
         if (filteredConfigs.length === 0) return;
+        if (!user?.profile?.googleUserId) return;
 
         const ids = Array.from(
             new Set(filteredConfigs.map((cfg) => cfg.spreadsheetId)),
@@ -177,7 +178,7 @@ export function DashboardClient() {
                 setTitlesRequested(false);
             }
         })();
-    }, [filteredConfigs, sheetTitles, titlesRequested]);
+    }, [filteredConfigs, user]);
 
     // derive workspace(s) from sync config + stripe connection
     const workspaces: Workspace[] =
