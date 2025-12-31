@@ -6,15 +6,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
 import { createTokenCipher, googleConnectionAad, parseKeyringJson } from "@blueplanit/asv2-shared";
+import { getGoogleClientConfigForShard } from "@/lib/google-oauth-sharding";
 import {
-    GOOGLE_DEFAULT_PROJECT_SHARD,
-    getGoogleClientConfigForShard,
-} from "@/lib/google-oauth-sharding";
-import {
-    verifyState,
+    verifyGoogleOAuthState,
     GOOGLE_OAUTH_NONCE_COOKIE,
-    sanitizeReturnTo,
 } from "@/lib/google-oauth-state";
+import { sanitizeReturnTo } from "@/lib/oauth-state-core";
 
 // add (module-level cipher)
 const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
@@ -54,7 +51,7 @@ export async function GET(req: NextRequest) {
     const rawState = searchParams.get("state");
     const cookieNonce = req.cookies.get(GOOGLE_OAUTH_NONCE_COOKIE)?.value ?? null;
 
-    const verified = verifyState(
+    const verified = verifyGoogleOAuthState(
         rawState,
         userId,
         cookieNonce,

@@ -11,11 +11,10 @@ import {
 import {
     GOOGLE_OAUTH_NONCE_COOKIE,
     makeGoogleOAuthState,
-    sanitizeReturnTo,
 } from "@/lib/google-oauth-state";
 import { getGoogleConnection } from "@/lib/google-connection";
+import { sanitizeReturnTo } from "@/lib/oauth-state-core";
 
-const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);

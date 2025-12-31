@@ -7,6 +7,7 @@ import {
     type StripeDataSyncEntry,
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
+import { userPk } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
@@ -216,7 +217,7 @@ export async function updateSyncConfig(params: {
             TableName: TABLE_NAME,
             ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
             Key: {
-                pk: `USER#${userId}`,
+                pk: userPk(userId),
                 sk: `SYNC#${spreadsheetId}`,
             },
             UpdateExpression,
