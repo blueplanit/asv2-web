@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
-import { createTokenCipher, googleConnectionAad, parseKeyringJson } from "@blueplanit/asv2-shared";
+import { createTokenCipher, googleConnectionAad, googleConnectSk, parseKeyringJson, userPk } from "@blueplanit/asv2-shared";
 import { getGoogleClientConfigForShard } from "@/lib/google-oauth-sharding";
 import {
     verifyGoogleOAuthState,
@@ -165,8 +165,8 @@ export async function GET(req: NextRequest) {
     }
 
     // 3) Encrypt tokens for storage
-    const pk = `USER#${userId}`;
-    const sk = `GOOGLE#${googleUserId}`;
+    const pk = userPk(userId);
+    const sk = googleConnectSk(googleUserId);
     const aad = googleConnectionAad({ userId, googleUserId, pk, sk });
     const accessTokenEncrypted = await tokenCipher.encrypt(
         {

@@ -21,7 +21,7 @@ import {
     SyncConfigSchema,
     type SyncConfig,
 } from "@/lib/schemas/sync-config";
-import { SheetTabState, SheetTabStateSchema } from "@blueplanit/asv2-shared";
+import { SheetTabState, SheetTabStateSchema, userPk } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
@@ -115,7 +115,7 @@ export async function loadUserState(userId: string): Promise<UserState> {
         throw new Error("User ID is required");
     }
 
-    const pk = `USER#${userId}`;
+    const pk = userPk(userId);
 
     const res = await ddb.send(
         new QueryCommand({

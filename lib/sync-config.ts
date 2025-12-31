@@ -19,7 +19,7 @@ export async function getSyncConfigs(
             TableName: TABLE_NAME,
             KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
             ExpressionAttributeValues: {
-                ":pk": `USER#${userId}`,
+                ":pk": userPk(userId),
                 ":sk": "SYNC#",
             },
         }),
@@ -38,7 +38,7 @@ export async function ensureSyncConfigForSheet(params: {
     stripeAccountId: string;
 }) {
     const { userId, spreadsheetId, stripeAccountId } = params;
-    const pk = `USER#${userId}`;
+    const pk = userPk(userId);
     const sk = `SYNC#${spreadsheetId}`;
     
     if (!userId) {
@@ -119,7 +119,7 @@ export async function createSyncConfig(params: {
     const now = new Date().toISOString();
 
     const item: SyncConfig = SyncConfigSchema.parse({
-        pk: `USER#${userId}`,
+        pk: userPk(userId),
         sk: `SYNC#${spreadsheetId}`,
         type: "SyncConfig",
 
@@ -155,7 +155,7 @@ export async function getSyncConfig(userId: string, spreadsheetId: string) {
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${userId}`,
+                pk: userPk(userId),
                 sk: `SYNC#${spreadsheetId}`,
             },
         }),
