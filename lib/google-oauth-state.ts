@@ -16,8 +16,7 @@ export type GoogleOAuthStatePayload = SignedOAuthStateBase & {
     shard: string;
 };
 
-// Call this in your /api/stripe/connect route
-// Pass in whatever you consider the current app user ID
+// Call this in /api/stripe/connect route
 export function makeGoogleOAuthState(args: {
     userId: string;
     flow: GoogleOAuthFlow;
@@ -38,7 +37,7 @@ export function makeGoogleOAuthState(args: {
     return { state, nonce };
 }
 
-// Call this in your /api/stripe/callback route
+// Call this in /api/stripe/callback route
 // Returns { ok: true, payload } if valid, else { ok: false, reason }
 export function verifyGoogleOAuthState(
     state: string | null,
