@@ -7,6 +7,7 @@ import {
     type StripeDataSyncEntry,
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
+import { userPk } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
@@ -18,7 +19,7 @@ export async function getSyncConfigs(
             TableName: TABLE_NAME,
             KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
             ExpressionAttributeValues: {
-                ":pk": `USER#${userId}`,
+                ":pk": userPk(userId),
                 ":sk": "SYNC#",
             },
         }),
@@ -37,7 +38,7 @@ export async function ensureSyncConfigForSheet(params: {
     stripeAccountId: string;
 }) {
     const { userId, spreadsheetId, stripeAccountId } = params;
-    const pk = `USER#${userId}`;
+    const pk = userPk(userId);
     const sk = `SYNC#${spreadsheetId}`;
     
     if (!userId) {
@@ -118,7 +119,7 @@ export async function createSyncConfig(params: {
     const now = new Date().toISOString();
 
     const item: SyncConfig = SyncConfigSchema.parse({
-        pk: `USER#${userId}`,
+        pk: userPk(userId),
         sk: `SYNC#${spreadsheetId}`,
         type: "SyncConfig",
 
@@ -154,7 +155,7 @@ export async function getSyncConfig(userId: string, spreadsheetId: string) {
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${userId}`,
+                pk: userPk(userId),
                 sk: `SYNC#${spreadsheetId}`,
             },
         }),
@@ -216,7 +217,7 @@ export async function updateSyncConfig(params: {
             TableName: TABLE_NAME,
             ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
             Key: {
-                pk: `USER#${userId}`,
+                pk: userPk(userId),
                 sk: `SYNC#${spreadsheetId}`,
             },
             UpdateExpression,

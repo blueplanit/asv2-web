@@ -10,6 +10,7 @@ import { ddb } from "./dynamo";
 import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { UserProfileSchema, type UserProfile } from "./schemas/user-profile";
 import { ulid } from "ulid";
+import { googleConnectSk, userPk } from "@blueplanit/asv2-shared";
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const GOOGLE_ID_GSI_NAME = "GOOGLE_GSI"; // must match CDK definition
 
@@ -27,7 +28,7 @@ export async function updateUserSubscriptionStatusToActive(
     params: UpdateUserSubscriptionParams,
     expectedCurrentSubscriptionId?: string | null,
 ) {
-    const pk = `USER#${userId}`;
+    const pk = userPk(userId);
     const now = new Date().toISOString();
 
     const {
@@ -108,7 +109,7 @@ export async function updateUserSubscriptionStatusToInactive(
     rawStatus?: string, // e.g. Stripe subscription.status ("canceled", "unpaid", etc.)
     expectedSubscriptionId?: string,
 ) {
-    const pk = `USER#${userId}`;
+    const pk = userPk(userId);
     const now = new Date().toISOString();
 
     let updateExpr =
@@ -146,7 +147,7 @@ export async function updateUserSubscriptionStatusToInactive(
 
 
 export async function getUserProfile(userId: string) {
-    const pk = `USER#${userId}`;
+    const pk = userPk(userId);
 
     const res = await ddb.send(
         new GetCommand({
@@ -170,7 +171,7 @@ export async function getUserProfileByGoogleUserId(
             IndexName: GOOGLE_ID_GSI_NAME,
             KeyConditionExpression: "GOOGLE_GSI_PK = :gpk",
             ExpressionAttributeValues: {
-                ":gpk": `GOOGLE#${googleUserId}`,
+                ":gpk": googleConnectSk(googleUserId),
             },
             Limit: 1,
         }),
@@ -205,7 +206,7 @@ async function createUserProfileForGoogleLogin(params: {
     }
 
     const item: UserProfile = {
-        pk: `USER#${userId}`,
+        pk: userPk(userId),
         sk: "PROFILE",
         userId: userId,
         email,
@@ -213,8 +214,7 @@ async function createUserProfileForGoogleLogin(params: {
         createdAt: now,
         updatedAt: now,
         subscriptionStatus: "inactive",
-        // optionally set GOOGLE_GSI_PK, etc.
-        GOOGLE_GSI_PK: `GOOGLE#${googleUserId}`,
+        GOOGLE_GSI_PK: googleConnectSk(googleUserId),
     } as any;
 
     UserProfileSchema.parse(item);

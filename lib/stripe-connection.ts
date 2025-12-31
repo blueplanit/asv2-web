@@ -5,6 +5,7 @@ import {
     StripeConnectionSchema,
     type StripeConnection,
 } from "@/lib/schemas/stripe-connection";
+import { userPk } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
@@ -17,7 +18,7 @@ export async function putStripeConnection(params: {
     const now = new Date().toISOString();
 
     const item: StripeConnection = StripeConnectionSchema.parse({
-        pk: `USER#${userId}`,
+        pk: userPk(userId),
         sk: `STRIPE#${stripeAccountId}`,
         type: "StripeConnection",
         userId: userId,
@@ -43,7 +44,7 @@ export async function getStripeConnection(userId: string, stripeAccountId: strin
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${userId}`,
+                pk: userPk(userId),
                 sk: `STRIPE#${stripeAccountId}`,
             },
         }),
@@ -62,7 +63,7 @@ export async function getStripeAccountIdForUser(
             TableName: TABLE_NAME,
             KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
             ExpressionAttributeValues: {
-                ":pk": `USER#${userId}`,
+                ":pk": userPk(userId),
                 ":sk": "STRIPE#",
             },
             Limit: 1,

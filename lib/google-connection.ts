@@ -1,10 +1,12 @@
 // lib/google-connection.ts
+import "server-only";
 import { ddb } from "./dynamo";
 import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import {
     GoogleConnectionSchema,
     type GoogleConnection,
 } from "@/lib/schemas/google-connection";
+import { googleConnectSk, userPk } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
@@ -51,8 +53,8 @@ export async function getGoogleConnection(userId: string, googleUserId: string) 
         new GetCommand({
             TableName: TABLE_NAME,
             Key: {
-                pk: `USER#${userId}`,
-                sk: `GOOGLE#${googleUserId}`,
+                pk: userPk(userId),
+                sk: googleConnectSk(googleUserId),
             },
         }),
     );

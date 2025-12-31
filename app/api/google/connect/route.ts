@@ -3,10 +3,14 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { 
+import {
     selectGoogleProjectShardForUser,
     getGoogleClientConfigForShard,
 } from "@/lib/google-oauth-sharding";
+import {
+    GOOGLE_OAUTH_NONCE_COOKIE,
+    makeGoogleOAuthState,
+} from "@/lib/google-oauth-state";
 
 export async function GET(_req: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -29,11 +33,12 @@ export async function GET(_req: NextRequest) {
         "https://www.googleapis.com/auth/drive.file"
     ].join(" ");
 
-    const statePayload = {
-        s: "google-connect",          // simple marker
-        shard: googleProjectShard,    // e.g. "gcp-0"
-    };
-    const state = Buffer.from(JSON.stringify(statePayload)).toString("base64url");
+    const { state, nonce } = makeGoogleOAuthState({
+        userId,
+        flow: "google-connect",
+        shard: googleProjectShard,
+        returnTo: "/onboarding?step=3",
+    });
 
     const params = new URLSearchParams({
         client_id: clientId,
@@ -44,11 +49,18 @@ export async function GET(_req: NextRequest) {
         prompt: "consent",              // force consent so we get a refresh token
         include_granted_scopes: "true", // incremental auth
         login_hint: loginHint,          // nudge user to pick the same Google account
-        // TODO: add a real state/CSRF token + verification
         state: state
     });
 
     const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    const res = NextResponse.redirect(url);
+    res.cookies.set(GOOGLE_OAUTH_NONCE_COOKIE, nonce, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 10 * 60,
+    });
 
-    return NextResponse.redirect(url);
+    return res;
 }

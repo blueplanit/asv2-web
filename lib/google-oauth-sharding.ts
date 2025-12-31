@@ -6,6 +6,7 @@ export const GOOGLE_DEFAULT_PROJECT_SHARD =
     process.env.GOOGLE_DEFAULT_PROJECT_SHARD ?? "gcp-0";
 
 // In future: hash userId → shard; for now always default shard.
+// THIS IS ONLY USED FOR SIGNUP !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 export function selectGoogleProjectShardForUser(userId: string): string {
     // TODO: hash userId → shard; for now always default shard.
     return GOOGLE_DEFAULT_PROJECT_SHARD;
