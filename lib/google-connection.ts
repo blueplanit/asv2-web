@@ -1,4 +1,5 @@
 // lib/google-connection.ts
+import "server-only";
 import { ddb } from "./dynamo";
 import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import {

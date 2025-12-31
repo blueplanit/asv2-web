@@ -1,8 +1,7 @@
 // lib/google-auth.ts (server-only)
 import "server-only";
 import { ddb } from "./dynamo";
-import { QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { GoogleConnectionSchema } from "@/lib/schemas/google-connection";
+import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import {
     type StoredAccessPayload,
     type StoredRefreshPayload,
@@ -12,7 +11,11 @@ import {
 } from "@blueplanit/asv2-shared";
 import { getGoogleClientConfigForShard } from "./google-oauth-sharding";
 import { UserState } from "./user-state";
-import { GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
+import { getGoogleConnection } from "./google-connection";
+import {
+    userPk,
+    googleConnectSk,
+} from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -21,6 +24,38 @@ if (!TOKEN_CIPHER_KEYRING_JSON) {
   throw new Error("Missing ASV2_TOKEN_CIPHER_KEYRING_JSON");
 }
 const tokenCipher = createTokenCipher(parseKeyringJson(TOKEN_CIPHER_KEYRING_JSON));
+
+async function markGoogleConnectionIncident(args: {
+    pk: string;
+    sk: string;
+    status: "error" | "revoked";
+    errorCode: "refresh_invalid" | "unknown";
+    errorMessage?: string;
+}) {
+    const now = new Date().toISOString();
+    await ddb.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { pk: args.pk, sk: args.sk },
+        UpdateExpression: "SET #status = :status, errorCode = :errorCode, errorMessage = :msg, lastErrorAt = :at, updatedAt = :now",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+            ":status": args.status,
+            ":errorCode": args.errorCode,
+            ":msg": args.errorMessage ?? null,
+            ":at": now,
+            ":now": now,
+        },
+    }));
+}
+
+function parseGoogleTokenError(text: string): { error?: string; error_description?: string } {
+    try {
+        const j = JSON.parse(text) as any;
+        return { error: j?.error, error_description: j?.error_description };
+    } catch {
+        return {};
+    }
+}
 
 // Assumes exactly one GoogleConnection per user for now
 export async function getGoogleAccessTokenForUser(userState: UserState): Promise<{
@@ -31,43 +66,44 @@ export async function getGoogleAccessTokenForUser(userState: UserState): Promise
     clientSecret: string;
 }> {
     const userId = userState.profile?.userId;
-    if (!userId) {
-        throw new Error("User ID not found");
-    }
-
     const googleUserId = userState.profile?.googleUserId;
-    const googleProjectShard = userState.googleConnections.find(connection => connection.googleUserId === googleUserId)?.googleProjectShard ?? GOOGLE_DEFAULT_PROJECT_SHARD;
+    if (!userId) throw new Error("User ID not found");
+    if (!googleUserId) throw new Error("Google user ID not found");
+
+    // 1) Load the exact GoogleConnection for the login Google user
+    const item = await getGoogleConnection(userId, googleUserId);
+    if (!item) throw new Error("Google connection not found");
+
+    // 2) Use the shard from the connection (stable)
+    const googleProjectShard = item.googleProjectShard;
     const { clientId, clientSecret } = getGoogleClientConfigForShard(googleProjectShard);
-
-    // 1) Load GoogleConnection for this user
-    const res = await ddb.send(
-        new QueryCommand({
-            TableName: TABLE_NAME,
-            KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
-            ExpressionAttributeValues: {
-                ":pk": `USER#${userId}`,
-                ":sk": "GOOGLE#",
-            },
-            Limit: 1,
-        }),
-    );
-
-    if (!res.Items || res.Items.length === 0) {
-        throw new Error("No Google connection found for user");
-    }
-
-    const item = GoogleConnectionSchema.parse(res.Items[0]);
+    const pk = userPk(userId);
+    const sk = googleConnectSk(googleUserId);
 
     const aad = googleConnectionAad(item);
 
-    const accessPayload = await tokenCipher.decrypt<StoredAccessPayload>(
-        item.accessTokenEncrypted,
-        { purpose: "google_access_v1", aad },
-    );
-    const refreshPayload = await tokenCipher.decrypt<StoredRefreshPayload>(
-        item.refreshTokenEncrypted,
-        { purpose: "google_refresh_v1", aad },
-    );
+    let accessPayload: StoredAccessPayload;
+    let refreshPayload: StoredRefreshPayload;
+
+    try {
+        accessPayload = await tokenCipher.decrypt<StoredAccessPayload>(
+            item.accessTokenEncrypted,
+            { purpose: "google_access_v1", aad },
+        );
+        refreshPayload = await tokenCipher.decrypt<StoredRefreshPayload>(
+            item.refreshTokenEncrypted,
+            { purpose: "google_refresh_v1", aad },
+        );
+    } catch (e: any) {
+        await markGoogleConnectionIncident({
+            pk: pk,
+            sk: sk,
+            status: "error",
+            errorCode: "unknown",
+            errorMessage: "Failed to decrypt stored Google tokens",
+        });
+        throw e;
+    }
 
     let { accessToken, expiresAt } = accessPayload;
     const { refreshToken } = refreshPayload;
@@ -92,6 +128,29 @@ export async function getGoogleAccessTokenForUser(userState: UserState): Promise
         });
 
         if (!tokenRes.ok) {
+            const txt = await tokenRes.text();
+            const parsed = parseGoogleTokenError(txt);
+            const msg = parsed.error_description || parsed.error || txt || `HTTP ${tokenRes.status}`;
+
+            // invalid_grant is the canonical “refresh token dead” signal
+            if ((parsed.error || "").toLowerCase() === "invalid_grant" || msg.toLowerCase().includes("invalid_grant")) {
+                await markGoogleConnectionIncident({
+                    pk,
+                    sk,
+                    status: "revoked",
+                    errorCode: "refresh_invalid",
+                    errorMessage: msg,
+                });
+            } else {
+                await markGoogleConnectionIncident({
+                    pk,
+                    sk,
+                    status: "error",
+                    errorCode: "unknown",
+                    errorMessage: msg,
+                });
+            }
+
             console.error(
                 "Google refresh_token exchange failed:",
                 tokenRes.status,
@@ -133,14 +192,14 @@ export async function getGoogleAccessTokenForUser(userState: UserState): Promise
             new UpdateCommand({
                 TableName: TABLE_NAME,
                 Key: {
-                    pk: item.pk,
-                    sk: item.sk,
+                    pk,
+                    sk,
                 },
                 UpdateExpression:
-                    "SET accessTokenEncrypted = :accessTokenEncrypted, updatedAt = :updatedAt",
+                    "SET accessTokenEncrypted = :accessTokenEncrypted, updatedAt = :now, lastValidatedAt = :now",
                 ExpressionAttributeValues: {
                     ":accessTokenEncrypted": newAccessTokenEncrypted,
-                    ":updatedAt": new Date().toISOString(),
+                    ":now": new Date().toISOString(),
                 },
             }),
         );

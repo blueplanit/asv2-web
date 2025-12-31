@@ -6,16 +6,36 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google-connection";
 import { createTokenCipher, googleConnectionAad, parseKeyringJson } from "@blueplanit/asv2-shared";
-
 import {
     GOOGLE_DEFAULT_PROJECT_SHARD,
     getGoogleClientConfigForShard,
 } from "@/lib/google-oauth-sharding";
+import {
+    verifyState,
+    GOOGLE_OAUTH_NONCE_COOKIE,
+    sanitizeReturnTo,
+} from "@/lib/google-oauth-state";
 
 // add (module-level cipher)
 const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
 if (!TOKEN_CIPHER_KEYRING_JSON) throw new Error("Missing ASV2_TOKEN_CIPHER_KEYRING_JSON");
 const tokenCipher = createTokenCipher(parseKeyringJson(TOKEN_CIPHER_KEYRING_JSON));
+
+function clearNonceCookie(res: NextResponse) {
+    res.cookies.set(GOOGLE_OAUTH_NONCE_COOKIE, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0,
+    });
+    return res;
+}
+
+function redirectFor(flow: "google-connect" | "google-reconnect", returnTo?: string) {
+    if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
+    return "/onboarding?step=3";
+}
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -32,30 +52,36 @@ export async function GET(req: NextRequest) {
     const code = searchParams.get("code");
     const error = searchParams.get("error");
     const rawState = searchParams.get("state");
+    const cookieNonce = req.cookies.get(GOOGLE_OAUTH_NONCE_COOKIE)?.value ?? null;
+
+    const verified = verifyState(
+        rawState,
+        userId,
+        cookieNonce,
+    );
+
+    // Default to connect redirects if state can’t be trusted
+    const fallbackBase = "/onboarding?step=2";
+
+    if (!verified.ok && "reason" in verified) {
+        const errUrl = new URL(fallbackBase, process.env.NEXTAUTH_URL);
+        errUrl.searchParams.set("googleError", "state");
+        errUrl.searchParams.set("reason", verified.reason);
+        return clearNonceCookie(NextResponse.redirect(errUrl));
+    }
+
+    const { payload } = verified;
+    const flow = payload.flow;
+    const base = redirectFor(flow, payload.returnTo);
 
     if (error || !code) {
-        const errorUrl = new URL(
-            "/onboarding?step=2&googleError=1",
-            process.env.NEXTAUTH_URL,
-        );
-        return NextResponse.redirect(errorUrl);
+        const errorUrl = new URL(base, process.env.NEXTAUTH_URL);
+        errorUrl.searchParams.set("googleError", "oauth");
+        return clearNonceCookie(NextResponse.redirect(errorUrl));
     }
 
-    let googleProjectShard = GOOGLE_DEFAULT_PROJECT_SHARD;
-    if (rawState) {
-        try {
-            const decoded = JSON.parse(
-                Buffer.from(rawState, "base64url").toString("utf8"),
-            ) as { shard?: string };
-            if (decoded.shard && typeof decoded.shard === "string") {
-                googleProjectShard = decoded.shard;
-            }
-        } catch {
-            // ignore parse errors; use default shard
-        }
-    }
     // get clientId/secret for chosen shard
-    const { clientId, clientSecret } = getGoogleClientConfigForShard(googleProjectShard);
+    const { clientId, clientSecret } = getGoogleClientConfigForShard(payload.shard);
 
     // 1) Exchange code for tokens
     const tokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -75,11 +101,9 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
         console.error("Google token exchange failed:", tokenRes.status, await tokenRes.text());
-        const errorUrl = new URL(
-            "/onboarding?step=2&googleError=1",
-            process.env.NEXTAUTH_URL,
-        );
-        return NextResponse.redirect(errorUrl);
+        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        errUrl.searchParams.set("googleError", "token_exchange");
+        return clearNonceCookie(NextResponse.redirect(errUrl));
     }
 
     const tokenJson = await tokenRes.json() as {
@@ -96,11 +120,9 @@ export async function GET(req: NextRequest) {
 
     if (!accessToken || !refreshToken) {
         console.error("Missing access/refresh token from Google:", tokenJson);
-        const errorUrl = new URL(
-            "/onboarding?step=2&googleError=1",
-            process.env.NEXTAUTH_URL,
-        );
-        return NextResponse.redirect(errorUrl);
+        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        errUrl.searchParams.set("googleError", "missing_tokens");
+        return clearNonceCookie(NextResponse.redirect(errUrl));
     }
 
     // 2) Get the Sheets account identity (sub + email)
@@ -113,11 +135,9 @@ export async function GET(req: NextRequest) {
 
     if (!userinfoRes.ok) {
         console.error("Google userinfo failed:", userinfoRes.status, await userinfoRes.text());
-        const errorUrl = new URL(
-            "/onboarding?step=2&googleError=1",
-            process.env.NEXTAUTH_URL,
-        );
-        return NextResponse.redirect(errorUrl);
+        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        errUrl.searchParams.set("googleError", "userinfo");
+        return clearNonceCookie(NextResponse.redirect(errUrl));
     }
 
     const userinfo = await userinfoRes.json() as {
@@ -139,15 +159,12 @@ export async function GET(req: NextRequest) {
             actualEmail: email,
         });
 
-        const mismatchUrl = new URL(
-            "/onboarding?step=2&googleMismatch=1",
-            process.env.NEXTAUTH_URL,
-        );
-        // Pass expected/actual emails for better UX in the snackbar / helper copy.
+        const mismatchUrl = new URL(base, process.env.NEXTAUTH_URL);
+        mismatchUrl.searchParams.set("googleMismatch", "1");
         mismatchUrl.searchParams.set("expectedEmail", sessionEmail);
         mismatchUrl.searchParams.set("actualEmail", email);
-
-        return NextResponse.redirect(mismatchUrl);
+    
+        return clearNonceCookie(NextResponse.redirect(mismatchUrl));
     }
 
     // 3) Encrypt tokens for storage
@@ -178,10 +195,10 @@ export async function GET(req: NextRequest) {
         email,
         accessTokenEncrypted,
         refreshTokenEncrypted,
-        googleProjectShard,
+        googleProjectShard: payload.shard,
     });
 
     // 5) Back to onboarding, step 3 (Create sheet)
-    const onboardingUrl = new URL("/onboarding?step=3", process.env.NEXTAUTH_URL);
-    return NextResponse.redirect(onboardingUrl);
+    const onboardingUrl = new URL(base, process.env.NEXTAUTH_URL);
+    return clearNonceCookie(NextResponse.redirect(onboardingUrl));
 }

@@ -3,7 +3,29 @@
 
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
+import type { GoogleConnection } from "@blueplanit/asv2-shared";
 
+function googleStatusCopy(conn: GoogleConnection) {
+    if (conn.status === "connected") return null;
+
+    if (conn.status === "revoked") {
+        return "Google access was revoked or expired. Reconnect to resume syncing.";
+    }
+
+    // status === "error"
+    switch (conn.errorCode) {
+        case "refresh_invalid":
+            return "Google access expired or was revoked. Reconnect to resume syncing.";
+        case "scope_missing":
+            return "Permissions are incomplete. Reconnect to restore access.";
+        case "file_forbidden":
+            return "We can’t access your spreadsheet anymore. Reconnect to restore access.";
+        case "account_mismatch":
+            return "Wrong Google account selected. Reconnect using your login Google account.";
+        default:
+            return "Google access needs attention. Reconnect to resume syncing.";
+    }
+}
 
 export function AccountPageClient() {
     const { user } = useUserState();
@@ -60,9 +82,14 @@ export function AccountPageClient() {
 
     const isActiveSubscription = status === "active";
     const isTrialing = rawStatus === "trialing";
-    const helpText = isActiveSubscription && !isTrialing ? 
-        `Use “Manage in Stripe” above to download invoices, update your payment method, or change your plan. `:
+    const helpText = isActiveSubscription && !isTrialing ?
+        `Use “Manage in Stripe” above to download invoices, update your payment method, or change your plan. ` :
         "";
+
+    const googleNeedsReconnect =
+        !!primaryGoogle && (primaryGoogle.status === "error" || primaryGoogle.status === "revoked");
+
+    const googleCopy = primaryGoogle ? googleStatusCopy(primaryGoogle) : null;
 
     return (
         <div className="space-y-6">
@@ -87,17 +114,17 @@ export function AccountPageClient() {
                             Subscription
                         </p>
                         {rawStatus === "trialing" ? null :
-                        (
-                            <p className="mt-1 text-sm font-semibold text-slate-900">
-                                {planLabel}
-                                {intervalLabel && (
-                                    <span className="font-normal text-slate-500">
-                                        {" "}
-                                        · {intervalLabel}
-                                    </span>
-                                )}
-                            </p>
-                        )}
+                            (
+                                <p className="mt-1 text-sm font-semibold text-slate-900">
+                                    {planLabel}
+                                    {intervalLabel && (
+                                        <span className="font-normal text-slate-500">
+                                            {" "}
+                                            · {intervalLabel}
+                                        </span>
+                                    )}
+                                </p>
+                            )}
                         <p className="mt-1 text-xs text-slate-600 mb-1">
                             Status:{" "}
                             <span className="font-medium text-slate-900">
@@ -200,25 +227,41 @@ export function AccountPageClient() {
                             Google Sheets
                         </p>
                         {primaryGoogle ? (
-                            <div className="mt-1 space-y-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                    {primaryGoogle.email}
-                                </p>
-                                <p className="text-xs text-slate-600">
-                                    Status:{" "}
-                                    <span className="font-medium text-slate-900">
-                                        {primaryGoogle.status === "connected"
-                                            ? "Connected"
-                                            : primaryGoogle.status === "revoked"
-                                                ? "Revoked"
-                                                : "Error"}
-                                    </span>
-                                </p>
+                            <div className="mt-1 space-y-2">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-slate-900">{primaryGoogle.email}</p>
+
+                                    <p className="text-xs text-slate-600">
+                                        Status:{" "}
+                                        <span className="font-medium text-slate-900">
+                                            {primaryGoogle.status === "connected" ? "Connected" : "Action required"}
+                                        </span>
+                                    </p>
+
+                                    {googleCopy ? (
+                                        <p className="text-xs text-slate-600">{googleCopy}</p>
+                                    ) : null}
+
+                                    {primaryGoogle.lastSuccessAt ? (
+                                        <p className="text-[11px] text-slate-500">
+                                            Last verified: {new Date(primaryGoogle.lastSuccessAt).toLocaleString()}
+                                        </p>
+                                    ) : null}
+                                </div>
+
+                                {googleNeedsReconnect ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        <a
+                                            href="/api/google/reconnect?returnTo=/dashboard"
+                                            className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                                        >
+                                            Reconnect Google Sheets
+                                        </a>
+                                    </div>
+                                ) : null}
                             </div>
                         ) : (
-                            <p className="mt-1 text-xs text-slate-600">
-                                No Google Sheets account connected yet.
-                            </p>
+                            <p className="mt-1 text-xs text-slate-600">No Google Sheets account connected yet.</p>
                         )}
                     </div>
                 </div>

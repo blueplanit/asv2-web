@@ -112,7 +112,7 @@ export function WorkspaceStats({ sheetTabState, stripeDataSyncMap }: WorkspaceSt
                                     Spreadsheet budget
                                 </p>
                                 <p className="text-sm font-medium text-slate-900">
-                                    {prettyCells} / {prettyBudget} cells ({pct}%)
+                                    {prettyCells} / {prettyBudget} cells used ({pct}%)
                                 </p>
                                 <p className="text-[11px] text-slate-500">
                                     {totalRows.toLocaleString()} rows across {totalTabs} sheet tab{totalTabs === 1 ? "" : "s"}
