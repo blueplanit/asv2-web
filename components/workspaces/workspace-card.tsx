@@ -441,9 +441,8 @@ export function WorkspaceCard({
         }
     }, [spreadsheetCapacity.ratio]);
 
-    const canRecover =
-        isError || localRecoveryStatus === "failed" || workspace.recoveryStatus === "failed" ||
-        workspace.syncStatus === "error" || workspace.syncStatus === "paused";
+    const canRecover = isError || localRecoveryStatus === "failed" || workspace.recoveryStatus === "failed" || workspace.syncStatus === "error";
+    const recoveryButtonText = recovering || isBackfilling ? "Recovering…" : "Recover sync";
 
     return (
         <article className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
@@ -568,7 +567,7 @@ export function WorkspaceCard({
                                         className={`cursor-pointer inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-60
                                             ${recovering || isBackfilling ? "opacity-60 !cursor-not-allowed" : ""}`}
                                     >
-                                        {recovering || isBackfilling ? "Recovering…" : "Recover sync"}
+                                        {recoveryButtonText}
                                     </button>
                                 )
                             }
