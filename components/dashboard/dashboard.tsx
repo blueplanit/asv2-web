@@ -57,8 +57,15 @@ function mapSyncConfigToWorkspace(args: {
     else if (cfg.syncStatus === "retired") health = "retired" as any;
 
     const lastSyncAt = cfg.lastSyncAt ?? null;
-
     const nameLoading = resolvedTitle === undefined;
+
+    const recoveryStatus = (cfg as any).recoveryStatus ?? null;
+    const recoveryRunId = (cfg as any).recoveryRunId ?? null;
+    const recoveryLastErrorMessage =
+        (cfg as any).recoveryLastErrorMessage ??
+        (cfg as any).lastError ??
+        null;
+
 
     return {
         id: cfg.spreadsheetId,
@@ -74,6 +81,9 @@ function mapSyncConfigToWorkspace(args: {
         nameLoading,
         nextSyncAt: cfg.nextSyncAt ?? null,
         nextSyncReason: cfg.nextSyncReason ?? null,
+        recoveryStatus,
+        recoveryRunId,
+        recoveryLastErrorMessage,
     };
 }
 // Map your onboarding stage → the next step id in /onboarding
@@ -454,12 +464,6 @@ export function DashboardClient() {
                                                         <WorkspaceCard
                                                             key={activeWorkspace.id}
                                                             workspace={activeWorkspace}
-                                                            onSyncNow={(id) => {
-                                                                console.log(
-                                                                    "Sync now for workspace",
-                                                                    id,
-                                                                );
-                                                            }}
                                                             onTogglePause={handleTogglePause}
                                                             sheetTabState={user.sheetTabState.filter((metric) => metric.spreadsheetId === activeWorkspace.id) ?? []}
                                                             stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}
@@ -492,12 +496,6 @@ export function DashboardClient() {
                                                             <WorkspaceCard
                                                                 key={ws.id}
                                                                 workspace={ws}
-                                                                onSyncNow={(id) => {
-                                                                    console.log(
-                                                                        "Sync now for workspace",
-                                                                        id,
-                                                                    );
-                                                                }}
                                                                 onTogglePause={handleTogglePause}
                                                                 sheetTabState={user.sheetTabState.filter((metric) => metric.spreadsheetId === ws.id) ?? []}
                                                                 stripeDataSyncMap={syncConfig?.stripeDataSyncMap ?? []}

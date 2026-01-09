@@ -23,7 +23,7 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
     const { userState, spreadsheetId } = params;
     let {workingSheetTitle, workingSheetMessage} = params;
     workingSheetTitle = workingSheetTitle || "Working Sheet";
-    workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
+    workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. You can edit anything here. DO NOT EDIT the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
 
     try {
         let { stripeDataSyncMap } = params;
