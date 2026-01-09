@@ -1,22 +1,19 @@
 // app/api/sync/recover/route.ts
 import "server-only";
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-import { GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
-import { randomUUID } from "crypto";
-
 import { ddb } from "@/lib/dynamo";
 import { getSqsClient } from "@/lib/sqs";
 import { getSyncConfig } from "@/lib/sync-config";
 import type { UserState } from "@/lib/user-state";
+import { userPk, syncCursorSk, SyncConfig, BACKFILL_LEASE_DURATION_SECONDS } from "@blueplanit/asv2-shared";
+import type { RecoveryBackfillMessage } from "@blueplanit/asv2-shared";
+import { beginRecoveryRun, RecoveryLockError, releaseRecoveryLock } from "@/lib/recovery-queries";
+import { GetCommand } from "@aws-sdk/lib-dynamodb";
 
-import { userPk, syncConfigSk, syncCursorSk, SyncConfig } from "@blueplanit/asv2-shared";
-
-const TABLE_NAME = process.env.DYNAMO_TABLE_NAME; // set to your table
+const TABLE_NAME = process.env.DYNAMO_TABLE_NAME;
 const BACKFILL_QUEUE_URL = process.env.BACKFILL_STANDARD_QUEUE_URL;
 
 if (!TABLE_NAME) {
@@ -26,18 +23,7 @@ if (!BACKFILL_QUEUE_URL) {
     throw new Error("BACKFILL_STANDARD_QUEUE_URL env var is required");
 }
 
-const LEASE_SECONDS = 15 * 60; // 15 minutes
 export const runtime = "nodejs";
-
-type RecoveryBackfillMessage = {
-    kind: "recovery_backfill_v1";
-    runId: string;
-    userId: string;
-    spreadsheetId: string;
-    stripeAccountId: string;
-    googleUserId: string;
-    fromCursor: string;
-};
 
 type Body = {
     spreadsheetId: string;
@@ -82,28 +68,26 @@ export async function POST(req: Request) {
 
     const gateError = gateRecoveryStart(syncConfig);
     if (gateError) {
+        console.error("Failed to start recovery", gateError);
         return new NextResponse(gateError.message, { status: gateError.status });
     }
 
     // 2) Pre-flight: load SyncCursor (must exist to know where to backfill from)
     const cursorKey = {
-        pk: { S: userPk(userId) },
-        sk: { S: syncCursorSk(stripeAccountId, spreadsheetId) },
+        pk: userPk(userId),
+        sk: syncCursorSk(stripeAccountId, spreadsheetId),
     };
 
     const cursorResp = await ddb.send(
-        new GetItemCommand({
+        new GetCommand({
             TableName: TABLE_NAME,
             Key: cursorKey,
             ConsistentRead: true,
         }),
     );
 
-    const cursorItem = cursorResp.Item;
-    const lastSyncedEventId =
-        cursorItem && cursorItem.lastSyncedEventId && cursorItem.lastSyncedEventId.S
-            ? cursorItem.lastSyncedEventId.S
-            : null;
+    const cursorItem = cursorResp.Item as { lastSyncedEventId?: string } | undefined;
+    const lastSyncedEventId = cursorItem?.lastSyncedEventId ?? null;
 
     if (!lastSyncedEventId) {
         return new NextResponse(
@@ -113,56 +97,19 @@ export async function POST(req: Request) {
     }
 
     // 3) Atomic lock on SyncConfig
-    const pk = { S: userPk(userId) };
-    const sk = { S: syncConfigSk(spreadsheetId) };
-
-    const nowMs = Date.now();
-    const leaseSeconds = Math.floor((nowMs + LEASE_SECONDS * 1000) / 1000); // now + LEASE_SECONDS
-    const runId = randomUUID();
-    const nowIso = new Date().toISOString();
-
+    let lockData: { runId: string };
+    
     try {
-        await ddb.send(
-            new UpdateItemCommand({
-                TableName: TABLE_NAME,
-                Key: { pk, sk },
-                // Prevent double-trigger when a backfill is already running
-                ConditionExpression:
-                    "attribute_not_exists(syncStatus) OR syncStatus <> :status",
-                UpdateExpression:
-                    "SET syncStatus = :status, " +
-                    "recoveryRunId = :runId, " +
-                    "recoveryStatus = :requested, " +
-                    "recoveryLeaseUntil = :leaseUntil, " +
-                    "recoveryRequestedAt = :now, " +
-                    "recoveryUpdatedAt = :now, " +
-                    "writerBlocked = :false, " +
-                    "nextSyncReason = :manual, " +
-                    "lastError = :null, " +
-                    "recoveryLastErrorMessage = :null",
-                ExpressionAttributeValues: {
-                    ":status": { S: "backfill_running" },
-                    ":runId": { S: runId },
-                    ":requested": { S: "requested" },
-                    ":leaseUntil": { N: leaseSeconds.toString() }, // TTL-style epoch seconds
-                    ":now": { S: nowIso },
-                    ":null": { NULL: true },
-                    ":false": { BOOL: false },
-                    ":manual": { S: "manual_trigger" },
-
-                },
-            }),
-        );
-    } catch (err: any) {
-        if (err?.name === "ConditionalCheckFailedException") {
-            return new NextResponse(
-                "A recovery/backfill run is already in progress for this workspace.",
-                { status: 409 },
-            );
+        lockData = await beginRecoveryRun({ syncConfig, fromCursor: lastSyncedEventId, leaseSeconds: BACKFILL_LEASE_DURATION_SECONDS });
+    } catch (err) {
+        if (err instanceof RecoveryLockError) {
+            return new NextResponse(err.message, { status: 409 });
         }
         console.error("Failed to acquire recovery lock", err);
-        return new NextResponse("Failed to start recovery", { status: 500 });
+        return new NextResponse("Internal Error: Failed to start recovery", { status: 500 });
     }
+
+    const { runId } = lockData;
 
     // 4) Enqueue SQS message; if this fails, attempt to mark recovery as failed
     const message: RecoveryBackfillMessage = {
@@ -183,33 +130,10 @@ export async function POST(req: Request) {
             }),
         );
     } catch (err) {
-        console.error("Failed to enqueue recovery backfill message", err);
-
         // Best-effort rollback of the lock so user is not stuck.
-        try {
-            await ddb.send(
-                new UpdateItemCommand({
-                    TableName: TABLE_NAME,
-                    Key: { pk, sk },
-                    UpdateExpression:
-                        "SET syncStatus = :error, " +
-                        "recoveryStatus = :failed, " +
-                        "recoveryLastErrorMessage = :msg" +
-                        "recoveryLastErrorCode = :code ",
-                    ExpressionAttributeValues: {
-                        ":error": { S: "error" },
-                        ":failed": { S: "failed" },
-                        ":msg": {
-                            S: "Failed to enqueue recovery backfill job. Please try again.",
-                        },
-                        ":code": { S: "sqs_enqueue_failed" },
-                    },
-                }),
-            );
-        } catch (rollbackErr) {
-            console.error("Failed to rollback recovery lock after SQS error", rollbackErr);
-        }
-
+        console.error("Failed to enqueue recovery backfill message", err);
+        // Rollback lock
+        await releaseRecoveryLock(userId, spreadsheetId, runId);
         return new NextResponse("Failed to enqueue recovery job", { status: 502 });
     }
 
@@ -282,25 +206,38 @@ function gateRecoveryStart(syncConfig: SyncConfig): GateError | null {
         };
     }
 
+    // Do not override a manual pause.
+    if (writerBlockedReason === "manual" && syncStatus === "paused") {
+        return {
+            status: 409,
+            message:
+                "This workspace is manually paused. Resume syncing instead of running recovery.",
+        };
+    }
+
+    // Future-proof: block recovery while the environment is obviously invalid.
+    if (
+        writerBlocked &&
+        (writerBlockedReason === "oauth_revoked" ||
+            writerBlockedReason === "permission_denied" ||
+            writerBlockedReason === "sheet_layout_incompatible" ||
+            writerBlockedReason === "config_invalid")
+    ) {
+        return {
+            status: 409,
+            message:
+                "This workspace is blocked by a configuration or permission issue. Fix the underlying issue before running recovery.",
+        };
+    }
+
     // Recovery is a corrective action: only for error or blocked-paused.
-    const isRecoverableStatus =
-        syncStatus === "error" ||
-        (syncStatus === "paused" && writerBlocked === true);
+    const isRecoverableStatus = syncStatus === "error" || (syncStatus === "paused" && writerBlocked === true);
 
     if (!isRecoverableStatus) {
         return {
             status: 409,
             message:
                 "Recovery is only available when the sync is blocked or in error. Use Resume or Pause instead.",
-        };
-    }
-
-    // Manual pause: user explicitly paused; recovery should not override that.
-    if (writerBlockedReason === "manual" && syncStatus === "paused") {
-        return {
-            status: 409,
-            message:
-                "This workspace is manually paused. Resume syncing instead of running recovery.",
         };
     }
 
