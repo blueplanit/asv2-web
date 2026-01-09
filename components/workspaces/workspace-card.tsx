@@ -104,6 +104,29 @@ export function WorkspaceCard({
     const isError = workspace.syncStatus === "error";
     const isRetired = workspace.syncStatus === "retired";
 
+    const googleConnection = user.googleConnections?.[0] ?? null;
+    const stripeConnection = user.stripeConnections?.find(
+        (c) =>
+            c.businessName === workspace.stripeAccountName ||
+            // optional: if you later add stripeAccountId to workspace, prefer that
+            (workspace as any).stripeAccountId === c.stripeAccountId,
+    ) ?? null;
+
+    const googleConnectionHealthy = googleConnection?.status === "connected";
+    const stripeConnectionHealthy = stripeConnection?.status === "connected";
+
+    const googleConnectionLabel = !googleConnectionHealthy && googleConnection?.status === "revoked"
+        ? "Google connection revoked"
+        : !googleConnectionHealthy && googleConnection?.status === "error"
+            ? "Google connection error"
+            : null;
+
+    const stripeConnectionLabel = !stripeConnectionHealthy && stripeConnection?.status === "revoked"
+        ? "Stripe connection revoked"
+        : !stripeConnectionHealthy && stripeConnection?.status === "error"
+            ? "Stripe connection error"
+            : null;
+
     // Recovery state
     const [recovering, setRecovering] = useState(false);
     const [recoveryUiError, setRecoveryUiError] = useState<string | null>(null);
@@ -343,6 +366,15 @@ export function WorkspaceCard({
     async function handleRecoverClick() {
         if (!workspace.id || recovering || isBackfilling || isRetired) return;
 
+        if (!googleConnectionHealthy || !stripeConnectionHealthy) {
+            setRecoveryUiError(
+                !googleConnectionHealthy
+                    ? `Reconnect Google Sheets for this workspace before running recovery. You can do this in the "Accounts" section.`
+                    : `Reconnect your Stripe account before running recovery. If this issue persists, please contact support.`,
+            );
+            return;
+        }
+
         try {
             setRecovering(true);
             setRecoveryUiError(null);
@@ -358,14 +390,24 @@ export function WorkspaceCard({
             });
 
             if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                if (res.status === 409) {
+                let raw = "";
+                let parsed: any = null;
+                try {
+                    raw = await res.text();
+                    parsed = raw ? JSON.parse(raw) : null;
+                } catch {
+                    parsed = null;
+                }
+
+                const apiMessage =
+                    parsed && typeof parsed.message === "string"
+                        ? parsed.message
+                        : raw;
+
+                if (res.status === 409 || res.status === 400) {
                     setRecoveryUiError(
-                        "A recovery/backfill run is already in progress for this workspace.",
-                    );
-                } else if (res.status === 400) {
-                    setRecoveryUiError(
-                        text || "Recovery cannot be started for this workspace. If this issue persists, please contact support.",
+                        apiMessage ||
+                        "Recovery cannot be started for this workspace. If this issue persists, please contact support.",
                     );
                 } else {
                     setRecoveryUiError(
@@ -441,8 +483,29 @@ export function WorkspaceCard({
         }
     }, [spreadsheetCapacity.ratio]);
 
-    const canRecover = isError || localRecoveryStatus === "failed" || workspace.recoveryStatus === "failed" || workspace.syncStatus === "error";
+    const canRecoverByState =
+        isError ||
+        localRecoveryStatus === "failed" ||
+        workspace.recoveryStatus === "failed" ||
+        workspace.syncStatus === "error";
+
+    const recoverDisabled =
+        recovering ||
+        isBackfilling ||
+        !canRecoverByState ||
+        !googleConnectionHealthy ||
+        !stripeConnectionHealthy;
+
     const recoveryButtonText = recovering || isBackfilling ? "Recovering…" : "Recover sync";
+
+    const recoverBlockedMessage = !googleConnectionHealthy
+        ? `Reconnect Google Sheets to enable recovery for this workspace. You can do this in the "Accounts" section.`
+        : !stripeConnectionHealthy
+            ? `Reconnect your Stripe account to enable recovery. If this issue persists, please contact support.`
+            : !canRecoverByState
+                ? "Recovery is only available when the sync is failing or a previous recovery attempt has failed."
+                : null;
+
 
     return (
         <article className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
@@ -504,20 +567,31 @@ export function WorkspaceCard({
                     )}
 
                     {/* Stripe account */}
-                    <p className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
                         Stripe account:{" "}
                         <span className="font-medium text-slate-800">
                             {workspace.stripeAccountName}
                         </span>
-                    </p>
+                        {!stripeConnectionHealthy && (
+                            <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
+                                {stripeConnectionLabel ?? "Stripe connection needs attention"}
+                            </span>
+                        )}
+                    </div>
 
                     {/* Google Sheets account */}
-                    <p className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500">
                         Google Sheets account:{" "}
                         <span className="font-medium text-slate-800">
                             {workspace.googleAccountEmail}
                         </span>
-                    </p>
+
+                        {!googleConnectionHealthy && (
+                                <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
+                                    {googleConnectionLabel ?? "Google connection needs attention"}
+                                </span>
+                            )}
+                    </div>
                 </div>
 
                 {/* Right: health + primary actions */}
@@ -559,20 +633,29 @@ export function WorkspaceCard({
                             }
 
                             {
-                                canRecover && (
-                                    <button
-                                        type="button"
-                                        onClick={handleRecoverClick}
-                                        disabled={recovering || isBackfilling}
-                                        className={`cursor-pointer inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-60
-                                            ${recovering || isBackfilling ? "opacity-60 !cursor-not-allowed" : ""}`}
-                                    >
-                                        {recoveryButtonText}
-                                    </button>
+                                canRecoverByState && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                onClick={recoverDisabled ? undefined : handleRecoverClick}
+                                                disabled={recoverDisabled}
+                                                className={`cursor-pointer inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-60 ${recoverDisabled ? "!cursor-not-allowed" : ""
+                                                    }`}
+                                            >
+                                                {recoveryButtonText}
+                                            </button>
+                                        </TooltipTrigger>
+                                        {recoverBlockedMessage && (
+                                            <TooltipContent side="top">
+                                                <p className="text-xs">{recoverBlockedMessage}</p>
+                                            </TooltipContent>
+                                        )}
+                                    </Tooltip>
                                 )
                             }
 
-                            {workspace.syncStatus !== "backfill_running" && <button
+                            {workspace.syncStatus !== "backfill_running" && !canRecoverByState && <button
                                 type="button"
                                 aria-haspopup="menu"
                                 aria-expanded={menuOpen}

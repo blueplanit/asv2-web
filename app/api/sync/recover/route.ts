@@ -12,6 +12,7 @@ import { userPk, syncCursorSk, SyncConfig, BACKFILL_LEASE_DURATION_SECONDS } fro
 import type { RecoveryBackfillMessage } from "@blueplanit/asv2-shared";
 import { beginRecoveryRun, RecoveryLockError, releaseRecoveryLock } from "@/lib/recovery-queries";
 import { GetCommand } from "@aws-sdk/lib-dynamodb";
+import { preflightRecovery } from "@/lib/recovery-preflight";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME;
 const BACKFILL_QUEUE_URL = process.env.BACKFILL_STANDARD_QUEUE_URL;
@@ -53,8 +54,6 @@ export async function POST(req: Request) {
         return new NextResponse("Google user not connected", { status: 400 });
     }
 
-    const sqs = getSqsClient();
-
     // 1) Load SyncConfig for this user + sheet
     const syncConfig = await getSyncConfig(userId, spreadsheetId);
     if (!syncConfig || !syncConfig.spreadsheetId) {
@@ -64,6 +63,19 @@ export async function POST(req: Request) {
     const stripeAccountId = (syncConfig as any).stripeAccountId as string | undefined;
     if (!stripeAccountId) {
         return new NextResponse("Stripe account not linked for this workspace", { status: 400 });
+    }
+
+    const preflight = await preflightRecovery({
+        userId,
+        googleUserId,
+        stripeAccountId,
+    });
+    
+    if (!preflight.ok) {
+        return NextResponse.json(
+            { code: preflight.code, message: preflight.message },
+            { status: 409 },
+        );
     }
 
     const gateError = gateRecoveryStart(syncConfig);
@@ -121,6 +133,8 @@ export async function POST(req: Request) {
         googleUserId,
         fromCursor: lastSyncedEventId,
     };
+
+    const sqs = getSqsClient();
 
     try {
         await sqs.send(
