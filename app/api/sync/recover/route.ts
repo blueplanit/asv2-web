@@ -14,7 +14,7 @@ import { getSqsClient } from "@/lib/sqs";
 import { getSyncConfig } from "@/lib/sync-config";
 import type { UserState } from "@/lib/user-state";
 
-import { userPk, syncConfigSk, syncCursorSk } from "@blueplanit/asv2-shared";
+import { userPk, syncConfigSk, syncCursorSk, SyncConfig } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME; // set to your table
 const BACKFILL_QUEUE_URL = process.env.BACKFILL_STANDARD_QUEUE_URL;
@@ -78,6 +78,11 @@ export async function POST(req: Request) {
     const stripeAccountId = (syncConfig as any).stripeAccountId as string | undefined;
     if (!stripeAccountId) {
         return new NextResponse("Stripe account not linked for this workspace", { status: 400 });
+    }
+
+    const gateError = gateRecoveryStart(syncConfig);
+    if (gateError) {
+        return new NextResponse(gateError.message, { status: gateError.status });
     }
 
     // 2) Pre-flight: load SyncCursor (must exist to know where to backfill from)
@@ -144,7 +149,7 @@ export async function POST(req: Request) {
                     ":null": { NULL: true },
                     ":false": { BOOL: false },
                     ":manual": { S: "manual_trigger" },
-                    
+
                 },
             }),
         );
@@ -189,13 +194,15 @@ export async function POST(req: Request) {
                     UpdateExpression:
                         "SET syncStatus = :error, " +
                         "recoveryStatus = :failed, " +
-                        "recoveryLastErrorMessage = :msg",
+                        "recoveryLastErrorMessage = :msg" +
+                        "recoveryLastErrorCode = :code ",
                     ExpressionAttributeValues: {
                         ":error": { S: "error" },
                         ":failed": { S: "failed" },
                         ":msg": {
                             S: "Failed to enqueue recovery backfill job. Please try again.",
                         },
+                        ":code": { S: "sqs_enqueue_failed" },
                     },
                 }),
             );
@@ -208,4 +215,94 @@ export async function POST(req: Request) {
 
     // 5) Success
     return NextResponse.json({ runId });
+}
+
+
+type GateError = { status: number; message: string };
+
+/**
+ * Pure gating function: decides whether a recovery run is allowed for this SyncConfig.
+ * Returns null if allowed; otherwise an HTTP error description the handler can return.
+ */
+function gateRecoveryStart(syncConfig: SyncConfig): GateError | null {
+    const {
+        syncStatus,
+        writerBlocked,
+        writerBlockedReason,
+        recoveryStatus,
+        stripeDataSyncMap,
+    } = syncConfig;
+
+    // Retired workspace: never recover. Explicitly dead.
+    if (syncStatus === "retired") {
+        return {
+            status: 409,
+            message: "This workspace has been retired and cannot be recovered.",
+        };
+    }
+
+    // Not fully onboarded: nothing to recover.
+    if (syncStatus === "onboarding") {
+        return {
+            status: 409,
+            message:
+                "This workspace is still being set up. Complete onboarding before running recovery.",
+        };
+    }
+
+    // Recovery already in-flight in the recovery state machine.
+    if (
+        recoveryStatus &&
+        (recoveryStatus === "requested" ||
+            recoveryStatus === "pulling" ||
+            recoveryStatus === "writing")
+    ) {
+        return {
+            status: 409,
+            message: "A recovery run is already in progress for this workspace.",
+        };
+    }
+
+    // Already backfilling at the sync layer.
+    if (syncStatus === "backfill_running") {
+        return {
+            status: 409,
+            message:
+                "A backfill or recovery is already running for this workspace.",
+        };
+    }
+
+    // No data enabled: don't start recovery if nothing is configured to sync.
+    const hasEnabledStripeData = !!stripeDataSyncMap?.some((entry) => entry.enabled);
+    if (!hasEnabledStripeData) {
+        return {
+            status: 400,
+            message:
+                "No Stripe data is enabled for this workspace. Enable at least one data set before running recovery.",
+        };
+    }
+
+    // Recovery is a corrective action: only for error or blocked-paused.
+    const isRecoverableStatus =
+        syncStatus === "error" ||
+        (syncStatus === "paused" && writerBlocked === true);
+
+    if (!isRecoverableStatus) {
+        return {
+            status: 409,
+            message:
+                "Recovery is only available when the sync is blocked or in error. Use Resume or Pause instead.",
+        };
+    }
+
+    // Manual pause: user explicitly paused; recovery should not override that.
+    if (writerBlockedReason === "manual" && syncStatus === "paused") {
+        return {
+            status: 409,
+            message:
+                "This workspace is manually paused. Resume syncing instead of running recovery.",
+        };
+    }
+
+    return null;
 }

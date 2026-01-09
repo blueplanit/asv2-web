@@ -69,6 +69,9 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
     },
 };
 
+const POLL_INTERVAL_MS = 5000;
+const POLL_MAX_MS = 60_000; // 1 minute
+
 type Props = {
     workspace: Workspace;
     onSyncNow?: (id: string) => void;
@@ -101,10 +104,14 @@ export function WorkspaceCard({
     const isError = workspace.syncStatus === "error";
     const isRetired = workspace.syncStatus === "retired";
 
+    // Recovery state
     const [recovering, setRecovering] = useState(false);
     const [recoveryUiError, setRecoveryUiError] = useState<string | null>(null);
     const [localRecoveryStatus, setLocalRecoveryStatus] = useState<RecoveryStatus | null>(workspace.recoveryStatus ?? null);
     const [localRecoveryRunId, setLocalRecoveryRunId] = useState<string | null>(workspace.recoveryRunId ?? null);
+    const [recoveryTimedOut, setRecoveryTimedOut] = useState(false);
+    const pollStartRef = useRef<number | null>(null);
+
 
     // click-outside to close menu
     useEffect(() => {
@@ -123,15 +130,97 @@ export function WorkspaceCard({
         setLocalRecoveryStatus(workspace.recoveryStatus ?? null);
         setLocalRecoveryRunId(workspace.recoveryRunId ?? null);
 
-        if (
-            workspace.recoveryStatus &&
-            ["requested", "pulling", "writing"].includes(workspace.recoveryStatus)
-        ) {
+        if (workspace.recoveryStatus && ["requested", "pulling", "writing"].includes(workspace.recoveryStatus)) {
             setRecovering(true);
         } else if (!workspace.recoveryStatus || workspace.recoveryStatus === "success") {
             setRecovering(false);
+            setRecoveryTimedOut(false);
         }
     }, [workspace.recoveryStatus, workspace.recoveryRunId]);
+
+    useEffect(() => {
+        if (!localRecoveryRunId) return;
+        if (!recovering) return;
+
+        let cancelled = false;
+
+        // Initialize start time once per run
+        pollStartRef.current = Date.now();
+        setRecoveryTimedOut(false);
+
+        const intervalId = window.setInterval(async () => {
+            if (cancelled) return;
+
+            const startedAt = pollStartRef.current;
+            if (startedAt && Date.now() - startedAt > POLL_MAX_MS) {
+                // Timeout reached: stop polling, but keep user informed.
+                cancelled = true;
+                window.clearInterval(intervalId);
+                setRecovering(false);
+                setRecoveryTimedOut(true);
+
+                // One last refresh to pick up any final state the backend may have written.
+                refresh().catch(() => {});
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    spreadsheetId: workspace.id,
+                    runId: localRecoveryRunId,
+                });
+
+                const res = await fetch(`/api/sync/status?${params.toString()}`);
+                if (!res.ok) return;
+
+                const data = (await res.json()) as {
+                    syncStatus: SyncStatus;
+                    recoveryStatus: RecoveryStatus | null;
+                    recoveryRunId: string | null;
+                    recoveryLastErrorMessage: string | null;
+                };
+
+                if (cancelled) return;
+
+                // If backend is now tracking a different run, stop and let global refresh take over.
+                if (!data.recoveryRunId || data.recoveryRunId !== localRecoveryRunId) {
+                    cancelled = true;
+                    window.clearInterval(intervalId);
+                    setRecovering(false);
+                    return;
+                }
+
+                setLocalRecoveryStatus(data.recoveryStatus ?? null);
+
+                if (data.recoveryStatus === "success") {
+                    cancelled = true;
+                    window.clearInterval(intervalId);
+                    setRecovering(false);
+                    setRecoveryTimedOut(false);
+                    setRecoveryUiError(null);
+                    // Refresh full user state so health/syncStatus are up to date.
+                    refresh().catch(() => { });
+                } else if (data.recoveryStatus === "failed") {
+                    cancelled = true;
+                    window.clearInterval(intervalId);
+                    setRecovering(false);
+                    setRecoveryTimedOut(false);
+                    setRecoveryUiError(
+                        data.recoveryLastErrorMessage ||
+                        "Recovery failed. Check your connections and try again.",
+                    );
+                    refresh().catch(() => { });
+                }
+            } catch (err) {
+                console.error("Failed to poll recovery status", err);
+            }
+        }, POLL_INTERVAL_MS);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [workspace.id, localRecoveryRunId]);
 
     function handlePauseClick() {
         const next = isPaused ? "syncing" : "paused";
@@ -257,6 +346,7 @@ export function WorkspaceCard({
         try {
             setRecovering(true);
             setRecoveryUiError(null);
+            setRecoveryTimedOut(false);
 
             const res = await fetch("/api/sync/recover", {
                 method: "POST",
@@ -326,7 +416,7 @@ export function WorkspaceCard({
     })();
 
 
-    const showSyncNowButton =  false; // TODO: wire to sync now API
+    const showSyncNowButton = false; // TODO: wire to sync now API
 
     // Check if any sheet tab exceeds the warning threshold
     const spreadsheetCapacity = useMemo(() => {
@@ -352,7 +442,7 @@ export function WorkspaceCard({
     }, [spreadsheetCapacity.ratio]);
 
     const canRecover =
-        isError || localRecoveryStatus === "failed" || workspace.recoveryStatus === "failed" || 
+        isError || localRecoveryStatus === "failed" || workspace.recoveryStatus === "failed" ||
         workspace.syncStatus === "error" || workspace.syncStatus === "paused";
 
     return (
@@ -528,9 +618,19 @@ export function WorkspaceCard({
                         </h3>
                         <p className="text-sm text-slate-700">{syncStatusLabel}</p>
                         <p className="text-xs text-slate-500">
-                            Last sync:{" "}
                             <span className="font-medium text-slate-800">
-                                {workspace.lastSyncAt ? new Date(workspace.lastSyncAt).toLocaleString() : "Not yet synced"}
+                                Last sync:{" "}
+                                <span className="font-medium text-slate-800">
+                                    {workspace.lastSyncAt
+                                        ? new Date(workspace.lastSyncAt).toLocaleString(undefined, {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                            hour: "numeric",
+                                            minute: "2-digit",
+                                        })
+                                        : "Not yet synced"}
+                                </span>
                             </span>
                         </p>
 
@@ -540,22 +640,32 @@ export function WorkspaceCard({
                             </p>
                         )}
 
-                        {isRecoveringActive && (
+                        {/* Recovery in progress or timed out */}
+                        {(isRecoveringActive || recoveryTimedOut) && (
                             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-flex h-4 w-4 flex-shrink-0 animate-spin rounded-full border-[1.5px] border-amber-500 border-t-transparent" />
-                                    <p className="text-xs font-medium text-amber-900">
-                                        {localRecoveryStatus === "requested" && "Recovery starting…"}
-                                        {localRecoveryStatus === "pulling" &&
-                                            "Recovering missed Stripe events…"}
-                                        {localRecoveryStatus === "writing" &&
-                                            "Writing recovered data into your sheet…"}
-                                        {!localRecoveryStatus && "Recovery in progress…"}
-                                    </p>
+                                <div className="flex items-start gap-2">
+                                    {!recoveryTimedOut && (
+                                        <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 animate-spin rounded-full border-[1.5px] border-amber-500 border-t-transparent" />
+                                    )}
+                                    <div className="space-y-1">
+                                        <p className="text-xs font-medium text-amber-900">
+                                            {recoveryTimedOut
+                                                ? "Recovery is taking longer than usual."
+                                                : localRecoveryStatus === "requested"
+                                                    ? "Recovery starting…"
+                                                    : localRecoveryStatus === "pulling"
+                                                        ? "Recovering missed Stripe events…"
+                                                        : localRecoveryStatus === "writing"
+                                                            ? "Writing recovered data into your sheet…"
+                                                            : "Recovery in progress…"}
+                                        </p>
+                                        <p className="text-[11px] text-amber-800">
+                                            {recoveryTimedOut
+                                                ? "Recovery is taking longer than expected and will continue in the background. You can leave this page and check back later; your data is safe."
+                                                : "You can keep using the dashboard; recovery continues in the background."}
+                                        </p>
+                                    </div>
                                 </div>
-                                <p className="mt-1 text-[11px] text-amber-800">
-                                    You can keep using the dashboard; recovery continues in the background.
-                                </p>
                             </div>
                         )}
 
