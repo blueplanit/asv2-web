@@ -22,6 +22,8 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
     subscriptions: "Subscriptions",
     payment_intents: "Payment Intents",
     disputes: "Disputes",
+    refunds: "Refunds",
+    invoice_line_items: "Invoice Line Items",
 };
 
 const navItems = [
@@ -36,6 +38,10 @@ const navItems = [
         icon: UserCircleIcon,
     },
 ];
+
+
+export const POLL_INTERVAL_MS = 5000;
+export const POLL_MAX_MS = 60_000; // 1 minute
 
 function mapSyncConfigToWorkspace(args: {
     cfg: SyncConfig;
@@ -108,6 +114,11 @@ function getNextOnboardingStep(onboardingStage: string): number {
 export function DashboardClient() {
     const { user, refresh } = useUserState();
     const { onboardingStage, stripeConnections, syncConfigs } = user;
+
+    const hasBackfillRunning = useMemo(
+        () => syncConfigs.some((cfg) => cfg.syncStatus === "backfill_running"),
+        [syncConfigs],
+    );
 
     // Newest → oldest
     const sortedSyncConfigs = useMemo(
@@ -189,6 +200,39 @@ export function DashboardClient() {
             }
         })();
     }, [filteredConfigs, user]);
+
+    // While any syncConfig is in "backfill_running", poll the backend for updated syncStatus
+    useEffect(() => {
+        if (!hasBackfillRunning) return;
+        if (typeof window === "undefined") return;
+
+        let cancelled = false;
+        const startedAt = Date.now();
+
+        const intervalId = window.setInterval(async () => {
+            if (cancelled) return;
+
+            // stop polling after some time; user can still manually refresh the page
+            if (Date.now() - startedAt > POLL_MAX_MS) {
+                cancelled = true;
+                window.clearInterval(intervalId);
+                return;
+            }
+
+            try {
+                await refresh(); // this should re-load user + syncConfigs from your API / Dynamo
+            } catch (err) {
+                if (isDevEnvironment()) {
+                    console.error("Initial backfill polling refresh failed", err);
+                }
+            }
+        }, POLL_INTERVAL_MS);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [hasBackfillRunning, refresh]);
 
     // derive workspace(s) from sync config + stripe connection
     const workspaces: Workspace[] =
@@ -280,6 +324,15 @@ export function DashboardClient() {
         // Clean the URL so refreshes don't re-trigger the param
         router.replace("/dashboard", { scroll: false });
     }, [searchParams, router]);
+
+    // When initial backfill completes (no configs are "backfill_running"), close the intro modal
+    useEffect(() => {
+        if (!backfillModalOpen) return;
+        if (!hasBackfillRunning) {
+            // use the same handler so localStorage "dismissed" logic still applies
+            handleBackfillModalOpenChange(false);
+        }
+    }, [backfillModalOpen, hasBackfillRunning]);
 
     function handleBackfillModalOpenChange(open: boolean) {
         if (!open && activeWorkspace && user.profile?.userId) {

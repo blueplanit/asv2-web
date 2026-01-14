@@ -19,6 +19,7 @@ import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE, initSheetTabSt
 import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
+import { POLL_INTERVAL_MS, POLL_MAX_MS } from "../dashboard/dashboard";
 
 export type RecoveryStatus = "requested" | "pulling" | "writing" | "success" | "failed";
 
@@ -68,9 +69,6 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
         tooltip: "The workspace is retired and not syncing data.",
     },
 };
-
-const POLL_INTERVAL_MS = 5000;
-const POLL_MAX_MS = 60_000; // 1 minute
 
 type Props = {
     workspace: Workspace;
