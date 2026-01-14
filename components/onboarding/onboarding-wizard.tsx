@@ -271,6 +271,35 @@ export function OnboardingWizard() {
         return true;
     }
 
+    async function startInitialBackfill(spreadsheetId: string | null) {
+        if (!spreadsheetId) {
+            setError("Missing spreadsheet ID when starting backfill");
+            return false;
+        }
+
+        try {
+            const res = await fetch("/api/sync/init-backfill", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ spreadsheetId }),
+            });
+
+            if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                setError(text || "Failed to start backfill");
+                return false;
+            }
+
+            return true;
+        } catch (e) {
+            setError(
+                `Failed to start backfill: ${e instanceof Error ? e.message : JSON.stringify(e)
+                }`,
+            );
+            return false;
+        }
+    }
+
     // Navigation helpers: compute next index, update state, then update URL
     function goToStepByIndex(nextIndex: number) {
         const clamped = Math.min(Math.max(nextIndex, 0), totalSteps - 1);
@@ -304,10 +333,21 @@ export function OnboardingWizard() {
         else if (currentStep.id === 4) {
             try {
                 setSubmitting(true);
+                // Start trial
                 const trialOk = await handleStartTrial();
+
                 // Save sync config selection
                 const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
+
                 if (!trialOk || !saveConfigOk) {
+                    setSubmitting(false);
+                    return;
+                }
+
+                // 3) Trigger initial backfill Lambda
+                const backfillOk = await startInitialBackfill(createdSpreadsheetId);
+
+                if (!backfillOk) {
                     setSubmitting(false);
                     return;
                 }

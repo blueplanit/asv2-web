@@ -19,6 +19,9 @@ import { FOLDER_NAME, WORKING_SHEET_TITLE, WORKING_SHEET_MESSAGE, initSheetTabSt
 import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
+import { POLL_INTERVAL_MS, POLL_MAX_MS } from "../dashboard/dashboard";
+
+export type RecoveryStatus = "requested" | "pulling" | "writing" | "success" | "failed";
 
 export type Workspace = {
     id: string;
@@ -34,6 +37,9 @@ export type Workspace = {
     nameLoading?: boolean;
     nextSyncAt: string | null;
     nextSyncReason: "manual_trigger" | "scheduled_sync" | "error" | "syncing" | "retired" | null;
+    recoveryStatus: RecoveryStatus | null;
+    recoveryRunId: string | null;
+    recoveryLastErrorMessage: string | null;
 };
 
 const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; tooltip: string }> = {
@@ -96,6 +102,38 @@ export function WorkspaceCard({
     const isError = workspace.syncStatus === "error";
     const isRetired = workspace.syncStatus === "retired";
 
+    const googleConnection = user.googleConnections?.[0] ?? null;
+    const stripeConnection = user.stripeConnections?.find(
+        (c) =>
+            c.businessName === workspace.stripeAccountName ||
+            // optional: if you later add stripeAccountId to workspace, prefer that
+            (workspace as any).stripeAccountId === c.stripeAccountId,
+    ) ?? null;
+
+    const googleConnectionHealthy = googleConnection?.status === "connected";
+    const stripeConnectionHealthy = stripeConnection?.status === "connected";
+
+    const googleConnectionLabel = !googleConnectionHealthy && googleConnection?.status === "revoked"
+        ? "Google connection revoked"
+        : !googleConnectionHealthy && googleConnection?.status === "error"
+            ? "Google connection error"
+            : null;
+
+    const stripeConnectionLabel = !stripeConnectionHealthy && stripeConnection?.status === "revoked"
+        ? "Stripe connection revoked"
+        : !stripeConnectionHealthy && stripeConnection?.status === "error"
+            ? "Stripe connection error"
+            : null;
+
+    // Recovery state
+    const [recovering, setRecovering] = useState(false);
+    const [recoveryUiError, setRecoveryUiError] = useState<string | null>(null);
+    const [localRecoveryStatus, setLocalRecoveryStatus] = useState<RecoveryStatus | null>(workspace.recoveryStatus ?? null);
+    const [localRecoveryRunId, setLocalRecoveryRunId] = useState<string | null>(workspace.recoveryRunId ?? null);
+    const [recoveryTimedOut, setRecoveryTimedOut] = useState(false);
+    const pollStartRef = useRef<number | null>(null);
+
+
     // click-outside to close menu
     useEffect(() => {
         if (!menuOpen) return;
@@ -109,15 +147,105 @@ export function WorkspaceCard({
         return () => document.removeEventListener("mousedown", handleClick);
     }, [menuOpen]);
 
+    useEffect(() => {
+        setLocalRecoveryStatus(workspace.recoveryStatus ?? null);
+        setLocalRecoveryRunId(workspace.recoveryRunId ?? null);
+
+        if (workspace.recoveryStatus && ["requested", "pulling", "writing"].includes(workspace.recoveryStatus)) {
+            setRecovering(true);
+        } else if (!workspace.recoveryStatus || workspace.recoveryStatus === "success") {
+            setRecovering(false);
+            setRecoveryTimedOut(false);
+        }
+    }, [workspace.recoveryStatus, workspace.recoveryRunId]);
+
+    useEffect(() => {
+        if (!localRecoveryRunId) return;
+        if (!recovering) return;
+
+        let cancelled = false;
+
+        // Initialize start time once per run
+        pollStartRef.current = Date.now();
+        setRecoveryTimedOut(false);
+
+        const intervalId = window.setInterval(async () => {
+            if (cancelled) return;
+
+            const startedAt = pollStartRef.current;
+            if (startedAt && Date.now() - startedAt > POLL_MAX_MS) {
+                // Timeout reached: stop polling, but keep user informed.
+                cancelled = true;
+                window.clearInterval(intervalId);
+                setRecovering(false);
+                setRecoveryTimedOut(true);
+
+                // One last refresh to pick up any final state the backend may have written.
+                refresh().catch(() => {});
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    spreadsheetId: workspace.id,
+                    runId: localRecoveryRunId,
+                });
+
+                const res = await fetch(`/api/sync/status?${params.toString()}`);
+                if (!res.ok) return;
+
+                const data = (await res.json()) as {
+                    syncStatus: SyncStatus;
+                    recoveryStatus: RecoveryStatus | null;
+                    recoveryRunId: string | null;
+                    recoveryLastErrorMessage: string | null;
+                };
+
+                if (cancelled) return;
+
+                // If backend is now tracking a different run, stop and let global refresh take over.
+                if (!data.recoveryRunId || data.recoveryRunId !== localRecoveryRunId) {
+                    cancelled = true;
+                    window.clearInterval(intervalId);
+                    setRecovering(false);
+                    return;
+                }
+
+                setLocalRecoveryStatus(data.recoveryStatus ?? null);
+
+                if (data.recoveryStatus === "success") {
+                    cancelled = true;
+                    window.clearInterval(intervalId);
+                    setRecovering(false);
+                    setRecoveryTimedOut(false);
+                    setRecoveryUiError(null);
+                    // Refresh full user state so health/syncStatus are up to date.
+                    refresh().catch(() => { });
+                } else if (data.recoveryStatus === "failed") {
+                    cancelled = true;
+                    window.clearInterval(intervalId);
+                    setRecovering(false);
+                    setRecoveryTimedOut(false);
+                    setRecoveryUiError(
+                        data.recoveryLastErrorMessage ||
+                        "Recovery failed. Check your connections and try again.",
+                    );
+                    refresh().catch(() => { });
+                }
+            } catch (err) {
+                console.error("Failed to poll recovery status", err);
+            }
+        }, POLL_INTERVAL_MS);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [workspace.id, localRecoveryRunId]);
+
     function handlePauseClick() {
         const next = isPaused ? "syncing" : "paused";
         onTogglePause(workspace.id, next);
-        setMenuOpen(false);
-    }
-
-    function handleBackfillClick() {
-        // TODO: wire to backfill API
-        console.log("Backfill requested for workspace", workspace.id);
         setMenuOpen(false);
     }
 
@@ -159,7 +287,6 @@ export function WorkspaceCard({
             if (workspace.nextSyncReason === "manual_trigger") {
                 return base.replace("Next sync", "Next sync (manual)");
             }
-
             return base;
         }
 
@@ -234,16 +361,102 @@ export function WorkspaceCard({
         }
     }
 
+    async function handleRecoverClick() {
+        if (!workspace.id || recovering || isBackfilling || isRetired) return;
+
+        if (!googleConnectionHealthy || !stripeConnectionHealthy) {
+            setRecoveryUiError(
+                !googleConnectionHealthy
+                    ? `Reconnect Google Sheets for this workspace before running recovery. You can do this in the "Accounts" section.`
+                    : `Reconnect your Stripe account before running recovery. If this issue persists, please contact support.`,
+            );
+            return;
+        }
+
+        try {
+            setRecovering(true);
+            setRecoveryUiError(null);
+            setRecoveryTimedOut(false);
+
+            const res = await fetch("/api/sync/recover", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    spreadsheetId: workspace.id,
+                    userState: user,
+                }),
+            });
+
+            if (!res.ok) {
+                let raw = "";
+                let parsed: any = null;
+                try {
+                    raw = await res.text();
+                    parsed = raw ? JSON.parse(raw) : null;
+                } catch {
+                    parsed = null;
+                }
+
+                const apiMessage =
+                    parsed && typeof parsed.message === "string"
+                        ? parsed.message
+                        : raw;
+
+                if (res.status === 409 || res.status === 400) {
+                    setRecoveryUiError(
+                        apiMessage ||
+                        "Recovery cannot be started for this workspace. If this issue persists, please contact support.",
+                    );
+                } else {
+                    setRecoveryUiError(
+                        "An error occurred while starting recovery. Please try again in a moment. If the issue persists, please contact support.",
+                    );
+                }
+                setRecovering(false);
+                return;
+            }
+
+            const data = (await res.json()) as { runId: string };
+
+            setLocalRecoveryRunId(data.runId);
+            setLocalRecoveryStatus("requested");
+        } catch (err) {
+            console.error("Failed to start recovery", err);
+            setRecoveryUiError(
+                "Unexpected error starting recovery. Please try again in a moment. If the issue persists, please contact support.",
+            );
+            setRecovering(false);
+        }
+    }
+
+    const isRecoveringActive =
+        recovering || (localRecoveryStatus !== null && ["requested", "pulling", "writing"].includes(localRecoveryStatus));
+
     const syncStatusLabel = (() => {
-        if (isBackfilling) return "Backfilling historical Stripe data into your sheet.";
+        if (isBackfilling) {
+            if (isRecoveringActive) {
+                if (localRecoveryStatus === "requested") {
+                    return "Recovery requested. Preparing to backfill missed Stripe events.";
+                }
+                if (localRecoveryStatus === "pulling") {
+                    return "Recovering: pulling missed Stripe events into the buffer.";
+                }
+                if (localRecoveryStatus === "writing") {
+                    return "Recovering: writing recovered data into your sheet.";
+                }
+                return "Backfilling Stripe data into your sheet.";
+            }
+            return "Backfilling Stripe data into your sheet.";
+        }
         if (isPaused) return "Sync is paused. No new Stripe data is being written.";
-        if (isError) return "Sync is currently failing. Check logs or reconnect.";
+        if (isError) return "Sync is currently failing. Fix connections and run recovery.";
         if (workspace.syncStatus === "syncing") return "Sync is active on the regular polling schedule.";
         if (isRetired) return "Sync is retired and not syncing data.";
         return "Sync will start once setup is complete.";
     })();
 
-    const showSyncNowButton = workspace.syncStatus !== "backfill_running" && workspace.syncStatus !== "paused" && workspace.syncStatus !== "error";
+
+    const showSyncNowButton = false; // TODO: wire to sync now API
 
     // Check if any sheet tab exceeds the warning threshold
     const spreadsheetCapacity = useMemo(() => {
@@ -267,6 +480,30 @@ export function WorkspaceCard({
             return `Your spreadsheet is at ${usedPct}% of the synced cell budget. Create a new spreadsheet before it reaches ${pct}% to avoid sync interruptions.`;
         }
     }, [spreadsheetCapacity.ratio]);
+
+    const canRecoverByState =
+        isError ||
+        localRecoveryStatus === "failed" ||
+        workspace.recoveryStatus === "failed" ||
+        workspace.syncStatus === "error";
+
+    const recoverDisabled =
+        recovering ||
+        isBackfilling ||
+        !canRecoverByState ||
+        !googleConnectionHealthy ||
+        !stripeConnectionHealthy;
+
+    const recoveryButtonText = recovering || isBackfilling ? "Recovering…" : "Recover sync";
+
+    const recoverBlockedMessage = !googleConnectionHealthy
+        ? `Reconnect Google Sheets to enable recovery for this workspace. You can do this in the "Accounts" section.`
+        : !stripeConnectionHealthy
+            ? `Reconnect your Stripe account to enable recovery. If this issue persists, please contact support.`
+            : !canRecoverByState
+                ? "Recovery is only available when the sync is failing or a previous recovery attempt has failed."
+                : null;
+
 
     return (
         <article className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
@@ -328,20 +565,31 @@ export function WorkspaceCard({
                     )}
 
                     {/* Stripe account */}
-                    <p className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
                         Stripe account:{" "}
                         <span className="font-medium text-slate-800">
                             {workspace.stripeAccountName}
                         </span>
-                    </p>
+                        {!stripeConnectionHealthy && (
+                            <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
+                                {stripeConnectionLabel ?? "Stripe connection needs attention"}
+                            </span>
+                        )}
+                    </div>
 
                     {/* Google Sheets account */}
-                    <p className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500">
                         Google Sheets account:{" "}
                         <span className="font-medium text-slate-800">
                             {workspace.googleAccountEmail}
                         </span>
-                    </p>
+
+                        {!googleConnectionHealthy && (
+                                <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
+                                    {googleConnectionLabel ?? "Google connection needs attention"}
+                                </span>
+                            )}
+                    </div>
                 </div>
 
                 {/* Right: health + primary actions */}
@@ -382,7 +630,30 @@ export function WorkspaceCard({
                                 )
                             }
 
-                            {workspace.syncStatus !== "backfill_running" && <button
+                            {
+                                canRecoverByState && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                onClick={recoverDisabled ? undefined : handleRecoverClick}
+                                                disabled={recoverDisabled}
+                                                className={`cursor-pointer inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-60 ${recoverDisabled ? "!cursor-not-allowed" : ""
+                                                    }`}
+                                            >
+                                                {recoveryButtonText}
+                                            </button>
+                                        </TooltipTrigger>
+                                        {recoverBlockedMessage && (
+                                            <TooltipContent side="top">
+                                                <p className="text-xs">{recoverBlockedMessage}</p>
+                                            </TooltipContent>
+                                        )}
+                                    </Tooltip>
+                                )
+                            }
+
+                            {workspace.syncStatus !== "backfill_running" && !canRecoverByState && <button
                                 type="button"
                                 aria-haspopup="menu"
                                 aria-expanded={menuOpen}
@@ -427,24 +698,82 @@ export function WorkspaceCard({
                         </h3>
                         <p className="text-sm text-slate-700">{syncStatusLabel}</p>
                         <p className="text-xs text-slate-500">
-                            Last sync:{" "}
                             <span className="font-medium text-slate-800">
-                                {workspace.lastSyncAt ? new Date(workspace.lastSyncAt).toLocaleString() : "Not yet synced"}
+                                Last sync:{" "}
+                                <span className="font-medium text-slate-800">
+                                    {workspace.lastSyncAt
+                                        ? new Date(workspace.lastSyncAt).toLocaleString(undefined, {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                            hour: "numeric",
+                                            minute: "2-digit",
+                                        })
+                                        : "Not yet synced"}
+                                </span>
                             </span>
                         </p>
 
                         {nextSyncText && (
                             <p className="text-xs text-slate-500">
                                 <span className="font-medium text-slate-800">{nextSyncText}</span>
-                                {/* Optional: tiny hint for transparency */}
-                                {workspace.nextSyncReason && (
-                                    <span className="ml-2 text-[11px] text-slate-400">
-                                        {/* comment: reason is mostly for debugging; hide if you prefer */}
-                                        ({workspace.nextSyncReason})
-                                    </span>
-                                )}
                             </p>
                         )}
+
+                        {/* Recovery in progress or timed out */}
+                        {(isRecoveringActive || recoveryTimedOut) && (
+                            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                <div className="flex items-start gap-2">
+                                    {!recoveryTimedOut && (
+                                        <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 animate-spin rounded-full border-[1.5px] border-amber-500 border-t-transparent" />
+                                    )}
+                                    <div className="space-y-1">
+                                        <p className="text-xs font-medium text-amber-900">
+                                            {recoveryTimedOut
+                                                ? "Recovery is taking longer than usual."
+                                                : localRecoveryStatus === "requested"
+                                                    ? "Recovery starting…"
+                                                    : localRecoveryStatus === "pulling"
+                                                        ? "Recovering missed Stripe events…"
+                                                        : localRecoveryStatus === "writing"
+                                                            ? "Writing recovered data into your sheet…"
+                                                            : "Recovery in progress…"}
+                                        </p>
+                                        <p className="text-[11px] text-amber-800">
+                                            {recoveryTimedOut
+                                                ? "Recovery is taking longer than expected and will continue in the background. You can leave this page and check back later; your data is safe."
+                                                : "You can keep using the dashboard; recovery continues in the background."}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* @ts-ignore */}
+                        {(recoveryUiError || localRecoveryStatus === "failed") &&
+                            !isRecoveringActive && (
+                                <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-3 space-y-2">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-700">
+                                        Recovery
+                                    </p>
+
+                                    {workspace.recoveryLastErrorMessage && (
+                                        <p className="text-xs text-red-800">
+                                            {workspace.recoveryLastErrorMessage}
+                                        </p>
+                                    )}
+
+                                    {recoveryUiError && (
+                                        <p className="text-xs text-red-800">{recoveryUiError}</p>
+                                    )}
+
+                                    {localRecoveryStatus === "failed" && !recoveryUiError && (
+                                        <p className="text-[11px] text-red-700">
+                                            Last recovery attempt failed. Please try again. If the issue persists, please contact support.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                     </div>
 
                     {/* Configuration / objects */}

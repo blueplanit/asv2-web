@@ -1,0 +1,53 @@
+// app/api/sync/init-backfill/route.ts
+import "server-only";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+
+export const runtime = "nodejs";
+
+const lambda = new LambdaClient({
+    region: process.env.AWS_REGION,
+});
+
+const START_BACKFILL_FUNCTION_NAME = process.env.START_BACKFILL_FUNCTION_NAME;
+
+if (!START_BACKFILL_FUNCTION_NAME) {
+    throw new Error("Missing env var START_BACKFILL_FUNCTION_NAME");
+}
+
+export async function POST(req: NextRequest) {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user || !(session.user as any).userId) {
+        return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const userId = (session.user as any).userId as string;
+
+    const body = await req.json().catch(() => null as any);
+    const spreadsheetId = body?.spreadsheetId as string | undefined;
+
+    if (!spreadsheetId) {
+        return new NextResponse("Missing spreadsheetId", { status: 400 });
+    }
+
+    try {
+        const payload = JSON.stringify({ userId, spreadsheetId });
+
+        await lambda.send(
+            new InvokeCommand({
+                FunctionName: START_BACKFILL_FUNCTION_NAME,
+                InvocationType: "Event", // async, fire-and-forget
+                Payload: new TextEncoder().encode(payload),
+            }),
+        );
+
+        // We don't wait for the backfill to finish – just confirm the trigger worked
+        return NextResponse.json({ ok: true });
+    } catch (err) {
+        console.error("Failed to invoke StartBackfill lambda", err);
+        return new NextResponse("Failed to start backfill", { status: 500 });
+    }
+}
