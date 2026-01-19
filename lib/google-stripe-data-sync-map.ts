@@ -13,15 +13,17 @@ function titleForEntry(entry: StripeDataSyncEntry): string {
     return `${base}_raw (DO NOT EDIT)`;
 }
 
+const MIN_RAW_TAB_ROW_COUNT = 5000;
+
 export async function ensureSheetTabsForStripeDataSyncMap(params: {
-        userState: UserState;
+    userState: UserState;
     spreadsheetId: string;
     stripeDataSyncMap: StripeDataSyncEntry[];
     workingSheetTitle?: string;
     workingSheetMessage?: string;
 }): Promise<StripeDataSyncEntry[]> {
     const { userState, spreadsheetId } = params;
-    let {workingSheetTitle, workingSheetMessage} = params;
+    let { workingSheetTitle, workingSheetMessage } = params;
     workingSheetTitle = workingSheetTitle || "Working Sheet";
     workingSheetMessage = workingSheetMessage || "Use this sheet for your own analysis. You can edit anything here. DO NOT EDIT THE PROTECTED TABS. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
 
@@ -94,6 +96,9 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                 addSheet: {
                     properties: {
                         title: desiredTitle,
+                        gridProperties: {
+                            rowCount: MIN_RAW_TAB_ROW_COUNT, // seed new *_raw tabs with 5,000 rows instead of the default 1,000
+                        },
                     },
                 },
             });
