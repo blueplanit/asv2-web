@@ -67,7 +67,6 @@ export async function acquireRecoveryLock(
     const pk = userPk(userId);
     const sk = syncConfigSk(spreadsheetId);
 
-    console.log('expectedSyncStatus', expectedSyncStatus);
     try {
         await ddb.send(
             new UpdateCommand({
