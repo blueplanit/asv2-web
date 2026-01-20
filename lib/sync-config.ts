@@ -36,11 +36,13 @@ export async function ensureSyncConfigForSheet(params: {
     userId: string;
     spreadsheetId: string;
     stripeAccountId: string;
+    timezone?: string | null;
 }) {
     const { userId, spreadsheetId, stripeAccountId } = params;
+    const timezone = params.timezone?.trim() || undefined;
     const pk = userPk(userId);
     const sk = syncConfigSk(spreadsheetId);
-    
+
     if (!userId) {
         throw new Error("Auth user ID is required");
     }
@@ -73,6 +75,7 @@ export async function ensureSyncConfigForSheet(params: {
         lastError: null,
         createdAt: now,
         updatedAt: now,
+        ...(timezone ? { timezone } : {}),
     });
 
     await ddb.send(
@@ -95,6 +98,7 @@ export async function createSyncConfig(params: {
     historyMode?: SyncConfig["historyMode"];
     historySinceDays?: number;
     syncStatus?: SyncConfig["syncStatus"];
+    timezone?: string | null;
 }) {
     const {
         userId,
@@ -104,6 +108,7 @@ export async function createSyncConfig(params: {
         historyMode = "since",
         historySinceDays = 90,
         syncStatus = "onboarding",
+        timezone,
     } = params;
 
     if (!stripeAccountId) {
@@ -137,6 +142,7 @@ export async function createSyncConfig(params: {
 
         createdAt: now,
         updatedAt: now,
+        ...(timezone ? { timezone: timezone.trim() } : {}),
     });
 
     await ddb.send(
@@ -191,7 +197,7 @@ export async function updateSyncConfig(params: {
     if (stripeDataSyncMap !== undefined) {
         updates.push("stripeDataSyncMap = :sdsm");
         values[":sdsm"] = stripeDataSyncMap;
-      }
+    }
 
     if (historyMode !== undefined && historyMode !== null) {
         updates.push("historyMode = :hm");
