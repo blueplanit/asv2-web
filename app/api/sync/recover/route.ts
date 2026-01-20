@@ -103,7 +103,7 @@ export async function POST(req: Request) {
 
     if (!lastSyncedEventId) {
         return new NextResponse(
-            "Cannot start recovery: sync cursor not found for this workspace.",
+            "Cannot start recovery: last sync event not found for this workspace. Please contact support.",
             { status: 409 },
         );
     }
