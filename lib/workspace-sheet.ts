@@ -101,17 +101,19 @@ export async function createWorkspaceSheetAndConfig(
     const spreadsheetId = sheetsResp.data.spreadsheetId;
     const spreadsheetUrl = sheetsResp.data.spreadsheetUrl;
     let spreadsheetTimezone = sheetsResp.data.properties?.timeZone;
+    let spreadsheetLocale = sheetsResp.data.properties?.locale;
 
     if (!spreadsheetId) {
         throw new Error("No spreadsheetId returned from Sheets API");
     }
 
-    if (!spreadsheetTimezone) {
+    if (!spreadsheetTimezone || !spreadsheetLocale) {
         const tzRes = await sheets.spreadsheets.get({
             spreadsheetId,
-            fields: "properties.timeZone",
+            fields: "properties.timeZone,properties.locale",
         });
         spreadsheetTimezone = tzRes.data.properties?.timeZone;
+        spreadsheetLocale = tzRes.data.properties?.locale;
     }
 
     // Move into folder
@@ -138,6 +140,7 @@ export async function createWorkspaceSheetAndConfig(
             spreadsheetId,
             stripeAccountId,
             timezone: spreadsheetTimezone,
+            locale: spreadsheetLocale,
         });
 
         return {
@@ -177,6 +180,7 @@ export async function createWorkspaceSheetAndConfig(
         historySinceDays: baseSyncConfig?.historySinceDays ?? 90,
         syncStatus: "syncing",
         timezone: spreadsheetTimezone,
+        locale: spreadsheetLocale,
     });
 
     return {

@@ -37,9 +37,11 @@ export async function ensureSyncConfigForSheet(params: {
     spreadsheetId: string;
     stripeAccountId: string;
     timezone?: string | null;
+    locale?: string | null;
 }) {
     const { userId, spreadsheetId, stripeAccountId } = params;
     const timezone = params.timezone?.trim() || undefined;
+    const locale = params.locale?.trim() || undefined;
     const pk = userPk(userId);
     const sk = syncConfigSk(spreadsheetId);
 
@@ -75,8 +77,13 @@ export async function ensureSyncConfigForSheet(params: {
         lastError: null,
         createdAt: now,
         updatedAt: now,
-        ...(timezone ? { timezone } : {}),
     });
+    if (timezone) {
+        (item as any).timezone = timezone;
+    }
+    if (locale) {
+        (item as any).locale = locale;
+    }
 
     await ddb.send(
         new PutCommand({
@@ -99,6 +106,7 @@ export async function createSyncConfig(params: {
     historySinceDays?: number;
     syncStatus?: SyncConfig["syncStatus"];
     timezone?: string | null;
+    locale?: string | null;
 }) {
     const {
         userId,
@@ -109,6 +117,7 @@ export async function createSyncConfig(params: {
         historySinceDays = 90,
         syncStatus = "onboarding",
         timezone,
+        locale,
     } = params;
 
     if (!stripeAccountId) {
@@ -142,8 +151,13 @@ export async function createSyncConfig(params: {
 
         createdAt: now,
         updatedAt: now,
-        ...(timezone ? { timezone: timezone.trim() } : {}),
     });
+    if (timezone) {
+        (item as any).timezone = timezone.trim();
+    }
+    if (locale) {
+        (item as any).locale = locale.trim();
+    }
 
     await ddb.send(
         new PutCommand({
