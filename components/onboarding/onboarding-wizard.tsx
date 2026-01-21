@@ -74,6 +74,10 @@ export function OnboardingWizard() {
             return undefined;
         }
     }, []);
+    const browserLocale = React.useMemo(() => {
+        if (typeof navigator === "undefined") return undefined;
+        return navigator.language || undefined;
+    }, []);
 
     // Find the config that is actually in onboarding (multi-config safe).
     const onboardingConfig = React.useMemo(
@@ -192,6 +196,7 @@ export function OnboardingWizard() {
                 body: JSON.stringify({
                     userState: user,
                     timezone: browserTimezone,
+                    locale: browserLocale,
                     folderName: FOLDER_NAME,
                     workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
                     workingSheetTitle: WORKING_SHEET_TITLE,

@@ -20,6 +20,7 @@ type CreateWorkspaceSheetParams = {
     workingSheetTitle?: string;
     workingSheetMessage?: string;
     timezone?: string | null;
+    locale?: string | null;
     // optional: base config to copy from (for rotation)
     baseSyncConfig?: SyncConfig | null;
 };
@@ -34,6 +35,7 @@ export async function createWorkspaceSheetAndConfig(
         workingSheetTitle,
         workingSheetMessage,
         timezone,
+        locale,
         baseSyncConfig,
     } = params;
 
@@ -121,6 +123,7 @@ export async function createWorkspaceSheetAndConfig(
     const resolvedTimezone =
         timezone?.trim() ||
         spreadsheetTimezone 
+    const resolvedLocale = locale?.trim() || spreadsheetLocale;
 
     // Move into folder
     if (syncFolderId) {
@@ -146,7 +149,7 @@ export async function createWorkspaceSheetAndConfig(
             spreadsheetId,
             stripeAccountId,
             timezone: resolvedTimezone,
-            locale: spreadsheetLocale,
+            locale: resolvedLocale,
         });
 
         return {
@@ -186,7 +189,7 @@ export async function createWorkspaceSheetAndConfig(
         historySinceDays: baseSyncConfig?.historySinceDays ?? 90,
         syncStatus: "syncing",
         timezone: resolvedTimezone,
-        locale: spreadsheetLocale,
+        locale: resolvedLocale,
     });
 
     return {
