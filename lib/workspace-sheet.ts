@@ -19,6 +19,7 @@ type CreateWorkspaceSheetParams = {
     workspaceSheetTitle?: string;
     workingSheetTitle?: string;
     workingSheetMessage?: string;
+    timezone?: string | null;
     // optional: base config to copy from (for rotation)
     baseSyncConfig?: SyncConfig | null;
 };
@@ -32,6 +33,7 @@ export async function createWorkspaceSheetAndConfig(
         workspaceSheetTitle,
         workingSheetTitle,
         workingSheetMessage,
+        timezone,
         baseSyncConfig,
     } = params;
 
@@ -116,6 +118,10 @@ export async function createWorkspaceSheetAndConfig(
         spreadsheetLocale = tzRes.data.properties?.locale;
     }
 
+    const resolvedTimezone =
+        timezone?.trim() ||
+        spreadsheetTimezone 
+
     // Move into folder
     if (syncFolderId) {
         await drive.files.update({
@@ -139,7 +145,7 @@ export async function createWorkspaceSheetAndConfig(
             userId,
             spreadsheetId,
             stripeAccountId,
-            timezone: spreadsheetTimezone,
+            timezone: resolvedTimezone,
             locale: spreadsheetLocale,
         });
 
@@ -179,7 +185,7 @@ export async function createWorkspaceSheetAndConfig(
         historyMode: baseSyncConfig?.historyMode ?? "since",
         historySinceDays: baseSyncConfig?.historySinceDays ?? 90,
         syncStatus: "syncing",
-        timezone: spreadsheetTimezone,
+        timezone: resolvedTimezone,
         locale: spreadsheetLocale,
     });
 

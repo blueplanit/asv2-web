@@ -67,6 +67,13 @@ export function OnboardingWizard() {
     const searchParams = useSearchParams();
     const { user, refresh } = useUserState();
     const router = useRouter();
+    const browserTimezone = React.useMemo(() => {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch {
+            return undefined;
+        }
+    }, []);
 
     // Find the config that is actually in onboarding (multi-config safe).
     const onboardingConfig = React.useMemo(
@@ -184,6 +191,7 @@ export function OnboardingWizard() {
                 method: "POST",
                 body: JSON.stringify({
                     userState: user,
+                    timezone: browserTimezone,
                     folderName: FOLDER_NAME,
                     workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
                     workingSheetTitle: WORKING_SHEET_TITLE,
