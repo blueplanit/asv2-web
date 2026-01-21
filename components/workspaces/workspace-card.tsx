@@ -61,7 +61,7 @@ const HEALTH_LABELS: Record<WorkspaceHealth, { label: string; color: string; too
     error: {
         label: "Error",
         color: "bg-red-50 text-red-700 ring-red-100",
-        tooltip: "The workspace is in error and not syncing data.",
+        tooltip: "The workspace is in error and not syncing data. See the sync status for more details.",
     },
     retired: {
         label: "Retired",
@@ -448,11 +448,11 @@ export function WorkspaceCard({
             }
             return "Backfilling Stripe data into your sheet.";
         }
-        if (isPaused) return "Sync is paused. No new Stripe data is being written.";
-        if (isError) return "Sync is currently failing. Fix connections and run recovery.";
-        if (workspace.syncStatus === "syncing") return "Sync is active on the regular polling schedule.";
-        if (isRetired) return "Sync is retired and not syncing data.";
-        return "Sync will start once setup is complete.";
+        if (isPaused) return "The sync is paused. No new Stripe data is being written.";
+        if (isError) return "The sync is currently erroring. Fix connections if necessary and run recovery. If it's another issue, please contact support.";
+        if (workspace.syncStatus === "syncing") return "The sync is active on the regular polling schedule.";
+        if (isRetired) return "The sync is retired and not syncing data.";
+        return "The sync will start once setup is complete.";
     })();
 
 
