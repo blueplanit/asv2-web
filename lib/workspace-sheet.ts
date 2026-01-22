@@ -19,6 +19,8 @@ type CreateWorkspaceSheetParams = {
     workspaceSheetTitle?: string;
     workingSheetTitle?: string;
     workingSheetMessage?: string;
+    timezone?: string | null;
+    locale?: string | null;
     // optional: base config to copy from (for rotation)
     baseSyncConfig?: SyncConfig | null;
 };
@@ -32,6 +34,8 @@ export async function createWorkspaceSheetAndConfig(
         workspaceSheetTitle,
         workingSheetTitle,
         workingSheetMessage,
+        timezone,
+        locale,
         baseSyncConfig,
     } = params;
 
@@ -100,10 +104,26 @@ export async function createWorkspaceSheetAndConfig(
 
     const spreadsheetId = sheetsResp.data.spreadsheetId;
     const spreadsheetUrl = sheetsResp.data.spreadsheetUrl;
+    let spreadsheetTimezone = sheetsResp.data.properties?.timeZone;
+    let spreadsheetLocale = sheetsResp.data.properties?.locale;
 
     if (!spreadsheetId) {
         throw new Error("No spreadsheetId returned from Sheets API");
     }
+
+    if (!spreadsheetTimezone || !spreadsheetLocale) {
+        const tzRes = await sheets.spreadsheets.get({
+            spreadsheetId,
+            fields: "properties.timeZone,properties.locale",
+        });
+        spreadsheetTimezone = tzRes.data.properties?.timeZone;
+        spreadsheetLocale = tzRes.data.properties?.locale;
+    }
+
+    const resolvedTimezone =
+        timezone?.trim() ||
+        spreadsheetTimezone 
+    const resolvedLocale = locale?.trim() || spreadsheetLocale;
 
     // Move into folder
     if (syncFolderId) {
@@ -128,6 +148,8 @@ export async function createWorkspaceSheetAndConfig(
             userId,
             spreadsheetId,
             stripeAccountId,
+            timezone: resolvedTimezone,
+            locale: resolvedLocale,
         });
 
         return {
@@ -166,6 +188,8 @@ export async function createWorkspaceSheetAndConfig(
         historyMode: baseSyncConfig?.historyMode ?? "since",
         historySinceDays: baseSyncConfig?.historySinceDays ?? 90,
         syncStatus: "syncing",
+        timezone: resolvedTimezone,
+        locale: resolvedLocale,
     });
 
     return {

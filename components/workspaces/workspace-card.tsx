@@ -89,6 +89,17 @@ export function WorkspaceCard({
     setTitlesRequested = () => { },
 }: Props) {
     const { user, refresh } = useUserState();
+    const browserTimezone = useMemo(() => {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch {
+            return undefined;
+        }
+    }, []);
+    const browserLocale = useMemo(() => {
+        if (typeof navigator === "undefined") return undefined;
+        return navigator.language || undefined;
+    }, []);
     const health = HEALTH_LABELS[workspace.health];
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -329,6 +340,8 @@ export function WorkspaceCard({
                     workingSheetTitle: WORKING_SHEET_TITLE,
                     workingSheetMessage: WORKING_SHEET_MESSAGE,
                     existingSpreadsheetId: workspace.id,
+                    timezone: browserTimezone,
+                    locale: browserLocale,
                 }),
             });
 

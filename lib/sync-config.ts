@@ -36,11 +36,15 @@ export async function ensureSyncConfigForSheet(params: {
     userId: string;
     spreadsheetId: string;
     stripeAccountId: string;
+    timezone?: string | null;
+    locale?: string | null;
 }) {
     const { userId, spreadsheetId, stripeAccountId } = params;
+    const timezone = params.timezone?.trim() || undefined;
+    const locale = params.locale?.trim() || undefined;
     const pk = userPk(userId);
     const sk = syncConfigSk(spreadsheetId);
-    
+
     if (!userId) {
         throw new Error("Auth user ID is required");
     }
@@ -74,6 +78,12 @@ export async function ensureSyncConfigForSheet(params: {
         createdAt: now,
         updatedAt: now,
     });
+    if (timezone) {
+        (item as any).timezone = timezone;
+    }
+    if (locale) {
+        (item as any).locale = locale;
+    }
 
     await ddb.send(
         new PutCommand({
@@ -95,6 +105,8 @@ export async function createSyncConfig(params: {
     historyMode?: SyncConfig["historyMode"];
     historySinceDays?: number;
     syncStatus?: SyncConfig["syncStatus"];
+    timezone?: string | null;
+    locale?: string | null;
 }) {
     const {
         userId,
@@ -104,6 +116,8 @@ export async function createSyncConfig(params: {
         historyMode = "since",
         historySinceDays = 90,
         syncStatus = "onboarding",
+        timezone,
+        locale,
     } = params;
 
     if (!stripeAccountId) {
@@ -138,6 +152,12 @@ export async function createSyncConfig(params: {
         createdAt: now,
         updatedAt: now,
     });
+    if (timezone) {
+        (item as any).timezone = timezone.trim();
+    }
+    if (locale) {
+        (item as any).locale = locale.trim();
+    }
 
     await ddb.send(
         new PutCommand({
@@ -191,7 +211,7 @@ export async function updateSyncConfig(params: {
     if (stripeDataSyncMap !== undefined) {
         updates.push("stripeDataSyncMap = :sdsm");
         values[":sdsm"] = stripeDataSyncMap;
-      }
+    }
 
     if (historyMode !== undefined && historyMode !== null) {
         updates.push("historyMode = :hm");

@@ -24,6 +24,8 @@ export async function POST(req: Request) {
             workingSheetTitle,
             workingSheetMessage,
             folderName,
+            timezone,
+            locale,
         } = body ?? {};
         const existing = await getSyncConfig(userId, existingSpreadsheetId);
         if (!existing) {
@@ -36,6 +38,8 @@ export async function POST(req: Request) {
             await createWorkspaceSheetAndConfig({
                 userState,
                 folderName,
+                timezone,
+                locale,
                 workspaceSheetTitle: newWorkspaceSheetTitle,
                 workingSheetTitle,
                 workingSheetMessage,
