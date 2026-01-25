@@ -1,6 +1,7 @@
 // app/blog/page.tsx
 import Link from "next/link";
 import { getAllBlogPosts } from "@/lib/contentful-queries";
+import { APP_NAME } from "@/lib/constants";
 
 export const revalidate = 60;
 
@@ -47,7 +48,7 @@ export default async function BlogIndexPage() {
                     </h1>
                     <p className="mt-2 max-w-xl text-sm text-slate-500">
                         Deep dives on Stripe → Sheets sync, infra architecture, and product
-                        decisions behind AutoSync V2.
+                        decisions behind {APP_NAME}.
                     </p>
                 </div>
                 <div className="text-xs text-slate-400">

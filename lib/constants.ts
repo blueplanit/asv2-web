@@ -1,1 +1,1 @@
-export const APP_NAME = "Stripe to Sheets";
+export const APP_NAME = "AutoSync2";
