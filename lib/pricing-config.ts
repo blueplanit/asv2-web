@@ -49,60 +49,70 @@ export type PricingCopy = z.infer<typeof pricingCopySchema>;
 
 // Fallback if Contentful is unavailable/invalid
 export const DEFAULT_PRICING_COPY: PricingCopy = {
-    hero: {
-        title: "Simple pricing for automated Stripe → Sheets sync.",
-        secondaryText: "No long-term contracts. Cancel anytime.",
-        freeTrialLinkHref: "/login",
-        freeTrialText: "Free 14-day trial after sign in and setup.",
+    "hero": {
+        "title": "Simple pricing for automated Stripe → Sheets sync.",
+        "freeTrialText": "Free 14-day trial after sign in and setup.",
+        "secondaryText": "No long-term contracts. Cancel anytime.",
+        "freeTrialLinkHref": "/login"
     },
-    toggle: {
-        monthlyLabel: "Monthly",
-        yearlyLabel: "Annual",
-        yearlySavingsTag: "Save 3.5 months",
-    },
-    plan: {
-        badgeLabel: "Recommended",
-        name: "Pro",
-        description: "For teams that rely on accurate Stripe data in Sheets every day.",
-        bullets: [
-            "1 Stripe account synced to Sheets",
-            "Automated backfill + 30-minute sync cadence",
-            "Invoices, charges, customers, payouts, subscriptions",
-            "Priority email support",
+    "plan": {
+        "name": "Pro",
+        "bullets": [
+            "1 Stripe account synced to Google Sheets",
+            "Automated backfill + 1 hour sync cadence",
+            "Sync invoices and line items, charges, customers, payouts, subscriptions, payment intents, disputes",
+            "Priority email support"
         ],
-        checkoutNote:
-            "You’ll be redirected to a secure Stripe-hosted payment page to checkout.",
+        "badgeLabel": "Recommended",
+        "description": "For teams that rely on accurate Stripe data in Sheets every day.",
+        "checkoutNote": "You’ll be redirected to a secure Stripe-hosted payment page to checkout."
     },
-    included: {
-        title: "What’s included",
-        bullets: [
-            "Unlimited sync runs during your trial",
-            "Drive ownership stays with your Google account",
-            "Safe to use with existing analysis / working tabs",
-        ],
-        faqTitle: "FAQ",
-        faqs: [
+    "toggle": {
+        "yearlyLabel": "Annual",
+        "monthlyLabel": "Monthly",
+        "yearlySavingsTag": "Save 3 months"
+    },
+    "included": {
+        "faqs": [
             {
-                question: "Can I cancel during my trial?",
-                answer: "Yes. Cancel before your 14 days are up and you won’t be charged.",
+                "answer": "Core Stripe data (invoices + line items, charges, customers, payouts, subscriptions, payment intents, and disputes) are synced into structured “raw” tabs so you can build reports based on product, fees, revenue and more.",
+                "question": "What Stripe data can AutoSync2 bring into Google Sheets?"
             },
             {
-                question: "Does this change anything in my Stripe account?",
-                answer:
-                    "No. We only read data via the Stripe API and write into your Sheets.",
+                "answer": "No. We only read data via the Stripe API and write into your Sheets.",
+                "question": "Does this change anything in my Stripe account?"
             },
+            {
+                "answer": "No. AutoSync2 only updates the dedicated, protected 'raw' tabs; your formulas, dashboards, and models in other 'working' tabs stay untouched.",
+                "question": "Will AutoSync2 overwrite my existing formulas or reports in the sheet?"
+            },
+            {
+                "answer": "Your Stripe → Sheets sync will stop running until you choose a paid plan.",
+                "question": "What happens when my free trial ends?"
+            },
+            {
+                "answer": "Yes, you can cancel anytime before your next billing period to avoid future charges. If you’ve already been billed, refunds are available within 14 days",
+                "question": "Can I cancel or get a refund if AutoSync isn’t a fit?"
+            }
         ],
+        "title": "What’s included",
+        "bullets": [
+            "One-way sync from Stripe to your Google Sheet every hour.",
+            "No more exporting CSVs from the Stripe dashboard.",
+            "Privacy-first: we only access Google Sheets created in the app."
+        ],
+        "faqTitle": "FAQ"
     },
-    snackbar: {
-        title: "You’re signed in with Google",
-        description: "You can now continue to checkout.",
+    "snackbar": {
+        "title": "You’re signed in with Google",
+        "description": "You can now continue to checkout."
     },
-    ctaLabels: {
-        signedInIdle: "Continue to checkout",
-        signedInLoading: "Redirecting to secure checkout…",
-        signedOutIdle: "Sign in to checkout",
-        signedOutLoading: "Opening secure sign-in…",
-    },
+    "ctaLabels": {
+        "signedInIdle": "Continue to checkout",
+        "signedOutIdle": "Sign in to checkout",
+        "signedInLoading": "Redirecting to secure checkout…",
+        "signedOutLoading": "Opening secure sign-in…"
+    }
 };
 
 export async function getPricingCopy(): Promise<PricingCopy> {

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
+import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing-config";
 
 type BillingInterval = "monthly" | "yearly";
@@ -21,6 +22,66 @@ const BILLING_DISPLAY: Record<
     monthly: { price: "$15", intervalLabel: "/month" },
     yearly: { price: "$129", intervalLabel: "/year" },
 };
+
+type FaqItem = {
+    question: string;
+    answer: string;
+};
+
+function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
+    const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+    if (!faqs || faqs.length === 0) return null;
+
+    return (
+        <div className="mt-4">
+            <h4 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                FAQ
+            </h4>
+            <div className="mt-2 rounded-2xl border border-slate-200 bg-white/70">
+                <ul className="divide-y divide-slate-200">
+                    {faqs.map((faq, index) => {
+                        const isOpen = openIndex === index;
+                        const panelId = `pricing-faq-panel-${index}`;
+                        const buttonId = `pricing-faq-button-${index}`;
+
+                        return (
+                            <li key={faq.question}>
+                                <button
+                                    id={buttonId}
+                                    type="button"
+                                    onClick={() =>
+                                        setOpenIndex(isOpen ? null : index)
+                                    }
+                                    aria-expanded={isOpen}
+                                    aria-controls={panelId}
+                                    className="cursor-pointer flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-xs font-medium text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-100"
+                                >
+                                    <span className="flex-1">{faq.question}</span>
+                                    <ChevronDownIcon
+                                        className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""
+                                            }`}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                                {isOpen && (
+                                    <div
+                                        id={panelId}
+                                        role="region"
+                                        aria-labelledby={buttonId}
+                                        className="px-3 pb-4 text-xs leading-relaxed text-slate-600"
+                                    >
+                                        {faq.answer}
+                                    </div>
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        </div>
+    );
+}
 
 export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
@@ -151,7 +212,8 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
                 {/* Plan cards */}
                 <section className="grid gap-6 md:grid-cols-2">
-                    <article className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    {/* Main plan */}
+                    <article className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
                         <div className="space-y-3">
                             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                                 {copy.plan.badgeLabel}
@@ -159,12 +221,16 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                             <h2 className="text-xl font-semibold text-slate-900">
                                 {copy.plan.name}
                             </h2>
-                            <p className="text-sm text-slate-600">{copy.plan.description}</p>
+                            <p className="text-sm text-slate-600">
+                                {copy.plan.description}
+                            </p>
                             <div className="mt-4 flex items-baseline gap-1">
                                 <span className="text-3xl font-semibold text-slate-900">
                                     {price}
                                 </span>
-                                <span className="text-sm text-slate-500">{intervalLabel}</span>
+                                <span className="text-sm text-slate-500">
+                                    {intervalLabel}
+                                </span>
                             </div>
                             <ul className="mt-4 space-y-2 text-sm text-slate-700">
                                 {copy.plan.bullets.map((line) => (
@@ -188,6 +254,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                         </div>
                     </article>
 
+                    {/* Included + FAQ */}
                     <article className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-sm text-slate-700">
                         <h3 className="text-sm font-semibold text-slate-900">
                             {copy.included.title}
@@ -197,17 +264,8 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                                 <li key={line}>• {line}</li>
                             ))}
                         </ul>
-                        <h4 className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            {copy.included.faqTitle}
-                        </h4>
-                        {copy.included.faqs.map((faq) => (
-                            <p key={faq.question} className="mt-2 text-xs text-slate-600">
-                                <span className="font-semibold text-slate-800">
-                                    {faq.question}
-                                </span>{" "}
-                                {faq.answer}
-                            </p>
-                        ))}
+
+                        <PricingFaqAccordion faqs={copy.included.faqs} />
                     </article>
                 </section>
             </main>
