@@ -165,8 +165,8 @@ export function SiteFooter() {
                 <div className="mt-6 flex flex-col gap-2 border-t border-slate-200 pt-4 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                     <span>© {year} {APP_NAME}, a Blue Planit LLC product. All rights reserved.</span>
                     <div className="flex flex-wrap gap-3">
-                        <span>Data residency: TBD</span>
-                        <span>EU & GDPR-ready: TBD</span>
+                        {/* <span>Data residency: TBD</span>
+                        <span>EU & GDPR-ready: TBD</span> */}
                     </div>
                 </div>
             </div>
