@@ -3,6 +3,7 @@
 import type {
     StripeDataSyncEntry,
 } from "./schemas/sync-config";
+import { getTabSchemaSpec, isDataSyncEntryIdSupported, type TabColumnSpec } from "@blueplanit/asv2-shared";
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 import { APP_NAME } from "./constants";
@@ -11,6 +12,23 @@ import { UserState } from "./user-state";
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
     return `${base}_raw (DO NOT EDIT)`;
+}
+
+/**
+ * Maps a registry column type to a Google Sheets numberFormat for repeatCell.
+ * Returns null for types that don't need a number format (string, boolean).
+ */
+function numberFormatForColumnType(col: TabColumnSpec): { type: "DATE_TIME" | "NUMBER"; pattern: string } | null {
+    switch (col.type) {
+        case "date":
+        case "timestamp":
+            return { type: "DATE_TIME", pattern: "yyyy-MM-dd HH:mm:ss" };
+        case "decimal":
+        case "int":
+        case "string":
+        case "boolean":
+            return null;
+    }
 }
 
 const MIN_RAW_TAB_ROW_COUNT = 5000;
@@ -134,8 +152,9 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
         // Second batch: protect our tabs + ensure "Working Sheet" exists, is named, seeded, and moved to the end
         const postRequests: sheets_v4.Schema$Request[] = [];
 
-        // Protect all enabled entries with a bound sheetId
-        for (const entry of stripeDataSyncMap) {
+        // Protect all enabled entries with a bound sheetId; format columns for newly created *_raw tabs
+        for (let idx = 0; idx < stripeDataSyncMap.length; idx++) {
+            const entry = stripeDataSyncMap[idx];
             if (!entry.enabled || entry.sheetId == null) continue;
 
             postRequests.push({
@@ -149,6 +168,34 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                     },
                 },
             });
+
+            // Format columns only for newly created sheets (registry: date, timestamp, number types)
+            if (entryIndexToRequestIndex.get(idx) == null) continue;
+            if (!isDataSyncEntryIdSupported(entry.id)) continue;
+
+            const spec = getTabSchemaSpec(entry.id, entry.schemaVersion ?? "1.0.0");
+            for (let colIdx = 0; colIdx < spec.columns.length; colIdx++) {
+                const nf = numberFormatForColumnType(spec.columns[colIdx]);
+                if (!nf) continue;
+
+                postRequests.push({
+                    repeatCell: {
+                        range: {
+                            sheetId: entry.sheetId,
+                            startRowIndex: 1,
+                            endRowIndex: MIN_RAW_TAB_ROW_COUNT,
+                            startColumnIndex: colIdx,
+                            endColumnIndex: colIdx + 1,
+                        },
+                        cell: {
+                            userEnteredFormat: {
+                                numberFormat: nf,
+                            },
+                        },
+                        fields: "userEnteredFormat.numberFormat",
+                    },
+                });
+            }
         }
 
         // Ensure a single "Working Sheet" tab exists, reuse/rename "Sheet1" if present
