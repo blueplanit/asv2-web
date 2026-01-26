@@ -23,15 +23,15 @@ const resourcesLinks = [
 ];
 
 const companyLinks = [
-    { label: "About", href: "#" },
+    { label: "About", href: "/pages/about" },
     // { label: "Customers", href: "#" },
     // { label: "Careers", href: "#" },
-    { label: "Contact", href: "#" },
+    { label: "Contact", href: "/pages/contact" },
 ];
 
 const legalLinks = [
     { label: "Privacy", href: "/pages/privacy-policy" },
-    { label: "Terms", href: "#" },
+    { label: "Terms", href: "/pages/terms" },
     // { label: "Data Processing", href: "#" },
     // { label: "Security", href: "#" },
 ];
