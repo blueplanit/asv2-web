@@ -1,42 +1,37 @@
 // components/marketing/how-it-works-section.tsx
+import type { MarketingCopy } from "@/lib/marketing-copy";
 
-import { marketingCopy } from "@/lib/marketing-copy";
+type HowItWorksCopy = MarketingCopy["howItWorks"];
 
-export function HowItWorksSection() {
-    const { howItWorks } = marketingCopy;
+type Props = {
+    copy: HowItWorksCopy;
+};
 
+export function HowItWorksSection({ copy }: Props) {
     return (
-        <section
-            aria-labelledby="how-it-works-heading"
-            className="space-y-6 border-t border-slate-100 pt-10"
-        >
-            <div className="space-y-2 max-w-3xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {howItWorks.eyebrow}
+        <section id="how-it-works" className="space-y-6">
+            <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    {copy.eyebrow}
                 </p>
-                <h2
-                    id="how-it-works-heading"
-                    className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl"
-                >
-                    {howItWorks.heading}
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                    {copy.heading}
                 </h2>
-
             </div>
 
-            <ol className="grid gap-4 md:grid-cols-3">
-                {howItWorks.steps.map((step, index) => (
+            <ol className="grid gap-4 sm:grid-cols-3">
+                {copy.steps.map((step) => (
                     <li
                         key={step.id}
-                        className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                        className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm"
                     >
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] text-white">
-                                {index + 1}
-                            </span>
-                            <span>Step {index + 1}</span>
+                        <div className="mb-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+                            {step.id}
                         </div>
-                        <h3 className="mt-3 text-sm font-semibold text-slate-900">{step.title}</h3>
-                        <p className="mt-2 text-sm text-slate-600">{step.description}</p>
+                        <h3 className="text-sm font-semibold text-slate-900">
+                            {step.title}
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-600">{step.description}</p>
                     </li>
                 ))}
             </ol>

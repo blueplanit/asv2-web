@@ -108,8 +108,9 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
 export async function getPricingCopy(): Promise<PricingCopy> {
     try {
         const res = await contentfulClient.getEntries({
-            content_type: "pricingPageASv2",
+            content_type: "aSv2CopyAndConfig",
             limit: 1,
+            "fields.pageKey": "pricing",
         });
 
         if (!res.items.length) {
