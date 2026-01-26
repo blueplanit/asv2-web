@@ -11,8 +11,7 @@ export async function getAllBlogPosts(): Promise<BlogPostFields[]> {
         ...(isProd ? { "fields.showInProduction": true } : {}),
     });
 
-    return res.items.map((item) => item.fields as BlogPostFields)
-        .filter((post) => (isProd ? post.showInProduction : true));
+    return res.items.map((item) => item.fields as BlogPostFields);
 }
 
 // All blog post slugs
@@ -23,8 +22,8 @@ export async function getAllBlogPostSlugs(): Promise<string[]> {
         ...(isProd ? { "fields.showInProduction": true } : {}),
     });
 
-    return res.items.map((item) => item.fields as BlogPostFields)
-        .filter((post) => (isProd ? post.showInProduction : true))
+    return res.items
+        .map((item) => item.fields as BlogPostFields)
         .map((post) => post.slug);
 }
 
