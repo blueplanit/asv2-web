@@ -1,26 +1,35 @@
 // components/pricing/pricing-client.tsx
 "use client";
-// at the top of pricing-client.tsx
+
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
+import type { PricingCopy } from "@/lib/pricing-config";
 
 type BillingInterval = "monthly" | "yearly";
+
 type PricingClientProps = {
     isLoggedIn: boolean;
+    copy: PricingCopy;
 };
 
-export function PricingClient({ isLoggedIn }: PricingClientProps) {
+const BILLING_DISPLAY: Record<
+    BillingInterval,
+    { price: string; intervalLabel: string }
+> = {
+    monthly: { price: "$15", intervalLabel: "/month" },
+    yearly: { price: "$129", intervalLabel: "/year" },
+};
+
+export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
+    const [showSignedInHint, setShowSignedInHint] = useState(false);
+
     const searchParams = useSearchParams();
     const authFlag = searchParams.get("auth");
     const justLoggedIn = isLoggedIn && authFlag === "1";
-    const priceDisplay = interval === "monthly" ? "$15" : "$129";
-    const intervalLabel = interval === "monthly" ? "/month" : "/year";
-
-    const [showSignedInHint, setShowSignedInHint] = useState(justLoggedIn);
 
     useEffect(() => {
         if (!justLoggedIn) return;
@@ -68,36 +77,46 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
         }
     }
 
-    const freeTrialMsg = !isLoggedIn ? <span className="text-sm text-slate-600"><a href="/login" className="text-indigo-600 hover:text-indigo-500 hover:underline font-bold">Free 14-day trial after sign in and setup.</a></span> : null;
+    const { price, intervalLabel } = BILLING_DISPLAY[interval];
+
+    const freeTrialMsg = !isLoggedIn ? (
+        <a
+            href={copy.hero.freeTrialLinkHref}
+            className="font-bold text-indigo-600 hover:text-indigo-500 hover:underline"
+        >
+            {copy.hero.freeTrialText}
+        </a>
+    ) : null;
+
     const primaryCtaLabel = isLoggedIn
         ? loading
-            ? "Redirecting to secure checkout…"
-            : "Continue to checkout"
+            ? copy.ctaLabels.signedInLoading
+            : copy.ctaLabels.signedInIdle
         : loading
-            ? "Opening secure sign-in…"
-            : "Sign in to checkout";
+            ? copy.ctaLabels.signedOutLoading
+            : copy.ctaLabels.signedOutIdle;
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
-            {/* Snackbar sits at the bottom of the viewport, independent of scroll */}
             <Snackbar
                 open={showSignedInHint}
                 onClose={() => setShowSignedInHint(false)}
                 variant="success"
-                title="You’re signed in with Google"
-                description="You can now continue to checkout."
+                title={copy.snackbar.title}
+                description={copy.snackbar.description}
                 animated
                 autoHideMs={7000}
             />
 
-            <main className="mx-auto max-w-5xl px-4 py-16 space-y-12">
+            <main className="mx-auto max-w-5xl space-y-12 px-4 py-16">
                 {/* Hero */}
-                <section className="text-center space-y-4">
+                <section className="space-y-4 text-center">
                     <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-                        Simple pricing for automated Stripe → Sheets sync.
+                        {copy.hero.title}
                     </h1>
-                    <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
-                        {freeTrialMsg} No long-term contracts. Cancel anytime.
+                    <p className="mx-auto max-w-2xl text-sm text-slate-600 sm:text-base">
+                        {freeTrialMsg && <>{freeTrialMsg} </>}
+                        {copy.hero.secondaryText}
                     </p>
                 </section>
 
@@ -108,50 +127,49 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                             type="button"
                             onClick={() => setInterval("monthly")}
                             className={`cursor-pointer rounded-full px-3 py-1 ${interval === "monthly"
-                                ? "bg-slate-900 text-white"
-                                : "bg-transparent text-slate-600"
+                                    ? "bg-slate-900 text-white"
+                                    : "bg-transparent text-slate-600"
                                 }`}
                         >
-                            Monthly
+                            {copy.toggle.monthlyLabel}
                         </button>
                         <button
                             type="button"
                             onClick={() => setInterval("yearly")}
                             className={`cursor-pointer rounded-full px-3 py-1 ${interval === "yearly"
-                                ? "bg-slate-900 text-white"
-                                : "bg-transparent text-slate-600"
+                                    ? "bg-slate-900 text-white"
+                                    : "bg-transparent text-slate-600"
                                 }`}
                         >
-                            Annual
+                            {copy.toggle.yearlyLabel}
                             <span className="ml-1 text-[10px] text-emerald-300">
-                                Save 3.5 months
+                                {copy.toggle.yearlySavingsTag}
                             </span>
                         </button>
                     </div>
                 </section>
 
-                {/* Plan cards (single plan now, structure supports more later) */}
+                {/* Plan cards */}
                 <section className="grid gap-6 md:grid-cols-2">
                     <article className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="space-y-3">
                             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                Recommended
+                                {copy.plan.badgeLabel}
                             </p>
-                            <h2 className="text-xl font-semibold text-slate-900">Pro</h2>
-                            <p className="text-sm text-slate-600">
-                                For teams that rely on accurate Stripe data in Sheets every day.
-                            </p>
+                            <h2 className="text-xl font-semibold text-slate-900">
+                                {copy.plan.name}
+                            </h2>
+                            <p className="text-sm text-slate-600">{copy.plan.description}</p>
                             <div className="mt-4 flex items-baseline gap-1">
                                 <span className="text-3xl font-semibold text-slate-900">
-                                    {priceDisplay}
+                                    {price}
                                 </span>
                                 <span className="text-sm text-slate-500">{intervalLabel}</span>
                             </div>
                             <ul className="mt-4 space-y-2 text-sm text-slate-700">
-                                <li>• 1 Stripe account synced to Sheets</li>
-                                <li>• Automated backfill + 30-minute sync cadence</li>
-                                <li>• Invoices, charges, customers, payouts, subscriptions</li>
-                                <li>• Priority email support</li>
+                                {copy.plan.bullets.map((line) => (
+                                    <li key={line}>• {line}</li>
+                                ))}
                             </ul>
                         </div>
 
@@ -160,45 +178,38 @@ export function PricingClient({ isLoggedIn }: PricingClientProps) {
                                 type="button"
                                 onClick={handleSelectPlan}
                                 disabled={loading}
-                                className="cursor-pointer inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-70"
+                                className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-70"
                             >
                                 {primaryCtaLabel}
                             </button>
-                            <p className="mt-2 text-[11px] text-slate-500 text-center">
-                                You’ll be redirected to a secure Stripe-hosted payment page to checkout.
+                            <p className="mt-2 text-center text-[11px] text-slate-500">
+                                {copy.plan.checkoutNote}
                             </p>
                         </div>
                     </article>
 
-                    {/* Optional: “Compare” card with feature summary, FAQs snippet, etc. */}
                     <article className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-sm text-slate-700">
                         <h3 className="text-sm font-semibold text-slate-900">
-                            What’s included
+                            {copy.included.title}
                         </h3>
                         <ul className="mt-3 space-y-2">
-                            <li>• Unlimited sync runs during your trial</li>
-                            <li>• Drive ownership stays with your Google account</li>
-                            <li>• Safe to use with existing analysis / working tabs</li>
+                            {copy.included.bullets.map((line) => (
+                                <li key={line}>• {line}</li>
+                            ))}
                         </ul>
                         <h4 className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            FAQ
+                            {copy.included.faqTitle}
                         </h4>
-                        <p className="mt-2 text-xs text-slate-600">
-                            <span className="font-semibold text-slate-800">
-                                Can I cancel during my trial?
-                            </span>{" "}
-                            Yes. Cancel before your 14 days are up and you won’t be charged.
-                        </p>
-                        <p className="mt-2 text-xs text-slate-600">
-                            <span className="font-semibold text-slate-800">
-                                Does this change anything in my Stripe account?
-                            </span>{" "}
-                            No. We only read data via the Stripe API and write into your Sheets.
-                        </p>
+                        {copy.included.faqs.map((faq) => (
+                            <p key={faq.question} className="mt-2 text-xs text-slate-600">
+                                <span className="font-semibold text-slate-800">
+                                    {faq.question}
+                                </span>{" "}
+                                {faq.answer}
+                            </p>
+                        ))}
                     </article>
                 </section>
-
-                {/* Feature comparison + testimonials could go here */}
             </main>
         </div>
     );
