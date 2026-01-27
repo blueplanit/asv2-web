@@ -183,7 +183,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
                 {/* Billing toggle */}
                 <section className="flex justify-center">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 text-xs font-medium text-slate-700">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 text-sm font-medium text-slate-700">
                         <button
                             type="button"
                             onClick={() => setInterval("monthly")}
@@ -203,7 +203,12 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                                 }`}
                         >
                             {copy.toggle.yearlyLabel}
-                            <span className="ml-1 text-[10px] text-emerald-300">
+                            <span
+                                className={`ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700 uppercase tracking-wide" ${interval === "yearly"
+                                        ? "bg-emerald-400 text-slate-900"
+                                        : "bg-emerald-100 text-emerald-700"
+                                    }`}
+                            >
                                 {copy.toggle.yearlySavingsTag}
                             </span>
                         </button>
