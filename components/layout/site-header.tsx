@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { User, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { APP_NAME } from "@/lib/constants";
 
 type NavItem = { href: string; label: string };
 
@@ -114,7 +115,7 @@ export function SiteHeader(props: SiteHeaderProps) {
                         </span>
                         <div className="flex flex-col">
                             <span className="text-sm font-semibold tracking-tight text-slate-900">
-                                {isPublic ? "AutoSync" : "AutoSync Control Tower"}
+                                {APP_NAME}
                             </span>
                             <span className="text-xs text-slate-500">
                                 Stripe → Google Sheets
