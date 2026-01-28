@@ -104,7 +104,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
             return;
         } else if (isNonEntitledTerminal) {
             if (!isCurrent) return;
-            await updateUserSubscriptionStatusToInactive(userId, status, subscription.id);
+            await updateUserSubscriptionStatusToInactive(userId, profile.accountRole, status, subscription.id);
             return;
         }
     } catch (err: any) {
@@ -161,6 +161,7 @@ export async function POST(req: NextRequest) {
                 try {
                     await updateUserSubscriptionStatusToInactive(
                         userId,
+                        profile.accountRole,
                         subscription.status,
                         subscription.id,
                     );

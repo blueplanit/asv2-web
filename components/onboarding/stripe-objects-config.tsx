@@ -17,7 +17,7 @@ const OBJECTS: { id: DataSyncEntryId; label: string; note: string }[] = [
     { id: "customers", label: "Customers", note: "Identifiers and emails" },
     { id: "payouts", label: "Payouts", note: "Gross, fees, and net" },
     { id: "subscriptions", label: "Subscriptions", note: "Plans, status, billing" },
-    { id: "payment_intents", label: "Payment Intents", note: "Authorizations and captures" },
+    // { id: "payment_intents", label: "Payment Intents", note: "Authorizations and captures" },
     { id: "disputes", label: "Disputes", note: "Disputed transactions" },
     { id: "invoice_line_items", label: "Invoice Line Items", note: "Line items for each invoice" },
 ];

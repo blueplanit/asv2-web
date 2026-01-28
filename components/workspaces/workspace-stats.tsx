@@ -11,7 +11,7 @@ const STRIPE_OBJECT_LABELS: Record<string, string> = {
     customers: "Customers",
     payouts: "Payouts",
     subscriptions: "Subscriptions",
-    payment_intents: "Payment Intents",
+    // payment_intents: "Payment Intents",
     disputes: "Disputes",
     invoice_line_items: "Invoice Line Items",
 };
@@ -48,7 +48,7 @@ export function WorkspaceStats({ sheetTabState, stripeDataSyncMap }: WorkspaceSt
         const stats: TabStat[] = [];
         for (const state of sheetTabState) {
             const entry = sheetIdToEntry.get(state.sheetId);
-            if (!entry) continue;
+            if (!entry || !entry.enabled) continue;
 
             const objectId = entry.id;
             const label = STRIPE_OBJECT_LABELS[objectId] ?? entry.displayName ?? objectId;
