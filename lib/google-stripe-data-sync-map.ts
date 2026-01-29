@@ -7,10 +7,23 @@ import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 import { APP_NAME } from "./constants";
 import { UserState } from "./user-state";
+import { getTabSchemaSpec } from "@blueplanit/asv2-shared";
 
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
     return `${base}_raw (DO NOT EDIT)`;
+}
+
+function getColumnCountForEntry(entry: StripeDataSyncEntry): number {
+    try {
+        const spec = getTabSchemaSpec(entry.id, entry.schemaVersion);
+        return spec.columns.length;
+    } catch (error) {
+        // If the schema is not found (e.g. version mismatch or invalid ID), 
+        // we log a warning and default to 26 columns (A-Z) so the sheet is still usable/viewable.
+        console.warn(`[ensureSheetTabs] Warning: Could not resolve schema for ${entry.id}@${entry.schemaVersion}. Defaulting to 26 columns.`, error);
+        return 26;
+    }
 }
 
 const MIN_RAW_TAB_ROW_COUNT = 5000;
@@ -80,7 +93,7 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
             }
 
             const desiredTitle = titleForEntry(entry);
-
+            const targetColCount = getColumnCountForEntry(entry);
             const existingByTitle = byTitle.get(desiredTitle);
             if (existingByTitle && existingByTitle.properties?.sheetId != null) {
                 return {
@@ -98,6 +111,8 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         title: desiredTitle,
                         gridProperties: {
                             rowCount: MIN_RAW_TAB_ROW_COUNT, // seed new *_raw tabs with 5,000 rows instead of the default 1,000
+                            columnCount: targetColCount, 
+                            frozenRowCount: 1,
                         },
                     },
                 },
@@ -138,6 +153,8 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
         for (const entry of stripeDataSyncMap) {
             if (!entry.enabled || entry.sheetId == null) continue;
 
+            const targetColCount = getColumnCountForEntry(entry);
+
             postRequests.push({
                 addProtectedRange: {
                     protectedRange: {
@@ -148,6 +165,35 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         description: `This tab is managed by ${APP_NAME}. Editing here may break your sync. Use the 'Working Sheet' tab for your own analysis.`,
                     },
                 },
+            });
+
+            // Enforce Grid Properties
+            // This ensures self-healing: if schema changes, the sheet resizes.
+            postRequests.push({
+                updateSheetProperties: {
+                    properties: {
+                        sheetId: entry.sheetId,
+                        gridProperties: {
+                            frozenRowCount: 1,
+                            columnCount: targetColCount
+                        },
+                    },
+                    fields: "gridProperties(frozenRowCount,columnCount)",
+                },
+            });
+
+            // Set basic filter to the first column of the tab
+            postRequests.push({
+                setBasicFilter: {
+                    filter: {
+                        range: {
+                            sheetId: entry.sheetId,
+                            startRowIndex: 0,
+                            startColumnIndex: 0,
+                            endColumnIndex: targetColCount
+                        }
+                    }
+                }
             });
         }
 
