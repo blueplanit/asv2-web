@@ -27,10 +27,10 @@ export const WORKING_SHEET_TITLE = "Working Sheet";
 export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
 export const OBJECTS: { id: DataSyncEntryId; label: string; note: string }[] = [
     { id: "invoices", label: "Invoices", note: "Status, amounts, and payments" },
-    { id: "charges", label: "Charges", note: "Card + ACH charges" },
+    { id: "charges", label: "Charges", note: "Transactions (amounts, refunds, statement descriptors, etc.)" },
     { id: "customers", label: "Customers", note: "Identifiers and emails" },
-    { id: "payouts", label: "Payouts", note: "Gross, fees, and net" },
-    { id: "subscriptions", label: "Subscriptions", note: "Plans, status, billing" },
+    { id: "payouts", label: "Payouts", note: "Amount, id, arrival date, etc." },
+    { id: "subscriptions", label: "Subscriptions", note: "Plans, status, cancellations, etc." },
     // { id: "payment_intents", label: "Payment Intents", note: "Authorizations and captures" },
     { id: "disputes", label: "Disputes", note: "Disputed transactions" },
     { id: "invoice_line_items", label: "Invoice Line Items", note: "Line items for each invoice" },
