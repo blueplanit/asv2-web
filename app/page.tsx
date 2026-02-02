@@ -17,6 +17,9 @@ export default async function HomePage() {
 
             <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 pb-16 pt-12 lg:pt-16">
                 <Hero copy={copy.hero} />
+                <div className="mt-10">
+                    <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/70 to-transparent" />
+                </div>
                 <HowItWorksSection copy={copy.howItWorks} />
                 {/* FaqSection could take copy.faq the same way */}
                 <FinalCtaSection copy={copy.finalCta} />

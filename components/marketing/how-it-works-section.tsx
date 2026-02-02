@@ -11,12 +11,12 @@ export function HowItWorksSection({ copy }: Props) {
     return (
         <section id="how-it-works" className="space-y-6">
             <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                    {copy.eyebrow}
-                </p>
-                <h2 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl text-center">
                     {copy.heading}
                 </h2>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500 text-center">
+                    {copy.eyebrow}
+                </p>
             </div>
 
             <ol className="grid gap-4 sm:grid-cols-3">
