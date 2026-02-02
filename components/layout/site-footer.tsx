@@ -60,7 +60,7 @@ export function SiteFooter() {
                                     {APP_NAME}
                                 </span>
                                 <span className="text-xs text-slate-500">
-                                    Stripe → Google Sheets, continuously.
+                                    Stripe → Google Sheets
                                 </span>
                             </div>
                         </div>
