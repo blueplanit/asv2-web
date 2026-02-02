@@ -48,12 +48,12 @@ export function SpreadsheetMockup() {
                                     }}
                                 >
                                     {/* top-left corner */}
-                                    <div className="h-8 border-r border-slate-200" />
+                                    <div className="h-5 border-r border-slate-200" />
 
                                     {letters.map((ch) => (
                                         <div
                                             key={ch}
-                                            className="flex h-8 items-center justify-center border-r border-slate-200 text-[11px] font-medium text-slate-500"
+                                            className="flex h-5 items-center justify-center border-r border-slate-200 text-[11px] font-medium text-slate-500"
                                         >
                                             {ch}
                                         </div>
