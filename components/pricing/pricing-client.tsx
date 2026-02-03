@@ -15,13 +15,12 @@ type PricingClientProps = {
     copy: PricingCopy;
 };
 
-const BILLING_DISPLAY: Record<
-    BillingInterval,
-    { price: string; intervalLabel: string }
-> = {
-    monthly: { price: "$15", intervalLabel: "/month" },
-    yearly: { price: "$129", intervalLabel: "/year" },
-};
+type BillingDisplay = Record<BillingInterval, { price: string; intervalLabel: string }>;
+
+const DEFAULT_BILLING_DISPLAY: BillingDisplay = {
+    monthly: { price: "$19", intervalLabel: "/month" },
+    yearly: { price: "$190", intervalLabel: "/year" },
+  };
 
 type FaqItem = {
     question: string;
@@ -87,6 +86,29 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
     const [showSignedInHint, setShowSignedInHint] = useState(false);
+    const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
+    const [pricingLoading, setPricingLoading] = useState(true); //
+
+    useEffect(() => {
+        let cancelled = false;
+
+        setPricingLoading(true);
+        fetch("/api/billing/pricing")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+                if (cancelled) return;
+                if (data?.billingDisplay) setBillingDisplay(data.billingDisplay);
+            })
+            .catch(() => { })
+            .finally(() => {
+                if (cancelled) return;
+                setPricingLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const searchParams = useSearchParams();
     const authFlag = searchParams.get("auth");
@@ -138,7 +160,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
         }
     }
 
-    const { price, intervalLabel } = BILLING_DISPLAY[interval];
+    const { price, intervalLabel } = billingDisplay[interval];
 
     const freeTrialMsg = !isLoggedIn ? (
         <a
@@ -229,14 +251,20 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                             <p className="text-sm text-slate-600">
                                 {copy.plan.description}
                             </p>
-                            <div className="mt-4 flex items-baseline gap-1">
-                                <span className="text-3xl font-semibold text-slate-900">
-                                    {price}
-                                </span>
-                                <span className="text-sm text-slate-500">
-                                    {intervalLabel}
-                                </span>
+                            <div className="mt-4 flex items-baseline gap-2">
+                                {pricingLoading ? (
+                                    <>
+                                        <span className="inline-block h-9 w-24 rounded-md bg-slate-200/80 align-bottom animate-pulse" />
+                                        <span className="inline-block h-5 w-14 rounded-md bg-slate-200/60 align-bottom animate-pulse" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-3xl font-semibold text-slate-900">{price}</span>
+                                        <span className="text-sm text-slate-500">{intervalLabel}</span>
+                                    </>
+                                )}
                             </div>
+
                             <ul className="mt-4 space-y-2 text-sm text-slate-700">
                                 {copy.plan.bullets.map((line) => (
                                     <li key={line}>• {line}</li>
