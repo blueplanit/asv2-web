@@ -4,6 +4,8 @@ import { APP_NAME } from "./constants";
 export interface HeroCopy {
     eyebrow: string;
     title: string;
+    title1: string;
+    title2: string;
     subtitle: string;
     primaryCtaLabel: string;
     primaryCtaHref: string;
@@ -50,6 +52,8 @@ export const DEFAULT_MARKETING_COPY: MarketingCopy = {
     hero: {
         eyebrow: "Stripe → Google Sheets, continuously",
         title: "Sync Stripe data into Google Sheets without exporting another CSV.",
+        title1: "Your Stripe data,",
+        title2: "already in Google Sheets.",
         subtitle: `${APP_NAME} keeps your Stripe data flowing into a structured Google Sheet, so revenue ops, founders, and technical leads can answer real questions, not fight with exports and stale files.`,
         primaryCtaLabel: "Get started",
         primaryCtaHref: "/login",

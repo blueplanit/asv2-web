@@ -76,15 +76,15 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
         "faqs": [
             {
                 "answer": "Core Stripe data (invoices + line items, charges, customers, payouts, subscriptions, payment intents, and disputes) are synced into structured “raw” tabs so you can build reports based on product, fees, revenue and more.",
-                "question": "What Stripe data can AutoSync2 bring into Google Sheets?"
+                "question": "What Stripe data can SyncStaq bring into Google Sheets?"
             },
             {
                 "answer": "No. We only read data via the Stripe API and write into your Sheets.",
                 "question": "Does this change anything in my Stripe account?"
             },
             {
-                "answer": "No. AutoSync2 only updates the dedicated, protected 'raw' tabs; your formulas, dashboards, and models in other 'working' tabs stay untouched.",
-                "question": "Will AutoSync2 overwrite my existing formulas or reports in the sheet?"
+                "answer": "No. SyncStaq only updates the dedicated, protected 'raw' tabs; your formulas, dashboards, and models in other 'working' tabs stay untouched.",
+                "question": "Will SyncStaq overwrite my existing formulas or reports in the sheet?"
             },
             {
                 "answer": "Your Stripe → Sheets sync will stop running until you choose a paid plan.",
@@ -92,7 +92,7 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
             },
             {
                 "answer": "Yes, you can cancel anytime before your next billing period to avoid future charges. If you’ve already been billed, refunds are available within 14 days",
-                "question": "Can I cancel or get a refund if AutoSync isn’t a fit?"
+                "question": "Can I cancel or get a refund if SyncStaq isn’t a fit?"
             }
         ],
         "title": "What’s included",

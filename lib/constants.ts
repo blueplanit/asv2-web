@@ -1,1 +1,1 @@
-export const APP_NAME = "AutoSync2";
+export const APP_NAME = "SyncStaq";

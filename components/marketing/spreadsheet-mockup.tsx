@@ -25,7 +25,7 @@ export function SpreadsheetMockup() {
                             </div>
 
                             <span className="text-xs font-medium text-slate-900">
-                                Stripe Sync Demo
+                                SyncStaq Demo
                             </span>
                         </div>
 
