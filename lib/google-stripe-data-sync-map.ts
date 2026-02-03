@@ -8,7 +8,6 @@ import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 import { APP_NAME } from "./constants";
 import { UserState } from "./user-state";
-import { getTabSchemaSpec } from "@blueplanit/asv2-shared";
 
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
@@ -129,7 +128,7 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         title: desiredTitle,
                         gridProperties: {
                             rowCount: MIN_RAW_TAB_ROW_COUNT, // seed new *_raw tabs with 5,000 rows instead of the default 1,000
-                            columnCount: targetColCount, 
+                            columnCount: targetColCount,
                             frozenRowCount: 1,
                         },
                     },
