@@ -22,7 +22,15 @@ export function Hero({ copy }: HeroProps) {
                         id="hero-heading"
                         className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl lg:text-5xl"
                     >
-                        {copy.title}
+                        <div>
+                            {copy.title}
+                        </div>
+                        <div>
+                            {copy.title1}
+                        </div>
+                        <div>
+                            {copy.title2}
+                        </div>
                     </h1>
                     <p className="max-w-lg text-base leading-relaxed text-slate-600 sm:text-lg">
                         {copy.subtitle}

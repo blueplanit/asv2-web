@@ -7,6 +7,8 @@ import { DEFAULT_MARKETING_COPY, type MarketingCopy } from "./marketing-copy";
 const heroSchema = z.object({
     eyebrow: z.string(),
     title: z.string(),
+    title1: z.string(),
+    title2: z.string(),
     subtitle: z.string(),
     primaryCtaLabel: z.string(),
     primaryCtaHref: z.string(),
@@ -77,6 +79,7 @@ export async function getMarketingCopy(): Promise<MarketingCopy> {
             return DEFAULT_MARKETING_COPY;
         }
 
+        console.log("getMarketingCopy: parsed", parsed.data);
         return parsed.data as MarketingCopy;
     } catch (err) {
         console.error("getMarketingCopy: Contentful error, using defaults", err);

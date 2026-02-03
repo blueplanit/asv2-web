@@ -1,7 +1,7 @@
 // components/layout/site-footer.tsx
 import Link from "next/link";
 import { APP_NAME } from "@/lib/constants";
-
+import { Brand } from "@/components/brand/brand";
 const productLinks = [
     // { label: "Overview", href: "#" },
     { label: "Pricing", href: "/pricing" },
@@ -50,20 +50,9 @@ export function SiteFooter() {
                     {/* Brand + brief copy */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
-                        <Link href="/" className="flex items-center gap-3">
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                                {APP_NAME.slice(0, 2).toUpperCase()}
-                            </span>
-                            </Link>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-semibold text-slate-900">
-                                    {APP_NAME}
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                    Stripe → Google Sheets
-                                </span>
-                            </div>
+                            <Brand size={32} />
                         </div>
+
                         <p className="max-w-sm text-xs leading-relaxed text-slate-500">
                             {APP_NAME} keeps your Stripe business data mirrored into a single, structured
                             Google Sheet so you can focus on insights, not exports.

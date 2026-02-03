@@ -8,6 +8,7 @@ import { User, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { APP_NAME } from "@/lib/constants";
+import { Brand } from "@/components/brand/brand";
 
 type NavItem = { href: string; label: string };
 
@@ -109,20 +110,9 @@ export function SiteHeader(props: SiteHeaderProps) {
             <div className="mx-auto flex w-full items-center justify-between px-6 py-3">
                 {/* Brand */}
                 <div className="flex items-center gap-3">
-                    <Link href="/" className="flex items-center gap-3">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                            AS
-                        </span>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-semibold tracking-tight text-slate-900">
-                                {APP_NAME}
-                            </span>
-                            <span className="text-xs text-slate-500">
-                                Stripe → Google Sheets
-                            </span>
-                        </div>
-                    </Link>
+                    <Brand size={32} />
                 </div>
+
 
                 {/* Nav */}
 
