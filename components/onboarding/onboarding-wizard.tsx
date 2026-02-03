@@ -1,12 +1,13 @@
 // components/onboarding/onboarding-wizard.tsx
 "use client";
 
+import { APP_NAME } from "@/lib/constants";
 import * as React from "react";
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { useEffect } from "react";
-import { DataSyncEntryId, DATA_SYNC_ENTRY_IDS } from "@/lib/schemas/sync-config";
+import { DataSyncEntryId } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
@@ -24,6 +25,17 @@ export const WORKSPACE_SHEET_TITLE = "My Stripe Sync – Workspace";
 export const FOLDER_NAME = "Sync";
 export const WORKING_SHEET_TITLE = "Working Sheet";
 export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
+export const OBJECTS: { id: DataSyncEntryId; label: string; note: string }[] = [
+    { id: "invoices", label: "Invoices", note: "Status, amounts, and payments" },
+    { id: "charges", label: "Charges", note: "Transactions (amounts, refunds, statement descriptors, etc.)" },
+    { id: "customers", label: "Customers", note: "Identifiers and emails" },
+    { id: "payouts", label: "Payouts", note: "Amount, arrival date, etc." },
+    { id: "subscriptions", label: "Subscriptions", note: "Plan details, status, cancellations, etc." },
+    // { id: "payment_intents", label: "Payment Intents", note: "Authorizations and captures" },
+    { id: "disputes", label: "Disputes", note: "Disputed transactions" },
+    { id: "invoice_line_items", label: "Invoice Line Items", note: "Line items for each invoice" },
+];
+export const AVAILABLE_DATA_SYNC_ENTRY_IDS: DataSyncEntryId[] = OBJECTS.map((obj) => obj.id);
 
 export type Step = {
     id: number;
@@ -45,7 +57,7 @@ const steps: Step[] = [
     {
         id: 2,
         title: "Grant Sheets access",
-        description: "Allow AutoSync to create and update Google Sheets files in your Drive.",
+        description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive.`,
         ctaLabel: "Connect Google Sheets",
     },
     {
@@ -164,7 +176,7 @@ export function OnboardingWizard() {
                 )
                 .map((entry) => entry.id) as DataSyncEntryId[];
         }
-        return [...DATA_SYNC_ENTRY_IDS] as DataSyncEntryId[];
+        return AVAILABLE_DATA_SYNC_ENTRY_IDS;
     }, [onboardingConfig]);
 
     const [selectedDataSyncEntries, setSelectedDataSyncEntries] = useState<DataSyncEntryId[]>(initialStripeDataSyncEntries);

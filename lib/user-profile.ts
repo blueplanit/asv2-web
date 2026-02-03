@@ -10,7 +10,7 @@ import { ddb } from "./dynamo";
 import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { UserProfileSchema, type UserProfile } from "./schemas/user-profile";
 import { ulid } from "ulid";
-import { googleConnectSk, userPk } from "@blueplanit/asv2-shared";
+import { googleConnectSk, userPk, AccountRole } from "@blueplanit/asv2-shared";
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const GOOGLE_ID_GSI_NAME = "GOOGLE_GSI"; // must match CDK definition
 
@@ -106,9 +106,14 @@ export async function updateUserSubscriptionStatusToActive(
 
 export async function updateUserSubscriptionStatusToInactive(
     userId: string,
+    accountRole?: AccountRole,
     rawStatus?: string, // e.g. Stripe subscription.status ("canceled", "unpaid", etc.)
     expectedSubscriptionId?: string,
 ) {
+    if (accountRole === "tester") {
+        return;
+    }
+
     const pk = userPk(userId);
     const now = new Date().toISOString();
 

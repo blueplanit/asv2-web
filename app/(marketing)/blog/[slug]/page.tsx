@@ -22,38 +22,43 @@ export async function generateStaticParams() {
 }
 
 // SEO metadata: use excerpt as meta description
-export async function generateMetadata(
-    { params }: { params: { slug: string } }
-): Promise<Metadata> {
-    const post = await getBlogPostBySlug(params.slug);
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+    try {
+        const post = await getBlogPostBySlug(params.slug);
+        if (!post) {
+            return {
+                title: `Post not found | ${APP_NAME} Blog`,
+                description: "This blog post could not be found.",
+            };
+        }
 
-    if (!post) {
+        const title = `${post.title} | ${APP_NAME} Blog`;
+        const description =
+            post.excerpt ||
+            "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.";
+
         return {
-            title: `Post not found | ${APP_NAME} Blog`,
-            description: "This blog post could not be found.",
+            title,
+            description,
+            openGraph: {
+                title,
+                description,
+                type: "article",
+                url: `/blog/${params.slug}`,
+            },
+            twitter: {
+                card: "summary",
+                title,
+                description,
+            },
+        };
+    } catch (err) {
+        console.error("generateMetadata error for blog post", { slug: params.slug, err });
+        return {
+            title: `Post not available | ${APP_NAME} Blog`,
+            description: "There was an error loading this blog post.",
         };
     }
-
-    const title = `${post.title} | ${APP_NAME} Blog`;
-    const description =
-        post.excerpt ||
-        "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.";
-
-    return {
-        title,
-        description,
-        openGraph: {
-            title,
-            description,
-            type: "article",
-            url: `/blog/${params.slug}`,
-        },
-        twitter: {
-            card: "summary",
-            title,
-            description,
-        },
-    };
 }
 
 export default async function BlogPostPage({
@@ -86,9 +91,11 @@ export default async function BlogPostPage({
                 </p>
             </header>
 
-            <div className="mt-8 text-sm leading-relaxed">
-                {documentToReactComponents(bodyDoc, contentfulRichTextOptions)}
-            </div>
+            {bodyDoc && (
+                <div className="mt-8 text-sm leading-relaxed">
+                    {documentToReactComponents(bodyDoc, contentfulRichTextOptions)}
+                </div>
+            )}
         </article>
     );
 }

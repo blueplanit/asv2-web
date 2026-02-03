@@ -1,25 +1,32 @@
-// app/pages/[slug]/page.tsx
+// app/(marketing)/pages/[slug]/page.tsx
 import { notFound } from "next/navigation";
 import { getPageBySlug } from "@/lib/contentful-queries";
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";
-import { contentfulRichTextOptions, type ContentfulRichTextDocument } from "@/lib/contentful-rich-text";
+import {
+    contentfulRichTextOptions,
+    type ContentfulRichTextDocument,
+} from "@/lib/contentful-rich-text";
+
 export const revalidate = 60;
 
 export default async function CmsPage({
     params,
 }: {
-    params: { slug: string };
+    params: Promise<{ slug: string }>;
 }) {
-    const page = await getPageBySlug(params.slug);
+    // params is a Promise in Next 16 + React 19
+    const { slug } = await params;
+
+    const page = await getPageBySlug(slug);
     if (!page) return notFound();
 
-    const bodyDoc = page.body as unknown as ContentfulRichTextDocument; // body is Rich text field
+    const bodyDoc = page.body as unknown as ContentfulRichTextDocument;
 
     return (
-        <div className="bg-white text-slate-900">
-            <div className="mx-auto max-w-3xl px-4 py-12">
+        <div className="bg-white text-slate-900 min-h-[100vh]">
+            <div className="mx-auto max-w-3xl px-4 py-12 h-full">
                 <h1 className="text-3xl font-semibold tracking-tight">
                     {page.title}
                 </h1>

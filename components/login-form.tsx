@@ -1,5 +1,7 @@
+// components/login-form.tsx
 "use client";
 
+import { APP_NAME } from "@/lib/constants";
 import { signIn } from "next-auth/react";
 
 export function LoginForm() {
@@ -8,13 +10,13 @@ export function LoginForm() {
             <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm space-y-6">
                 <div className="space-y-2 text-center">
                     <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
-                        AutoSync
+                        {APP_NAME}
                     </p>
                     <h1 className="text-2xl font-semibold text-slate-900">
                         Sign in with Google
                     </h1>
                     <p className="text-sm text-slate-600">
-                        Use your Google account to access your AutoSync workspace.
+                        Use your Google account to access your {APP_NAME} workspace.
                     </p>
                 </div>
 

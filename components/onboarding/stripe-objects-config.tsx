@@ -2,7 +2,6 @@
 "use client";
 
 import {
-    DATA_SYNC_ENTRY_IDS,
     type DataSyncEntryId,
 } from "@/lib/schemas/sync-config";
 import {
@@ -10,17 +9,8 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const OBJECTS: { id: DataSyncEntryId; label: string; note: string }[] = [
-    { id: "invoices", label: "Invoices", note: "Status, amounts, and payments" },
-    { id: "charges", label: "Charges", note: "Card + ACH charges" },
-    { id: "customers", label: "Customers", note: "Identifiers and emails" },
-    { id: "payouts", label: "Payouts", note: "Gross, fees, and net" },
-    { id: "subscriptions", label: "Subscriptions", note: "Plans, status, billing" },
-    { id: "payment_intents", label: "Payment Intents", note: "Authorizations and captures" },
-    { id: "disputes", label: "Disputes", note: "Disputed transactions" },
-    { id: "invoice_line_items", label: "Invoice Line Items", note: "Line items for each invoice" },
-];
+import { OBJECTS } from "./onboarding-wizard";
+import { AVAILABLE_DATA_SYNC_ENTRY_IDS } from "./onboarding-wizard";
 
 export function StripeObjectsStep(props: {
     value: DataSyncEntryId[];
@@ -30,7 +20,7 @@ export function StripeObjectsStep(props: {
     const { value, onChange, disabled } = props;
 
     // Ensure caller can initialize with [] and we still show defaults
-    const selected = value.length ? value : [...DATA_SYNC_ENTRY_IDS];
+    const selected = value.length ? value : AVAILABLE_DATA_SYNC_ENTRY_IDS;
     const allSelected = selected.length === OBJECTS.length;
 
     function toggleObject(id: DataSyncEntryId) {
@@ -49,7 +39,7 @@ export function StripeObjectsStep(props: {
 
     function resetToRecommended() {
         if (disabled) return;
-        onChange([...DATA_SYNC_ENTRY_IDS]);
+        onChange(AVAILABLE_DATA_SYNC_ENTRY_IDS);
     }
 
     const reccomendedBtnText = allSelected ? "Recommended options" : "Sync all data";
