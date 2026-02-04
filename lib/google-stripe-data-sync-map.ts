@@ -241,6 +241,38 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                     },
                 });
             }
+
+            // Populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
+            // NOTE: invoice tab is already populated with customer name, email, and description columns from API
+            if (entry.id !== "invoices") {
+                const idxCustomerId = spec.columns.findIndex(c => c.fieldKey === "customer_id");
+                if (idxCustomerId >= 0) {
+                    const customerIdCol = colLetter(idxCustomerId);
+
+                    const targets: Array<{ fieldKey: string; field: "name" | "email" | "description" }> = [
+                        { fieldKey: "customer_name", field: "name" },
+                        { fieldKey: "customer_email", field: "email" },
+                        { fieldKey: "customer_description", field: "description" },
+                    ];
+
+                    for (const t of targets) {
+                        const idxTarget = spec.columns.findIndex(c => c.fieldKey === t.fieldKey);
+                        if (idxTarget < 0) continue;
+
+                        postRequests.push(
+                            setArrayFormulaInColumn({
+                                sheetId: entry.sheetId!,
+                                colIndex0: idxTarget,
+                                formula: customerLookupFormula({
+                                    customerIdColLetter: customerIdCol,
+                                    field: t.field,
+                                    customersSheetTitle: "Customers_raw (DO NOT EDIT)",
+                                }),
+                            })
+                        );
+                    }
+                }
+            }
         }
 
         // Ensure a single "Working Sheet" tab exists, reuse/rename "Sheet1" if present
@@ -316,4 +348,53 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
         throw error;
     }
 
+}
+
+
+function setArrayFormulaInColumn(params: {
+    sheetId: number;
+    colIndex0: number;     // target column (0-based)
+    formula: string;       // must start with =
+}): sheets_v4.Schema$Request {
+    return {
+        updateCells: {
+            start: { sheetId: params.sheetId, rowIndex: 1, columnIndex: params.colIndex0 }, // row 2
+            rows: [
+                { values: [{ userEnteredValue: { formulaValue: params.formula } }] }
+            ],
+            fields: "userEnteredValue"
+        }
+    };
+}
+
+function colLetter(colIdx0: number): string {
+    let n = colIdx0 + 1;
+    let s = "";
+    while (n > 0) {
+        const r = (n - 1) % 26;
+        s = String.fromCharCode(65 + r) + s;
+        n = Math.floor((n - 1) / 26);
+    }
+    return s;
+}
+
+
+type CustomerField = "name" | "email" | "description";
+
+function customerLookupFormula(params: {
+    customerIdColLetter: string;   // e.g. "B"
+    field: CustomerField;
+    customersSheetTitle?: string;  // default: Customers_raw (DO NOT EDIT)
+}): string {
+    const sheet = `'${params.customersSheetTitle ?? "Customers_raw (DO NOT EDIT)"}'`;
+
+    // Customers sheet columns: A=id, D=name, E=email, F=description (per registry)
+    const returnCol =
+        params.field === "name" ? "D" :
+            params.field === "email" ? "E" :
+                "F";
+
+    const idCol = params.customerIdColLetter;
+
+    return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",IFERROR(XLOOKUP(${idCol}2:${idCol},${sheet}!A:A,${sheet}!${returnCol}:${returnCol}),"")))`;
 }
