@@ -7,7 +7,6 @@ import clsx from "clsx";
 import { User, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { APP_NAME } from "@/lib/constants";
 import { Brand } from "@/components/brand/brand";
 
 type NavItem = { href: string; label: string };
@@ -85,11 +84,11 @@ export function SiteHeader(props: SiteHeaderProps) {
                 <div className="absolute right-0 mt-2 flex w-40 flex-col items-start gap-1 rounded-xl border border-slate-200 bg-white py-1 text-xs text-slate-700 shadow-lg">
                     <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                             setMenuOpen(false);
                             if (isAuthed) {
                                 try {
-                                    signOut({ callbackUrl: "/login" });
+                                    await signOut({ callbackUrl: "/login", redirect: true });
                                 } catch (error) {
                                     console.error("Error signing out", error);
                                 }
