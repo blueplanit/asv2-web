@@ -3,11 +3,11 @@
 import type {
     StripeDataSyncEntry,
 } from "./schemas/sync-config";
+import { getTabSchemaSpec, isDataSyncEntryIdSupported, TabSchemaSpec, type TabColumnSpec } from "@blueplanit/asv2-shared";
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 import { APP_NAME } from "./constants";
 import { UserState } from "./user-state";
-import { getTabSchemaSpec } from "@blueplanit/asv2-shared";
 
 function titleForEntry(entry: StripeDataSyncEntry): string {
     const base = entry.displayName ?? entry.id;
@@ -23,6 +23,23 @@ function getColumnCountForEntry(entry: StripeDataSyncEntry): number {
         // we log a warning and default to 26 columns (A-Z) so the sheet is still usable/viewable.
         console.warn(`[ensureSheetTabs] Warning: Could not resolve schema for ${entry.id}@${entry.schemaVersion}. Defaulting to 26 columns.`, error);
         return 26;
+    }
+}
+
+/**
+ * Maps a registry column type to a Google Sheets numberFormat for repeatCell.
+ * Returns null for types that don't need a number format (string, boolean).
+ */
+function numberFormatForColumnType(col: TabColumnSpec): { type: "DATE_TIME" | "NUMBER"; pattern: string } | null {
+    switch (col.type) {
+        case "date":
+        case "timestamp":
+            return { type: "DATE_TIME", pattern: "yyyy-MM-dd HH:mm:ss" };
+        case "decimal":
+        case "int":
+        case "string":
+        case "boolean":
+            return null;
     }
 }
 
@@ -111,7 +128,7 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         title: desiredTitle,
                         gridProperties: {
                             rowCount: MIN_RAW_TAB_ROW_COUNT, // seed new *_raw tabs with 5,000 rows instead of the default 1,000
-                            columnCount: targetColCount, 
+                            columnCount: targetColCount,
                             frozenRowCount: 1,
                         },
                     },
@@ -149,8 +166,9 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
         // Second batch: protect our tabs + ensure "Working Sheet" exists, is named, seeded, and moved to the end
         const postRequests: sheets_v4.Schema$Request[] = [];
 
-        // Protect all enabled entries with a bound sheetId
-        for (const entry of stripeDataSyncMap) {
+        // Protect all enabled entries with a bound sheetId; format columns for newly created *_raw tabs
+        for (let idx = 0; idx < stripeDataSyncMap.length; idx++) {
+            const entry = stripeDataSyncMap[idx];
             if (!entry.enabled || entry.sheetId == null) continue;
 
             const targetColCount = getColumnCountForEntry(entry);
@@ -195,6 +213,72 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                     }
                 }
             });
+
+            // Format columns only for newly created sheets (registry: date, timestamp, number types)
+            if (entryIndexToRequestIndex.get(idx) == null) continue;
+            if (!isDataSyncEntryIdSupported(entry.id)) continue;
+
+            const spec = getTabSchemaSpec(entry.id, entry.schemaVersion ?? "1.0.0");
+            for (let colIdx = 0; colIdx < spec.columns.length; colIdx++) {
+                const nf = numberFormatForColumnType(spec.columns[colIdx]);
+                if (!nf) continue;
+
+                postRequests.push({
+                    repeatCell: {
+                        range: {
+                            sheetId: entry.sheetId,
+                            startRowIndex: 1,
+                            endRowIndex: MIN_RAW_TAB_ROW_COUNT,
+                            startColumnIndex: colIdx,
+                            endColumnIndex: colIdx + 1,
+                        },
+                        cell: {
+                            userEnteredFormat: {
+                                numberFormat: nf,
+                            },
+                        },
+                        fields: "userEnteredFormat.numberFormat",
+                    },
+                });
+            }
+
+            // Populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
+            // NOTE: invoice tab is already populated with customer name, email, and description columns from API
+            const customersSpec = getTabSchemaSpec("customers", "1.0.0");
+            if (entry.id !== "invoices") {
+                const idxCustomerId = spec.columns.findIndex(c => c.fieldKey === "customer_id");
+                if (idxCustomerId >= 0) {
+                    const factCustomerIdCol = colLetter(idxCustomerId);
+
+                    const targets: Array<{ fieldKey: string; field: "name" | "email" | "description" }> = [
+                        { fieldKey: "customer_name", field: "name" },
+                        { fieldKey: "customer_email", field: "email" },
+                        { fieldKey: "customer_description", field: "description" },
+                    ];
+
+                    for (const t of targets) {
+                        const idxTarget = spec.columns.findIndex(c => c.fieldKey === t.fieldKey);
+                        if (idxTarget < 0) continue;
+
+                        const formula = customerLookupFormula({
+                            factCustomerIdColLetter: factCustomerIdCol,
+                            field: t.field,
+                            customersSheetTitle: "Customers_raw (DO NOT EDIT)",
+                            customersSpec,
+                        });
+
+                        if (!formula) continue;
+
+                        postRequests.push(
+                            setArrayFormulaInColumn({
+                                sheetId: entry.sheetId!,
+                                colIndex0: idxTarget,
+                                formula,
+                            })
+                        );
+                    }
+                }
+            }
         }
 
         // Ensure a single "Working Sheet" tab exists, reuse/rename "Sheet1" if present
@@ -270,4 +354,64 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
         throw error;
     }
 
+}
+
+
+function setArrayFormulaInColumn(params: {
+    sheetId: number;
+    colIndex0: number;     // target column (0-based)
+    formula: string;       // must start with =
+}): sheets_v4.Schema$Request {
+    return {
+        updateCells: {
+            start: { sheetId: params.sheetId, rowIndex: 1, columnIndex: params.colIndex0 }, // row 2
+            rows: [
+                { values: [{ userEnteredValue: { formulaValue: params.formula } }] }
+            ],
+            fields: "userEnteredValue"
+        }
+    };
+}
+
+function colLetter(colIdx0: number): string {
+    let n = colIdx0 + 1;
+    let s = "";
+    while (n > 0) {
+        const r = (n - 1) % 26;
+        s = String.fromCharCode(65 + r) + s;
+        n = Math.floor((n - 1) / 26);
+    }
+    return s;
+}
+
+type CustomerField = "name" | "email" | "description";
+
+function colLetterForFieldKey(spec: TabSchemaSpec, fieldKey: string): string | null {
+    const idx = spec.columns.findIndex(c => c.fieldKey === fieldKey);
+    return idx >= 0 ? colLetter(idx) : null;
+}
+
+// This function generates a lookup formula to populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
+function customerLookupFormula(params: {
+    factCustomerIdColLetter: string;     // e.g. "B" (in the non-customer tab)
+    field: CustomerField;               // name|email|description
+    customersSheetTitle?: string;       // default: Customers_raw (DO NOT EDIT)
+    customersSpec: TabSchemaSpec;       // registry spec for "customers"
+}): string | null {
+    const sheet = `'${params.customersSheetTitle ?? "Customers_raw (DO NOT EDIT)"}'`;
+
+    const customerIdColInCustomers = colLetterForFieldKey(params.customersSpec, "customer_id");
+    if (!customerIdColInCustomers) return null;
+
+    const customerFieldKey =
+        params.field === "name" ? "name" :
+            params.field === "email" ? "email" :
+                "description";
+
+    const returnColInCustomers = colLetterForFieldKey(params.customersSpec, customerFieldKey);
+    if (!returnColInCustomers) return null;
+
+    const idCol = params.factCustomerIdColLetter;
+
+    return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",IFERROR(XLOOKUP(${idCol}2:${idCol},${sheet}!${customerIdColInCustomers}:${customerIdColInCustomers},${sheet}!${returnColInCustomers}:${returnColInCustomers}),"")))`;
 }

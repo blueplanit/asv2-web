@@ -21,10 +21,10 @@ type InitSheetTabStates = Array<{
     lastSyncedAt?: string | null;
 }>;
 
-export const WORKSPACE_SHEET_TITLE = "My Stripe Sync – Workspace";
-export const FOLDER_NAME = "Sync";
+export const WORKSPACE_SHEET_TITLE = `My ${APP_NAME} – Workspace`;
+export const FOLDER_NAME = APP_NAME;
 export const WORKING_SHEET_TITLE = "Working Sheet";
-export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. You can edit anything here. Don't edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
+export const WORKING_SHEET_MESSAGE = "Use this sheet for your own analysis. You can edit anything here. Do NOT edit the protected tabs. Instead, reference the protected *_raw (DO NOT EDIT) tabs with formulas.";
 export const OBJECTS: { id: DataSyncEntryId; label: string; note: string }[] = [
     { id: "invoices", label: "Invoices", note: "Status, amounts, and payments" },
     { id: "charges", label: "Charges", note: "Transactions (amounts, refunds, statement descriptors, etc.)" },
