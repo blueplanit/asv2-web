@@ -166,6 +166,48 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
         // Second batch: protect our tabs + ensure "Working Sheet" exists, is named, seeded, and moved to the end
         const postRequests: sheets_v4.Schema$Request[] = [];
 
+        // Define lookup sources for customer name, email, and description columns
+        const customersEntry = stripeDataSyncMap.find(e => e.id === "customers");
+        const invoicesEntry = stripeDataSyncMap.find(e => e.id === "invoices");
+
+        const hasLookupDeps = Boolean(customersEntry && invoicesEntry);
+
+        let primaryCustomers: LookupSource | null = null;
+        let fallbackInvoices: LookupSource | null = null;
+
+        if (hasLookupDeps) {
+            const customersSheetTitle = titleForEntry(customersEntry!);
+            const invoicesSheetTitle = titleForEntry(invoicesEntry!);
+
+            const customersSchemaVersion = customersEntry!.schemaVersion ?? "1.0.0";
+            const invoicesSchemaVersion = invoicesEntry!.schemaVersion ?? "1.0.0";
+
+            const customersSpec = getTabSchemaSpec("customers", customersSchemaVersion);
+            const invoicesSpec = getTabSchemaSpec("invoices", invoicesSchemaVersion);
+
+            primaryCustomers = {
+                sheetTitle: customersSheetTitle,
+                spec: customersSpec,
+                idFieldKey: "customer_id",
+                valueFieldKeyByCustomerField: {
+                    name: "name",
+                    email: "email",
+                    description: "description",
+                },
+            };
+
+            fallbackInvoices = {
+                sheetTitle: invoicesSheetTitle,
+                spec: invoicesSpec,
+                idFieldKey: "customer_id",
+                valueFieldKeyByCustomerField: {
+                    name: "customer_name",
+                    email: "customer_email",
+                    description: "customer_description",
+                },
+            };
+        }
+
         // Protect all enabled entries with a bound sheetId; format columns for newly created *_raw tabs
         for (let idx = 0; idx < stripeDataSyncMap.length; idx++) {
             const entry = stripeDataSyncMap[idx];
@@ -243,41 +285,16 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
             }
 
             // Populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
-            // NOTE: invoice tab is already populated with customer name, email, and description columns from API
-            const customersSpec = getTabSchemaSpec("customers", "1.0.0");
-            if (entry.id !== "invoices") {
-                const idxCustomerId = spec.columns.findIndex(c => c.fieldKey === "customer_id");
-                if (idxCustomerId >= 0) {
-                    const factCustomerIdCol = colLetter(idxCustomerId);
-
-                    const targets: Array<{ fieldKey: string; field: "name" | "email" | "description" }> = [
-                        { fieldKey: "customer_name", field: "name" },
-                        { fieldKey: "customer_email", field: "email" },
-                        { fieldKey: "customer_description", field: "description" },
-                    ];
-
-                    for (const t of targets) {
-                        const idxTarget = spec.columns.findIndex(c => c.fieldKey === t.fieldKey);
-                        if (idxTarget < 0) continue;
-
-                        const formula = customerLookupFormula({
-                            factCustomerIdColLetter: factCustomerIdCol,
-                            field: t.field,
-                            customersSheetTitle: "Customers_raw (DO NOT EDIT)",
-                            customersSpec,
-                        });
-
-                        if (!formula) continue;
-
-                        postRequests.push(
-                            setArrayFormulaInColumn({
-                                sheetId: entry.sheetId!,
-                                colIndex0: idxTarget,
-                                formula,
-                            })
-                        );
-                    }
-                }
+            // NOTE: invoice tab is already populated with customer name and email columns from API, description is populated with a lookup formula
+            if (primaryCustomers && fallbackInvoices) {
+                appendCustomerLookupFormulaRequests({
+                    postRequests,
+                    entryId: entry.id,
+                    sheetId: entry.sheetId!,
+                    spec,
+                    primary: primaryCustomers,
+                    fallback: fallbackInvoices,
+                });
             }
         }
 
@@ -356,7 +373,6 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
 
 }
 
-
 function setArrayFormulaInColumn(params: {
     sheetId: number;
     colIndex0: number;     // target column (0-based)
@@ -391,27 +407,103 @@ function colLetterForFieldKey(spec: TabSchemaSpec, fieldKey: string): string | n
     return idx >= 0 ? colLetter(idx) : null;
 }
 
+type LookupSource = {
+    sheetTitle: string;                 // e.g. "Customers_raw (DO NOT EDIT)"
+    spec: TabSchemaSpec;                // registry spec for that tab
+    idFieldKey: string;                 // e.g. "customer_id"
+    valueFieldKeyByCustomerField: Record<CustomerField, string>; // fieldKey mapping per source
+};
+
 // This function generates a lookup formula to populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
 function customerLookupFormula(params: {
-    factCustomerIdColLetter: string;     // e.g. "B" (in the non-customer tab)
-    field: CustomerField;               // name|email|description
-    customersSheetTitle?: string;       // default: Customers_raw (DO NOT EDIT)
-    customersSpec: TabSchemaSpec;       // registry spec for "customers"
+    factCustomerIdColLetter: string;   // customer_id column letter in the *fact* tab (e.g. "B")
+    field: CustomerField;
+    primary: LookupSource;             // Customers_raw
+    fallback?: LookupSource;           // Invoices_raw (optional)
 }): string | null {
-    const sheet = `'${params.customersSheetTitle ?? "Customers_raw (DO NOT EDIT)"}'`;
-
-    const customerIdColInCustomers = colLetterForFieldKey(params.customersSpec, "customer_id");
-    if (!customerIdColInCustomers) return null;
-
-    const customerFieldKey =
-        params.field === "name" ? "name" :
-            params.field === "email" ? "email" :
-                "description";
-
-    const returnColInCustomers = colLetterForFieldKey(params.customersSpec, customerFieldKey);
-    if (!returnColInCustomers) return null;
-
     const idCol = params.factCustomerIdColLetter;
 
-    return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",IFERROR(XLOOKUP(${idCol}2:${idCol},${sheet}!${customerIdColInCustomers}:${customerIdColInCustomers},${sheet}!${returnColInCustomers}:${returnColInCustomers}),"")))`;
+    const pIdCol = colLetterForFieldKey(params.primary.spec, params.primary.idFieldKey);
+    const pValKey = params.primary.valueFieldKeyByCustomerField[params.field];
+    const pValCol = colLetterForFieldKey(params.primary.spec, pValKey);
+    if (!pIdCol || !pValCol) return null;
+
+    const primarySheet = `'${params.primary.sheetTitle}'`;
+
+    if (!params.fallback) {
+        return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",IFERROR(XLOOKUP(${idCol}2:${idCol},${primarySheet}!${pIdCol}:${pIdCol},${primarySheet}!${pValCol}:${pValCol}),"")))`;
+    }
+
+    const fIdCol = colLetterForFieldKey(params.fallback.spec, params.fallback.idFieldKey);
+    const fValKey = params.fallback.valueFieldKeyByCustomerField[params.field];
+    const fValCol = colLetterForFieldKey(params.fallback.spec, fValKey);
+    if (!fIdCol || !fValCol) return null;
+
+    const fallbackSheet = `'${params.fallback.sheetTitle}'`;
+
+    // Prefer primary if non-empty, else fallback
+    return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",LET(cid,${idCol}2:${idCol},p,IFERROR(XLOOKUP(cid,${primarySheet}!${pIdCol}:${pIdCol},${primarySheet}!${pValCol}:${pValCol}),""),f,IFERROR(XLOOKUP(cid,${fallbackSheet}!${fIdCol}:${fIdCol},${fallbackSheet}!${fValCol}:${fValCol}),""),IF(p<>"",p,f))))`;
+}
+
+function appendCustomerLookupFormulaRequests(params: {
+    postRequests: sheets_v4.Schema$Request[];
+    entryId: string;
+    sheetId: number;
+    spec: TabSchemaSpec;
+    primary: LookupSource;
+    fallback: LookupSource;
+}): void {
+    const { postRequests, entryId, sheetId, spec, primary, fallback } = params;
+
+    const idxCustomerId = spec.columns.findIndex(c => c.fieldKey === "customer_id");
+    if (idxCustomerId < 0) return;
+
+    const factCustomerIdCol = colLetter(idxCustomerId);
+
+    // Non-invoice tabs: name/email/description with fallback to invoices
+    if (entryId !== "invoices") {
+        const targets: Array<{ fieldKey: string; field: CustomerField }> = [
+            { fieldKey: "customer_name", field: "name" },
+            { fieldKey: "customer_email", field: "email" },
+            { fieldKey: "customer_description", field: "description" },
+        ];
+
+        for (const t of targets) {
+            const idxTarget = spec.columns.findIndex(c => c.fieldKey === t.fieldKey);
+            if (idxTarget < 0) continue;
+
+            const formula = customerLookupFormula({
+                factCustomerIdColLetter: factCustomerIdCol,
+                field: t.field,
+                primary,
+                fallback,
+            });
+            if (!formula) continue;
+
+            postRequests.push(setArrayFormulaInColumn({
+                sheetId,
+                colIndex0: idxTarget,
+                formula,
+            }));
+        }
+
+        return;
+    }
+
+    // Invoices: only customer_description from Customers (no fallback)
+    const idxDesc = spec.columns.findIndex(c => c.fieldKey === "customer_description");
+    if (idxDesc < 0) return;
+
+    const formula = customerLookupFormula({
+        factCustomerIdColLetter: factCustomerIdCol,
+        field: "description",
+        primary,
+    });
+    if (!formula) return;
+
+    postRequests.push(setArrayFormulaInColumn({
+        sheetId,
+        colIndex0: idxDesc,
+        formula,
+    }));
 }
