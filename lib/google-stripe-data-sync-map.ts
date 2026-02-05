@@ -3,7 +3,7 @@
 import type {
     StripeDataSyncEntry,
 } from "./schemas/sync-config";
-import { getTabSchemaSpec, isDataSyncEntryIdSupported, type TabColumnSpec } from "@blueplanit/asv2-shared";
+import { getTabSchemaSpec, isDataSyncEntryIdSupported, TabSchemaSpec, type TabColumnSpec } from "@blueplanit/asv2-shared";
 import { getGoogleAccessTokenForUser } from "./google-auth";
 import { google, sheets_v4 } from "googleapis";
 import { APP_NAME } from "./constants";
@@ -244,10 +244,11 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
 
             // Populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
             // NOTE: invoice tab is already populated with customer name, email, and description columns from API
+            const customersSpec = getTabSchemaSpec("customers", "1.0.0");
             if (entry.id !== "invoices") {
                 const idxCustomerId = spec.columns.findIndex(c => c.fieldKey === "customer_id");
                 if (idxCustomerId >= 0) {
-                    const customerIdCol = colLetter(idxCustomerId);
+                    const factCustomerIdCol = colLetter(idxCustomerId);
 
                     const targets: Array<{ fieldKey: string; field: "name" | "email" | "description" }> = [
                         { fieldKey: "customer_name", field: "name" },
@@ -259,15 +260,20 @@ export async function ensureSheetTabsForStripeDataSyncMap(params: {
                         const idxTarget = spec.columns.findIndex(c => c.fieldKey === t.fieldKey);
                         if (idxTarget < 0) continue;
 
+                        const formula = customerLookupFormula({
+                            factCustomerIdColLetter: factCustomerIdCol,
+                            field: t.field,
+                            customersSheetTitle: "Customers_raw (DO NOT EDIT)",
+                            customersSpec,
+                        });
+
+                        if (!formula) continue;
+
                         postRequests.push(
                             setArrayFormulaInColumn({
                                 sheetId: entry.sheetId!,
                                 colIndex0: idxTarget,
-                                formula: customerLookupFormula({
-                                    customerIdColLetter: customerIdCol,
-                                    field: t.field,
-                                    customersSheetTitle: "Customers_raw (DO NOT EDIT)",
-                                }),
+                                formula,
                             })
                         );
                     }
@@ -378,23 +384,34 @@ function colLetter(colIdx0: number): string {
     return s;
 }
 
-
 type CustomerField = "name" | "email" | "description";
 
+function colLetterForFieldKey(spec: TabSchemaSpec, fieldKey: string): string | null {
+    const idx = spec.columns.findIndex(c => c.fieldKey === fieldKey);
+    return idx >= 0 ? colLetter(idx) : null;
+}
+
+// This function generates a lookup formula to populate customer name, email, and description columns in non-customer sheet tabs with lookup formulas
 function customerLookupFormula(params: {
-    customerIdColLetter: string;   // e.g. "B"
-    field: CustomerField;
-    customersSheetTitle?: string;  // default: Customers_raw (DO NOT EDIT)
-}): string {
+    factCustomerIdColLetter: string;     // e.g. "B" (in the non-customer tab)
+    field: CustomerField;               // name|email|description
+    customersSheetTitle?: string;       // default: Customers_raw (DO NOT EDIT)
+    customersSpec: TabSchemaSpec;       // registry spec for "customers"
+}): string | null {
     const sheet = `'${params.customersSheetTitle ?? "Customers_raw (DO NOT EDIT)"}'`;
 
-    // Customers sheet columns: A=id, D=name, E=email, F=description (per registry)
-    const returnCol =
-        params.field === "name" ? "D" :
-            params.field === "email" ? "E" :
-                "F";
+    const customerIdColInCustomers = colLetterForFieldKey(params.customersSpec, "customer_id");
+    if (!customerIdColInCustomers) return null;
 
-    const idCol = params.customerIdColLetter;
+    const customerFieldKey =
+        params.field === "name" ? "name" :
+            params.field === "email" ? "email" :
+                "description";
 
-    return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",IFERROR(XLOOKUP(${idCol}2:${idCol},${sheet}!A:A,${sheet}!${returnCol}:${returnCol}),"")))`;
+    const returnColInCustomers = colLetterForFieldKey(params.customersSpec, customerFieldKey);
+    if (!returnColInCustomers) return null;
+
+    const idCol = params.factCustomerIdColLetter;
+
+    return `=ARRAYFORMULA(IF(${idCol}2:${idCol}="","",IFERROR(XLOOKUP(${idCol}2:${idCol},${sheet}!${customerIdColInCustomers}:${customerIdColInCustomers},${sheet}!${returnColInCustomers}:${returnColInCustomers}),"")))`;
 }
