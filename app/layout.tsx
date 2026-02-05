@@ -6,7 +6,6 @@ import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { APP_NAME } from "@/lib/constants";
-import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -63,7 +62,6 @@ export default function RootLayout({
             >
                 <AppProviders>
                     <div className="min-h-screen flex flex-col">
-                        <GoogleAnalytics />
                         <div className="flex-1">{children}</div>
                         <SiteFooter />
                     </div>
