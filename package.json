@@ -13,7 +13,7 @@
     "@aws-sdk/client-lambda": "^3.969.0",
     "@aws-sdk/client-sqs": "^3.965.0",
     "@aws-sdk/lib-dynamodb": "^3.933.0",
-    "@blueplanit/asv2-shared": "^1.4.2",
+    "@blueplanit/asv2-shared": "^1.4.3",
     "@contentful/rich-text-react-renderer": "^16.1.6",
     "@contentful/rich-text-types": "^17.2.5",
     "@heroicons/react": "^2.2.0",
