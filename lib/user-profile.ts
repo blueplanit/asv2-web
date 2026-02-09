@@ -220,6 +220,7 @@ async function createUserProfileForGoogleLogin(params: {
         updatedAt: now,
         subscriptionStatus: "inactive",
         GOOGLE_GSI_PK: googleConnectSk(googleUserId),
+        EMAIL_GSI_PK: email,
     } as any;
 
     UserProfileSchema.parse(item);
