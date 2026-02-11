@@ -28,8 +28,8 @@ export function Brand({
                 priority
             />
             {showText ? (
-                <div className="flex flex-col">
-                    <span className="text-sm font-semibold tracking-tight text-slate-900">
+                <div className="flex flex-col text-left">
+                    <span className="text-sm font-semibold tracking-tight text-slate-900 sm:text-left">
                         {APP_NAME}
                     </span>
                     {showTagline ? (

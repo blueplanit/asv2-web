@@ -9,12 +9,6 @@ const productLinks = [
     // { label: "Status", href: "#" },
 ];
 
-const solutionsLinks = [
-    { label: "SaaS & Subscriptions", href: "#" },
-    { label: "Finance & RevOps", href: "#" },
-    { label: "Ops & Analytics", href: "#" },
-];
-
 const resourcesLinks = [
     // { label: "Docs", href: "#" },
     // { label: "API Reference", href: "#" },
@@ -45,15 +39,15 @@ export function SiteFooter() {
 
     return (
         <footer className="border-t border-slate-200 bg-white/80">
-            <div className="mx-auto max-w-6xl px-6 py-8">
+            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-8">
                 <div className="grid gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
                     {/* Brand + brief copy */}
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3">
+                    <div className="space-y-3 text-center sm:text-left">
+                        <div className="flex items-center justify-center gap-3 sm:justify-start">
                             <Brand size={32} />
                         </div>
 
-                        <p className="max-w-sm text-xs leading-relaxed text-slate-500">
+                        <p className="mx-auto max-w-sm text-xs leading-relaxed text-slate-500 sm:mx-0">
                             {APP_NAME} keeps your Stripe business data mirrored into a single, structured
                             Google Sheet so you can focus on insights, not exports.
                         </p>
@@ -63,7 +57,7 @@ export function SiteFooter() {
                     </div>
 
                     {/* Link columns */}
-                    <div className="grid gap-6 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-6 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-4">
                         <div className="space-y-2">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                 Product
@@ -73,7 +67,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="cursor-pointer hover:text-slate-900 transition-colors"
+                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
                                         >
                                             {item.label}
                                         </Link>
@@ -91,7 +85,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="cursor-pointer hover:text-slate-900 transition-colors"
+                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
                                         >
                                             {item.label}
                                         </Link>
@@ -109,7 +103,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="cursor-pointer hover:text-slate-900 transition-colors"
+                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
                                         >
                                             {item.label}
                                         </Link>
@@ -127,7 +121,7 @@ export function SiteFooter() {
                                     <li key={item.label}>
                                         <Link
                                             href={item.href}
-                                            className="cursor-pointer hover:text-slate-900 transition-colors"
+                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
                                         >
                                             {item.label}
                                         </Link>
@@ -151,12 +145,8 @@ export function SiteFooter() {
                 </div>
 
                 {/* Bottom bar */}
-                <div className="mt-6 flex flex-col gap-2 border-t border-slate-200 pt-4 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-6 flex flex-col gap-2 border-t border-slate-200 pt-4 text-center text-[11px] text-slate-500 sm:text-left sm:flex-row sm:items-center sm:justify-between pb-4">
                     <span>© {year} {APP_NAME}, a Blue Planit LLC product. All rights reserved.</span>
-                    <div className="flex flex-wrap gap-3">
-                        {/* <span>Data residency: TBD</span>
-                        <span>EU & GDPR-ready: TBD</span> */}
-                    </div>
                 </div>
             </div>
         </footer>
