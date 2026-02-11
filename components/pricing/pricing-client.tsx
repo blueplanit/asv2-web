@@ -286,7 +286,12 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                     </section>
                 </div>
 
-                <div className="mt-12 space-y-14">
+                <div
+                    className="mx-auto mt-10 h-px w-full max-w-5xl bg-gradient-to-r from-transparent via-slate-200 to-transparent"
+                    aria-hidden="true"
+                />
+
+                <div className="mt-10 space-y-14">
                     {/* What's included */}
                     <section className="mx-auto max-w-4xl space-y-5">
                     <div className="text-center">
@@ -311,6 +316,11 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                         ))}
                     </div>
                     </section>
+
+                    <div
+                        className="mx-auto h-px w-full max-w-4xl bg-gradient-to-r from-transparent via-slate-200 to-transparent"
+                        aria-hidden="true"
+                    />
 
                     {/* FAQs */}
                     <section className="mx-auto max-w-4xl space-y-5">
