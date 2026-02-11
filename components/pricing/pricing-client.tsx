@@ -1,7 +1,7 @@
 // components/pricing/pricing-client.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
@@ -29,8 +29,28 @@ type FaqItem = {
 
 function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
     const [openIndex, setOpenIndex] = useState<number | null>(null);
+    const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
     if (!faqs || faqs.length === 0) return null;
+
+    function handleQuestionKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+        if (faqs.length <= 1) return;
+
+        let nextIndex: number | null = null;
+        if (event.key === "ArrowDown") {
+            nextIndex = (index + 1) % faqs.length;
+        } else if (event.key === "ArrowUp") {
+            nextIndex = (index - 1 + faqs.length) % faqs.length;
+        } else if (event.key === "Home") {
+            nextIndex = 0;
+        } else if (event.key === "End") {
+            nextIndex = faqs.length - 1;
+        }
+
+        if (nextIndex === null) return;
+        event.preventDefault();
+        buttonRefs.current[nextIndex]?.focus();
+    }
 
     return (
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -45,7 +65,11 @@ function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
                             <button
                                 id={buttonId}
                                 type="button"
+                                ref={(el) => {
+                                    buttonRefs.current[index] = el;
+                                }}
                                 onClick={() => setOpenIndex(isOpen ? null : index)}
+                                onKeyDown={(event) => handleQuestionKeyDown(event, index)}
                                 aria-expanded={isOpen}
                                 aria-controls={panelId}
                                 className="flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
@@ -184,7 +208,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                 autoHideMs={7000}
             />
 
-            <main className="mx-auto max-w-6xl px-4 py-12 sm:py-16">
+            <main className="mx-auto max-w-6xl px-4 pb-28 pt-12 sm:pb-16 sm:pt-16">
                 <div className="space-y-7 sm:space-y-8">
                     {/* Hero */}
                     <section className="space-y-4 text-center">
@@ -199,10 +223,15 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
                     {/* Billing toggle */}
                     <section className="flex justify-center">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 text-sm font-medium text-slate-700 shadow-sm">
+                        <div
+                            role="group"
+                            aria-label="Billing interval"
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 text-sm font-medium text-slate-700 shadow-sm"
+                        >
                             <button
                                 type="button"
                                 onClick={() => setInterval("monthly")}
+                                aria-pressed={interval === "monthly"}
                                 className={`cursor-pointer rounded-full px-4 py-1.5 transition-colors ${interval === "monthly" ? "bg-slate-900 text-white" : "bg-transparent text-slate-600 hover:text-slate-900"}`}
                             >
                                 {copy.toggle.monthlyLabel}
@@ -210,6 +239,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                             <button
                                 type="button"
                                 onClick={() => setInterval("yearly")}
+                                aria-pressed={interval === "yearly"}
                                 className={`cursor-pointer rounded-full px-4 py-1.5 transition-colors ${interval === "yearly" ? "bg-slate-900 text-white" : "bg-transparent text-slate-600 hover:text-slate-900"}`}
                             >
                                 {copy.toggle.yearlyLabel}
@@ -223,8 +253,8 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                     </section>
 
                     {/* Main plan */}
-                    <section className="mx-auto max-w-xl">
-                        <article className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/50 sm:p-9">
+                    <section id="pricing-card" className="mx-auto max-w-xl scroll-mt-20">
+                        <article className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-white p-7 shadow-xl shadow-indigo-100/40 sm:p-9">
                             <div
                                 className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-indigo-50 to-transparent"
                                 aria-hidden="true"
@@ -239,7 +269,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                                     </p>
                                 </div>
 
-                                <div className="flex items-end gap-2">
+                                <div className="flex items-end gap-2" aria-live="polite" aria-busy={pricingLoading}>
                                     {pricingLoading ? (
                                         <>
                                             <span className="inline-block h-10 w-28 animate-pulse rounded-md bg-slate-200/80 align-bottom" />
@@ -277,9 +307,17 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                                     >
                                         {primaryCtaLabel}
                                     </button>
-                                    <p className="mt-2 text-center text-[11px] text-slate-500">
-                                        {copy.plan.checkoutNote}
-                                    </p>
+                                    <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-slate-600">
+                                        {copy.plan.trustSignals.map((signal) => (
+                                            <li key={signal} className="flex items-center gap-1.5">
+                                                <span
+                                                    className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+                                                    aria-hidden="true"
+                                                />
+                                                <span>{signal}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </div>
                             </div>
                         </article>
@@ -293,28 +331,28 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
                 <div className="mt-10 space-y-14">
                     {/* What's included */}
-                    <section className="mx-auto max-w-4xl space-y-5">
-                    <div className="text-center">
-                        <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                            {copy.included.title}
-                        </h3>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        {copy.included.bullets.map((line) => (
-                            <article
-                                key={line}
-                                className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
-                            >
-                                <p className="flex items-start gap-3 text-sm leading-relaxed text-slate-700">
-                                    <span
-                                        className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500"
-                                        aria-hidden="true"
-                                    />
-                                    <span>{line}</span>
-                                </p>
-                            </article>
-                        ))}
-                    </div>
+                    <section id="whats-included" className="mx-auto max-w-4xl scroll-mt-20 space-y-5">
+                        <div className="text-center">
+                            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+                                {copy.included.title}
+                            </h3>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {copy.included.bullets.map((line) => (
+                                <article
+                                    key={line}
+                                    className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                                >
+                                    <p className="flex items-start gap-3 text-sm leading-relaxed text-slate-700">
+                                        <span
+                                            className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500"
+                                            aria-hidden="true"
+                                        />
+                                        <span>{line}</span>
+                                    </p>
+                                </article>
+                            ))}
+                        </div>
                     </section>
 
                     <div
@@ -323,7 +361,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                     />
 
                     {/* FAQs */}
-                    <section className="mx-auto max-w-4xl space-y-5">
+                    <section id="pricing-faqs" className="mx-auto max-w-4xl scroll-mt-20 space-y-5">
                         <div className="text-center">
                             <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
                                 {faqHeading}
@@ -333,6 +371,25 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
                     </section>
                 </div>
             </main>
+
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+                <div className="mx-auto max-w-xl">
+                    <div className="mb-2 flex items-baseline justify-between">
+                        <p className="text-xs font-medium text-slate-600">{copy.plan.name}</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                            {pricingLoading ? "Loading..." : `${price}${intervalLabel}`}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleSelectPlan}
+                        disabled={loading}
+                        className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
+                    >
+                        {primaryCtaLabel}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

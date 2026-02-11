@@ -3,6 +3,12 @@ import "server-only";
 import { z } from "zod";
 import { contentfulClient } from "./contentful";
 
+const DEFAULT_TRUST_SIGNALS = [
+    "Secure Stripe-hosted checkout",
+    "Cancel anytime",
+    "No long-term contracts",
+];
+
 const pricingCopySchema = z.object({
     hero: z.object({
         title: z.string(),
@@ -20,7 +26,7 @@ const pricingCopySchema = z.object({
         name: z.string(),
         description: z.string(),
         bullets: z.array(z.string()),
-        checkoutNote: z.string(),
+        trustSignals: z.array(z.string()).default(DEFAULT_TRUST_SIGNALS),
     }),
     included: z.object({
         title: z.string(),
@@ -65,7 +71,7 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
         ],
         "badgeLabel": "Recommended",
         "description": "For teams that rely on accurate Stripe data in Sheets every day.",
-        "checkoutNote": "You’ll be redirected to a secure Stripe-hosted payment page to checkout."
+        "trustSignals": DEFAULT_TRUST_SIGNALS
     },
     "toggle": {
         "yearlyLabel": "Annual",
@@ -128,7 +134,7 @@ export async function getPricingCopy(): Promise<PricingCopy> {
             return DEFAULT_PRICING_COPY;
         }
 
-        const fields = res.items[0].fields as any;
+        const fields = res.items[0].fields as Record<string, unknown>;
         const rawConfig = fields.config ?? fields.pricingCopy ?? null;
 
         if (!rawConfig) {
