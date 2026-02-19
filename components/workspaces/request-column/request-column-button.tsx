@@ -21,7 +21,7 @@ export function RequestColumnButton(props: Props) {
         aria-label="Request a new Stripe column"
       >
         <span className="text-xs leading-none mr-1">+</span>
-        Request column
+        Request other columns
       </button>
 
       <RequestColumnModal
