@@ -1,6 +1,6 @@
 // components/marketing/faq-section.tsx
 
-import { marketingCopy } from "@/lib/marketing-copy";
+import { marketingCopy } from "@/lib/marketing/marketing-copy";
 
 export function FaqSection() {
     const { faq } = marketingCopy;

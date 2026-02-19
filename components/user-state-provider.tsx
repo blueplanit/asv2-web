@@ -2,7 +2,7 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
-import type { UserState } from "@/lib/user-state";
+import type { UserState } from "@/lib/app-state/user-state";
 
 type UserStateContextValue = {
     user: UserState;

@@ -1,10 +1,10 @@
 // app/api/auth/[...nextauth]/route.ts
 
 import "server-only";
-import { ensureAppUserForGoogleLogin } from "@/lib/user-profile";
+import { ensureAppUserForGoogleLogin } from "@/lib/dynamo/user-profile";
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { getGoogleClientConfigForShard } from "@/lib/google-oauth-sharding";
+import { getGoogleClientConfigForShard } from "@/lib/google/google-oauth-sharding";
 
 
 // Keep login on one shard unless truly need to shard login too.

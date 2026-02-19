@@ -20,6 +20,7 @@ import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
 import { POLL_INTERVAL_MS, POLL_MAX_MS } from "../dashboard/dashboard";
+import { RequestColumnButton } from "./request-column/request-column-button";
 
 export type RecoveryStatus = "requested" | "pulling" | "writing" | "success" | "failed";
 
@@ -703,7 +704,7 @@ export function WorkspaceCard({
 
             {/* BODY GRID */}
             {!isRetired && (
-                <div className="grid gap-6 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2">
                     {/* Sync status column */}
                     <div className="space-y-2">
                         <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -811,6 +812,12 @@ export function WorkspaceCard({
                             </div>
                         )}
                     </div>
+                    <div className="space-y-2"></div>
+                    <RequestColumnButton
+                        userEmail={workspace.googleAccountEmail}
+                        workspaceName={workspace.name}
+                        stripeAccountId={stripeConnection?.stripeAccountId ?? undefined}
+                    />
                 </div>
             )}
 

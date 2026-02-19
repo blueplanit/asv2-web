@@ -1,9 +1,9 @@
 // app/api/stripe/callback/route.ts
 import "server-only";
 import Stripe from "stripe";
-import { STRIPE_OAUTH_NONCE_COOKIE, verifyStripeOAuthState } from "@/lib/stripe-oauth-state";
+import { STRIPE_OAUTH_NONCE_COOKIE, verifyStripeOAuthState } from "@/lib/stripe/stripe-oauth-state";
 import { redirect } from "next/navigation";
-import { putStripeConnection } from "@/lib/stripe-connection";
+import { putStripeConnection } from "@/lib/stripe/stripe-connection";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextRequest, NextResponse } from "next/server";

@@ -6,11 +6,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
     selectGoogleProjectShardForUser,
     getGoogleClientConfigForShard,
-} from "@/lib/google-oauth-sharding";
+} from "@/lib/google/google-oauth-sharding";
 import {
     GOOGLE_OAUTH_NONCE_COOKIE,
     makeGoogleOAuthState,
-} from "@/lib/google-oauth-state";
+} from "@/lib/google/google-oauth-state";
 
 export async function GET(_req: NextRequest) {
     const session = await getServerSession(authOptions);

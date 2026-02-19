@@ -8,14 +8,14 @@ import {
     BILLING_PRICES,
     type BillingPlanId,
     type BillingInterval,
-} from "@/lib/stripe-billing";
+} from "@/lib/stripe/stripe-billing";
 import {
     updateUserSubscriptionStatusToActive,
     getUserProfile,
-} from "@/lib/user-profile";
-import { ensureStripeCustomerId } from "@/lib/ensure-stripe-customer";
-import { getSubscriptionPeriodEnd } from "@/lib/billing-period";
-import { isUserProfileEntitled } from "@/lib/subscription-entitlement";
+} from "@/lib/dynamo/user-profile";
+import { ensureStripeCustomerId } from "@/lib/dynamo/ensure-stripe-customer";
+import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
+import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
 
 export const runtime = "nodejs";
 

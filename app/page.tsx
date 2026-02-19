@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Hero } from "@/components/marketing/hero";
 import { HowItWorksSection } from "@/components/marketing/how-it-works-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
-import { getMarketingCopy } from "@/lib/marketing-config";
+import { getMarketingCopy } from "@/lib/marketing/marketing-config";
 
 export const revalidate = 60;
 

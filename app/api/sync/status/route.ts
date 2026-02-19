@@ -4,7 +4,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getSyncConfig } from "@/lib/sync-config";
+import { getSyncConfig } from "@/lib/dynamo/sync-config";
 
 export const runtime = "nodejs";
 

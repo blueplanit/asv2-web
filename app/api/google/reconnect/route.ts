@@ -7,13 +7,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
     getGoogleClientConfigForShard,
-} from "@/lib/google-oauth-sharding";
+} from "@/lib/google/google-oauth-sharding";
 import {
     GOOGLE_OAUTH_NONCE_COOKIE,
     makeGoogleOAuthState,
-} from "@/lib/google-oauth-state";
-import { getGoogleConnection } from "@/lib/google-connection";
-import { sanitizeReturnTo } from "@/lib/oauth-state-core";
+} from "@/lib/google/google-oauth-state";
+import { getGoogleConnection } from "@/lib/google/google-connection";
+import { sanitizeReturnTo } from "@/lib/app-state/oauth-state-core";
 
 
 export async function GET(req: NextRequest) {

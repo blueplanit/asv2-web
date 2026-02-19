@@ -1,4 +1,4 @@
-import { stripeBilling, BILLING_PRICES } from "@/lib/stripe-billing";
+import { stripeBilling, BILLING_PRICES } from "@/lib/stripe/stripe-billing";
 
 export type BillingInterval = "monthly" | "yearly";
 export type BillingDisplay = Record<BillingInterval, { price: string; intervalLabel: string }>;

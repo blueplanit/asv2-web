@@ -1,6 +1,6 @@
 // components/marketing/final-cta-section.tsx
 import Link from "next/link";
-import type { FinalCtaCopy } from "@/lib/marketing-copy";
+import type { FinalCtaCopy } from "@/lib/marketing/marketing-copy";
 
 type Props = {
     copy: FinalCtaCopy;

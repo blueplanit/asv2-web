@@ -7,14 +7,14 @@ import {
     DataSyncEntryIdEnum,
     type DataSyncEntryId,
 } from "@/lib/schemas/sync-config";
-import { getSyncConfig, updateSyncConfig } from "@/lib/sync-config";
+import { getSyncConfig, updateSyncConfig } from "@/lib/dynamo/sync-config";
 import {
     ensureStripeDataSyncMap,
     applyStripeSelectionToStripeDataSyncMap,
-} from "@/lib/stripe-data-sync-map-helpers";
-import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google-stripe-data-sync-map";
+} from "@/lib/stripe/stripe-data-sync-map-helpers";
+import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google/google-stripe-data-sync-map";
 import { SyncStatus } from "@/lib/types/sync-status";
-import { UserState } from "@/lib/user-state";
+import { UserState } from "@/lib/app-state/user-state";
 
 export const runtime = "nodejs";
 

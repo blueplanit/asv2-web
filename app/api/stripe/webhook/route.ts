@@ -1,17 +1,17 @@
 // app/api/stripe/webhook/route.ts
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
-import { stripeBilling } from "@/lib/stripe-billing";
+import { stripeBilling } from "@/lib/stripe/stripe-billing";
 import {
     UpdateUserSubscriptionParams,
     updateUserSubscriptionStatusToActive,
     updateUserSubscriptionStatusToInactive,
-} from "@/lib/user-profile";
+} from "@/lib/dynamo/user-profile";
 import Stripe from "stripe";
-import { mapStripePriceToPlan } from "@/lib/billing-plan-map";
-import { getSubscriptionPeriodEnd } from "@/lib/billing-period";
-import { getUserProfile } from "@/lib/user-profile";
-import { isStripeSubscriptionEntitled, isStripeSubscriptionNonEntitledTerminal } from "@/lib/subscription-entitlement";
+import { mapStripePriceToPlan } from "@/lib/billing/billing-plan-map";
+import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
+import { getUserProfile } from "@/lib/dynamo/user-profile";
+import { isStripeSubscriptionEntitled, isStripeSubscriptionNonEntitledTerminal } from "@/lib/app-state/subscription-entitlement";
 import { isDevEnvironment } from "@/lib/utils";
 
 export const runtime = "nodejs";

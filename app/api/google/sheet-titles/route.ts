@@ -4,9 +4,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { google } from "googleapis";
-import { getGoogleAccessTokenForUser } from "@/lib/google-auth";
-import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "@/lib/google-oauth-sharding";
-import { UserState } from "@/lib/user-state";
+import { getGoogleAccessTokenForUser } from "@/lib/google/google-auth";
+import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "@/lib/google/google-oauth-sharding";
+import { UserState } from "@/lib/app-state/user-state";
 
 export const runtime = "nodejs";
 

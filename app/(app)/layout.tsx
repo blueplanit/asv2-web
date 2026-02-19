@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { loadUserState } from "@/lib/user-state";
+import { loadUserState } from "@/lib/app-state/user-state";
 import { UserStateProvider } from "@/components/user-state-provider";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";

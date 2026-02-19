@@ -3,8 +3,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { stripeBilling, BILLING_PRICES, type BillingPlanId, type BillingInterval } from "@/lib/stripe-billing";
-import { getUserProfile } from "@/lib/user-profile";
+import { stripeBilling, BILLING_PRICES, type BillingPlanId, type BillingInterval } from "@/lib/stripe/stripe-billing";
+import { getUserProfile } from "@/lib/dynamo/user-profile";
 
 export const runtime = "nodejs";
 

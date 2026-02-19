@@ -7,7 +7,7 @@ import {
 import {
     contentfulRichTextOptions,
     type ContentfulRichTextDocument,
-} from "@/lib/contentful-rich-text";
+} from "@/lib/contentful/contentful-rich-text";
 
 export const revalidate = 60;
 

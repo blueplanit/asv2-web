@@ -3,8 +3,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getSyncConfig, updateSyncConfig } from "@/lib/sync-config";
-import { createWorkspaceSheetAndConfig } from "@/lib/workspace-sheet";
+import { getSyncConfig, updateSyncConfig } from "@/lib/dynamo/sync-config";
+import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
 
 export const runtime = "nodejs";
 

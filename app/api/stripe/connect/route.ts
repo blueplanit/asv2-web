@@ -2,7 +2,7 @@
 import "server-only";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
-import { makeState, STRIPE_OAUTH_NONCE_COOKIE } from "@/lib/stripe-oauth-state";
+import { makeState, STRIPE_OAUTH_NONCE_COOKIE } from "@/lib/stripe/stripe-oauth-state";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";

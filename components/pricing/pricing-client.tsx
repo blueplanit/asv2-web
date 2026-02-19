@@ -6,7 +6,7 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
-import type { PricingCopy } from "@/lib/pricing-config";
+import type { PricingCopy } from "@/lib/pricing/pricing-config";
 
 type BillingInterval = "monthly" | "yearly";
 

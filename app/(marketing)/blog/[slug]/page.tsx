@@ -11,7 +11,7 @@ import {
 import { type Document } from "@contentful/rich-text-types";
 import {
     contentfulRichTextOptions,
-} from "@/lib/contentful-rich-text";
+} from "@/lib/contentful/contentful-rich-text";
 import { APP_NAME } from "@/lib/constants";
 
 export const revalidate = 60;
