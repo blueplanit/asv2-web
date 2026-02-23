@@ -142,37 +142,18 @@ export function OnboardingWizard() {
         const stripeReason = searchParams.get("reason");
         const stripeDesc = searchParams.get("desc");
         const googleError = searchParams.get("googleError");
-        const stepParam = searchParams.get("step");
-        const stripeAttemptPending =
-            typeof window !== "undefined" &&
-            window.localStorage.getItem("syncstaq_oauth_pending_stripe") === "1";
-        const googleAttemptPending =
-            typeof window !== "undefined" &&
-            window.localStorage.getItem("syncstaq_oauth_pending_google") === "1";
 
-        if (stripeAttemptPending) {
-            if (stripeError) {
-                trackAmplitudeError("Stripe Connect Failed", stripeDesc ?? stripeError, {
-                    error_code: stripeError,
-                    reason: stripeReason ?? null,
-                });
-                window.localStorage.removeItem("syncstaq_oauth_pending_stripe");
-            } else if (stepParam === "2") {
-                trackAmplitudeEvent("Stripe Connect Succeeded");
-                window.localStorage.removeItem("syncstaq_oauth_pending_stripe");
-            }
+        if (stripeError) {
+            trackAmplitudeError("Stripe Connect Failed", stripeDesc ?? stripeError, {
+                error_code: stripeError,
+                reason: stripeReason ?? null,
+            });
         }
 
-        if (googleAttemptPending) {
-            if (googleError) {
-                trackAmplitudeError("Google Connect Failed", googleError, {
-                    error_code: googleError,
-                });
-                window.localStorage.removeItem("syncstaq_oauth_pending_google");
-            } else if (stepParam === "3") {
-                trackAmplitudeEvent("Google Connect Succeeded");
-                window.localStorage.removeItem("syncstaq_oauth_pending_google");
-            }
+        if (googleError) {
+            trackAmplitudeError("Google Connect Failed", googleError, {
+                error_code: googleError,
+            });
         }
 
         if (mismatch === "1") {
@@ -405,9 +386,6 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
-            if (typeof window !== "undefined") {
-                window.localStorage.setItem("syncstaq_oauth_pending_stripe", "1");
-            }
             trackAmplitudeEvent("Onboarding Step Started", {
                 step_id: 1,
                 step_name: "connect_stripe",
@@ -418,9 +396,6 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 2) {
-            if (typeof window !== "undefined") {
-                window.localStorage.setItem("syncstaq_oauth_pending_google", "1");
-            }
             trackAmplitudeEvent("Onboarding Step Started", {
                 step_id: 2,
                 step_name: "connect_google_sheets",
@@ -473,12 +448,6 @@ export function OnboardingWizard() {
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 });
                 onboardingCompletedRef.current = true;
-                if (typeof window !== "undefined") {
-                    window.localStorage.setItem(
-                        "syncstaq_onboarding_completed_at",
-                        new Date().toISOString(),
-                    );
-                }
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 setSubmitting(false);

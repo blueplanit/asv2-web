@@ -344,31 +344,10 @@ export function DashboardClient() {
     // When initial backfill completes (no configs are "backfill_running"), close the intro modal
     useEffect(() => {
         if (prevHasBackfillRunningRef.current && !hasBackfillRunning) {
-            let onboardingToBackfillMs: number | null = null;
-            if (typeof window !== "undefined") {
-                const onboardingCompletedAt = window.localStorage.getItem(
-                    "syncstaq_onboarding_completed_at",
-                );
-                if (onboardingCompletedAt) {
-                    const startedAt = Date.parse(onboardingCompletedAt);
-                    if (Number.isFinite(startedAt)) {
-                        onboardingToBackfillMs = Date.now() - startedAt;
-                    }
-                    window.localStorage.removeItem("syncstaq_onboarding_completed_at");
-                }
-            }
             trackAmplitudeEvent("Backfill Completed", {
                 spreadsheet_id: activeWorkspace?.id ?? null,
                 workspace_name: activeWorkspace?.name ?? null,
-                onboarding_to_first_backfill_ms: onboardingToBackfillMs,
             });
-            if (onboardingToBackfillMs !== null) {
-                trackAmplitudeEvent("Time To First Backfill Completed", {
-                    spreadsheet_id: activeWorkspace?.id ?? null,
-                    workspace_name: activeWorkspace?.name ?? null,
-                    duration_ms: onboardingToBackfillMs,
-                });
-            }
         }
         prevHasBackfillRunningRef.current = hasBackfillRunning;
     }, [hasBackfillRunning, activeWorkspace?.id, activeWorkspace?.name]);

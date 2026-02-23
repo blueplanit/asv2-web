@@ -6,7 +6,6 @@ import {
     identifyAmplitudeUser,
     initAmplitude,
     resetAmplitudeUser,
-    trackAmplitudeEvent,
 } from "@/lib/analytics/amplitude-client";
 
 export function AmplitudeInit() {
@@ -39,19 +38,6 @@ export function AmplitudeInit() {
                 userId,
                 email: session?.user?.email,
             });
-
-            // Lightweight heuristic for "signup completed" without backend changes:
-            // fire once per user per browser.
-            if (typeof window !== "undefined") {
-                const key = `syncstaq_signup_completed_tracked:${userId}`;
-                const tracked = window.localStorage.getItem(key);
-                if (!tracked) {
-                    trackAmplitudeEvent("Signup Completed", {
-                        heuristic: "first_auth_on_device",
-                    });
-                    window.localStorage.setItem(key, "1");
-                }
-            }
             return;
         }
 
