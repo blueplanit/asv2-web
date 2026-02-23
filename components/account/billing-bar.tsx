@@ -36,23 +36,27 @@ export function BillingBar() {
                 method: "POST",
             });
             if (!res.ok) {
+                trackAmplitudeEvent("SyncStaq: Billing Portal Open Failed", {
+                    error_message: "Failed to create billing portal session",
+                });
                 setPortalLoading(false);
                 return;
             }
             const data = await res.json();
             if (data.url) {
-                trackAmplitudeEvent("SyncStaq: Billing Portal Opened", {
-                    source: "billing_bar",
-                    plan_id: planId,
-                    subscription_status: status,
-                    subscription_raw_status: rawStatus,
-                });
+                trackAmplitudeEvent("SyncStaq: Billing Portal Opened");
                 window.open(data.url, "_blank");
             } else {
+                trackAmplitudeEvent("SyncStaq: Billing Portal Open Failed", {
+                    error_message: "Billing portal URL missing",
+                });
                 setPortalLoading(false);
             }
         } catch {
             console.error("Error opening billing portal");
+            trackAmplitudeEvent("SyncStaq: Billing Portal Open Failed", {
+                error_message: "Error opening billing portal",
+            });
         }
         finally {
             setPortalLoading(false);

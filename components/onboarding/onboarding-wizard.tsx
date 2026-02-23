@@ -119,13 +119,7 @@ export function OnboardingWizard() {
 
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
     const viewedOnboardingStepsRef = React.useRef<Set<number>>(new Set());
-    const onboardingStartedAtRef = React.useRef<number>(Date.now());
     const onboardingCompletedRef = React.useRef(false);
-    const currentStepIdRef = React.useRef(steps[initialIndex]?.id ?? 1);
-    const oauthResolvedRef = React.useRef<{ stripe: boolean; google: boolean }>({
-        stripe: false,
-        google: false,
-    });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
@@ -141,6 +135,30 @@ export function OnboardingWizard() {
 
     useEffect(() => {
         const mismatch = searchParams.get("googleMismatch");
+        const stripeError = searchParams.get("stripeError");
+        const stripeReason = searchParams.get("reason");
+        const stripeDesc = searchParams.get("desc");
+        const googleError = searchParams.get("googleError");
+        const stepParam = searchParams.get("step");
+
+        if (stripeError) {
+            trackAmplitudeEvent("SyncStaq: Stripe Connect Failed", {
+                error_code: stripeError,
+                reason: stripeReason ?? null,
+                description: stripeDesc ?? null,
+            });
+        } else if (stepParam === "2") {
+            trackAmplitudeEvent("SyncStaq: Stripe Connect Succeeded");
+        }
+
+        if (googleError) {
+            trackAmplitudeEvent("SyncStaq: Google Connect Failed", {
+                error_code: googleError,
+            });
+        } else if (stepParam === "3") {
+            trackAmplitudeEvent("SyncStaq: Google Connect Succeeded");
+        }
+
         if (mismatch === "1") {
             const expectedEmail = searchParams.get("expectedEmail");
             const actualEmail = searchParams.get("actualEmail");
@@ -157,78 +175,6 @@ export function OnboardingWizard() {
             router.replace("/onboarding?step=2", { scroll: false });
         }
     }, [searchParams, router]);
-
-    useEffect(() => {
-        const stripeError = searchParams.get("stripeError");
-        const googleError = searchParams.get("googleError");
-        const googleMismatch = searchParams.get("googleMismatch");
-
-        if (stripeError && !oauthResolvedRef.current.stripe) {
-            trackAmplitudeEvent("SyncStaq: Stripe Connect Failed", {
-                reason: stripeError,
-                reason_detail: searchParams.get("reason"),
-                description: searchParams.get("desc"),
-            });
-            oauthResolvedRef.current.stripe = true;
-            try {
-                if (typeof window !== "undefined") {
-                    window.sessionStorage.removeItem("onboarding:pending_stripe_connect");
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
-        }
-
-        if ((googleError || googleMismatch === "1") && !oauthResolvedRef.current.google) {
-            trackAmplitudeEvent("SyncStaq: Google Connect Failed", {
-                reason: googleMismatch === "1" ? "account_mismatch" : googleError,
-                expected_email: searchParams.get("expectedEmail"),
-                actual_email: searchParams.get("actualEmail"),
-            });
-            oauthResolvedRef.current.google = true;
-            try {
-                if (typeof window !== "undefined") {
-                    window.sessionStorage.removeItem("onboarding:pending_google_connect");
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
-        }
-
-        if (!oauthResolvedRef.current.stripe) {
-            try {
-                const stripePending =
-                    typeof window !== "undefined" &&
-                    window.sessionStorage.getItem("onboarding:pending_stripe_connect") === "1";
-                if (stripePending && user.stripeConnections.length > 0) {
-                    trackAmplitudeEvent("SyncStaq: Stripe Connect Succeeded", {
-                        stripe_connection_count: user.stripeConnections.length,
-                    });
-                    oauthResolvedRef.current.stripe = true;
-                    window.sessionStorage.removeItem("onboarding:pending_stripe_connect");
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
-        }
-
-        if (!oauthResolvedRef.current.google) {
-            try {
-                const googlePending =
-                    typeof window !== "undefined" &&
-                    window.sessionStorage.getItem("onboarding:pending_google_connect") === "1";
-                if (googlePending && user.googleConnections.length > 0) {
-                    trackAmplitudeEvent("SyncStaq: Google Connect Succeeded", {
-                        google_connection_count: user.googleConnections.length,
-                    });
-                    oauthResolvedRef.current.google = true;
-                    window.sessionStorage.removeItem("onboarding:pending_google_connect");
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
-        }
-    }, [searchParams, user.googleConnections.length, user.stripeConnections.length]);
 
     // Spreadsheet ID associated with the onboarding config (if any)
     const serverSpreadsheetId = onboardingConfig?.spreadsheetId ?? null;
@@ -287,41 +233,11 @@ export function OnboardingWizard() {
             return;
         }
         viewedOnboardingStepsRef.current.add(currentStep.id);
-        currentStepIdRef.current = currentStep.id;
         trackAmplitudeEvent("SyncStaq: Onboarding Step Viewed", {
             step_id: currentStep.id,
             step_name: currentStep.title,
         });
     }, [currentStep.id, currentStep.title]);
-
-    useEffect(() => {
-        function trackOnboardingAbandoned(source: "beforeunload" | "unmount") {
-            if (onboardingCompletedRef.current) {
-                return;
-            }
-            const elapsedSeconds = Math.floor((Date.now() - onboardingStartedAtRef.current) / 1000);
-            trackAmplitudeEvent("SyncStaq: Onboarding Abandoned", {
-                source,
-                current_step_id: currentStepIdRef.current,
-                elapsed_seconds: elapsedSeconds,
-            });
-        }
-
-        function handleBeforeUnload() {
-            trackOnboardingAbandoned("beforeunload");
-        }
-
-        if (typeof window !== "undefined") {
-            window.addEventListener("beforeunload", handleBeforeUnload);
-        }
-
-        return () => {
-            if (typeof window !== "undefined") {
-                window.removeEventListener("beforeunload", handleBeforeUnload);
-            }
-            trackOnboardingAbandoned("unmount");
-        };
-    }, []);
 
     async function createSheet() {
         try {
@@ -341,8 +257,6 @@ export function OnboardingWizard() {
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to create sheet");
                 trackAmplitudeEvent("SyncStaq: Create Sheet Failed", {
-                    step_id: 3,
-                    status_code: res.status,
                     error_message: text || "Failed to create sheet",
                 });
                 return;
@@ -357,11 +271,10 @@ export function OnboardingWizard() {
             });
             return data;
         } catch (e) {
-            trackAmplitudeEvent("SyncStaq: Create Sheet Failed", {
-                step_id: 3,
-                error_message: e instanceof Error ? e.message : "unknown_error",
-            });
             setError(`Failed to create sheet: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
+            trackAmplitudeEvent("SyncStaq: Create Sheet Failed", {
+                error_message: e instanceof Error ? e.message : JSON.stringify(e),
+            });
             return false;
         }
     }
@@ -417,7 +330,6 @@ export function OnboardingWizard() {
                 const message = await res.text();
                 setError(message || "Failed to start trial");
                 trackAmplitudeEvent("SyncStaq: Start Trial Failed", {
-                    status_code: res.status,
                     error_message: message || "Failed to start trial",
                 });
                 return;
@@ -432,16 +344,15 @@ export function OnboardingWizard() {
                 return;
             }
             trackAmplitudeEvent("SyncStaq: Start Trial Succeeded", {
-                trial_ends_at: data?.trialEndsAt ?? null,
-                plan_id: "pro",
-                interval: "monthly",
+                status: data.status ?? null,
+                trial_ends_at: data.trialEndsAt ?? null,
             });
             // Optional: show trial end date from data.trialEndsAt
             // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
             trackAmplitudeEvent("SyncStaq: Start Trial Failed", {
-                error_message: e instanceof Error ? e.message : "unknown_error",
+                error_message: e instanceof Error ? e.message : "Failed to start trial",
             });
             return false;
         }
@@ -492,13 +403,6 @@ export function OnboardingWizard() {
                 step_id: 1,
                 step_name: "connect_stripe",
             });
-            try {
-                if (typeof window !== "undefined") {
-                    window.sessionStorage.setItem("onboarding:pending_stripe_connect", "1");
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
@@ -509,13 +413,6 @@ export function OnboardingWizard() {
                 step_id: 2,
                 step_name: "connect_google_sheets",
             });
-            try {
-                if (typeof window !== "undefined") {
-                    window.sessionStorage.setItem("onboarding:pending_google_connect", "1");
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
             setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
@@ -564,6 +461,12 @@ export function OnboardingWizard() {
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 });
                 onboardingCompletedRef.current = true;
+                if (typeof window !== "undefined") {
+                    window.localStorage.setItem(
+                        "syncstaq_onboarding_completed_at",
+                        new Date().toISOString(),
+                    );
+                }
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 setSubmitting(false);

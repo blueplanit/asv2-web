@@ -168,7 +168,6 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
         setLoading(true);
         try {
             trackAmplitudeEvent("SyncStaq: Checkout Started", {
-                source: "pricing_page",
                 plan_id: "pro",
                 interval,
             });
@@ -179,22 +178,33 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
             });
             if (!res.ok) {
                 console.error("Failed to create checkout session");
+                trackAmplitudeEvent("SyncStaq: Checkout Session Failed", {
+                    interval,
+                    error_message: "Failed to create checkout session",
+                });
                 setLoading(false);
                 return;
             }
             const data = await res.json();
             if (data.url) {
                 trackAmplitudeEvent("SyncStaq: Checkout Session Created", {
-                    source: "pricing_page",
                     plan_id: "pro",
                     interval,
                 });
                 window.location.href = data.url;
             } else {
+                trackAmplitudeEvent("SyncStaq: Checkout Session Failed", {
+                    interval,
+                    error_message: "Checkout URL missing",
+                });
                 setLoading(false);
             }
         } catch (err) {
             console.error("Error starting checkout", err);
+            trackAmplitudeEvent("SyncStaq: Checkout Session Failed", {
+                interval,
+                error_message: err instanceof Error ? err.message : "Error starting checkout",
+            });
             setLoading(false);
         }
     }

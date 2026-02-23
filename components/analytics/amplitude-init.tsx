@@ -37,18 +37,17 @@ export function AmplitudeInit() {
                 email: session?.user?.email,
             });
 
-            try {
-                const signupTrackedKey = `amplitude:signup-tracked:${userId}`;
-                const signupTrackedAtKey = `amplitude:signup-tracked-at:${userId}`;
-                if (typeof window !== "undefined" && !window.sessionStorage.getItem(signupTrackedKey)) {
+            // Lightweight heuristic for "signup completed" without backend changes:
+            // fire once per user per browser.
+            if (typeof window !== "undefined") {
+                const key = `syncstaq_signup_completed_tracked:${userId}`;
+                const tracked = window.localStorage.getItem(key);
+                if (!tracked) {
                     trackAmplitudeEvent("SyncStaq: Signup Completed", {
-                        user_id: userId,
+                        heuristic: "first_auth_on_device",
                     });
-                    window.sessionStorage.setItem(signupTrackedKey, "1");
-                    window.localStorage.setItem(signupTrackedAtKey, String(Date.now()));
+                    window.localStorage.setItem(key, "1");
                 }
-            } catch {
-                // Ignore storage access errors.
             }
             return;
         }

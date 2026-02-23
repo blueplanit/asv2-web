@@ -34,8 +34,9 @@ export function identifyAmplitudeUser(params: {
     }
 
     const { userId, email } = params;
+    const emailPrefix = email.split("@")[0] || email;
     const instance = getAmplitudeInstance();
-    instance.setUserId(`${email}-${userId}`);
+    instance.setUserId(`${emailPrefix}-${userId}`);
 
     const identify = new amplitude.Identify();
     identify.set("email", email);

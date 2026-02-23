@@ -144,7 +144,6 @@ export function WorkspaceCard({
     const [localRecoveryRunId, setLocalRecoveryRunId] = useState<string | null>(workspace.recoveryRunId ?? null);
     const [recoveryTimedOut, setRecoveryTimedOut] = useState(false);
     const pollStartRef = useRef<number | null>(null);
-    const trackedRecoveryOutcomeRunIdsRef = useRef<Set<string>>(new Set());
 
 
     // click-outside to close menu
@@ -227,31 +226,18 @@ export function WorkspaceCard({
                 setLocalRecoveryStatus(data.recoveryStatus ?? null);
 
                 if (data.recoveryStatus === "success") {
-                    if (!trackedRecoveryOutcomeRunIdsRef.current.has(localRecoveryRunId)) {
-                        trackAmplitudeEvent("SyncStaq: Recovery Succeeded", {
-                            spreadsheet_id: workspace.id,
-                            recovery_run_id: localRecoveryRunId,
-                        });
-                        trackedRecoveryOutcomeRunIdsRef.current.add(localRecoveryRunId);
-                    }
                     cancelled = true;
                     window.clearInterval(intervalId);
                     setRecovering(false);
                     setRecoveryTimedOut(false);
                     setRecoveryUiError(null);
+                    trackAmplitudeEvent("SyncStaq: Recovery Succeeded", {
+                        spreadsheet_id: workspace.id,
+                        run_id: localRecoveryRunId,
+                    });
                     // Refresh full user state so health/syncStatus are up to date.
                     refresh().catch(() => { });
                 } else if (data.recoveryStatus === "failed") {
-                    if (!trackedRecoveryOutcomeRunIdsRef.current.has(localRecoveryRunId)) {
-                        trackAmplitudeEvent("SyncStaq: Recovery Failed", {
-                            spreadsheet_id: workspace.id,
-                            recovery_run_id: localRecoveryRunId,
-                            error_message:
-                                data.recoveryLastErrorMessage ||
-                                "Recovery failed. Check your connections and try again.",
-                        });
-                        trackedRecoveryOutcomeRunIdsRef.current.add(localRecoveryRunId);
-                    }
                     cancelled = true;
                     window.clearInterval(intervalId);
                     setRecovering(false);
@@ -260,6 +246,13 @@ export function WorkspaceCard({
                         data.recoveryLastErrorMessage ||
                         "Recovery failed. Check your connections and try again.",
                     );
+                    trackAmplitudeEvent("SyncStaq: Recovery Failed", {
+                        spreadsheet_id: workspace.id,
+                        run_id: localRecoveryRunId,
+                        error_message:
+                            data.recoveryLastErrorMessage ||
+                            "Recovery failed. Check your connections and try again.",
+                    });
                     refresh().catch(() => { });
                 }
             } catch (err) {
@@ -376,6 +369,10 @@ export function WorkspaceCard({
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 console.error("Failed to rotate sheet:", text);
+                trackAmplitudeEvent("SyncStaq: Workspace Rotation Failed", {
+                    spreadsheet_id: workspace.id,
+                    error_message: text || "Failed to rotate sheet",
+                });
                 setRotateError(
                     "We couldn’t create a new sheet. Please try again or contact support.",
                 );
@@ -386,12 +383,12 @@ export function WorkspaceCard({
             if (data?.newSyncConfig?.spreadsheetId) {
                 await initSheetTabState(data.newSyncConfig.spreadsheetId, data.newSyncConfig.stripeDataSyncMap);
             }
+
             trackAmplitudeEvent("SyncStaq: Workspace Rotated", {
                 previous_spreadsheet_id: workspace.id,
                 new_spreadsheet_id: data?.newSyncConfig?.spreadsheetId ?? null,
                 workspace_name: workspace.name,
             });
-
             await refresh();
             if (setTitlesRequested) {
                 setTitlesRequested(true);
@@ -399,6 +396,10 @@ export function WorkspaceCard({
             setRotateModalOpen(false);
         } catch (e) {
             console.error("Failed to rotate sheet:", e);
+            trackAmplitudeEvent("SyncStaq: Workspace Rotation Failed", {
+                spreadsheet_id: workspace.id,
+                error_message: e instanceof Error ? e.message : "Unexpected rotation error",
+            });
             setRotateError(
                 "Unexpected error while rotating the sheet. Please try again or contact support.",
             );
@@ -460,34 +461,33 @@ export function WorkspaceCard({
                 }
                 trackAmplitudeEvent("SyncStaq: Recovery Failed", {
                     spreadsheet_id: workspace.id,
-                    stage: "start",
+                    error_message: apiMessage || "Recovery failed to start",
                     status_code: res.status,
-                    error_message:
-                        apiMessage ||
-                        "An error occurred while starting recovery.",
                 });
                 setRecovering(false);
                 return;
             }
 
             const data = (await res.json()) as { runId: string };
-            trackAmplitudeEvent("SyncStaq: Recovery Started", {
-                spreadsheet_id: workspace.id,
-                recovery_run_id: data.runId,
-            });
 
             setLocalRecoveryRunId(data.runId);
             setLocalRecoveryStatus("requested");
+            trackAmplitudeEvent("SyncStaq: Recovery Started", {
+                spreadsheet_id: workspace.id,
+                run_id: data.runId,
+            });
         } catch (err) {
             console.error("Failed to start recovery", err);
+            trackAmplitudeEvent("SyncStaq: Recovery Failed", {
+                spreadsheet_id: workspace.id,
+                error_message:
+                    err instanceof Error
+                        ? err.message
+                        : "Unexpected error starting recovery",
+            });
             setRecoveryUiError(
                 "Unexpected error starting recovery. Please try again in a moment. If the issue persists, please contact support.",
             );
-            trackAmplitudeEvent("SyncStaq: Recovery Failed", {
-                spreadsheet_id: workspace.id,
-                stage: "start",
-                error_message: err instanceof Error ? err.message : "unknown_error",
-            });
             setRecovering(false);
         }
     }

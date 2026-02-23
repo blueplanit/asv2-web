@@ -151,7 +151,15 @@ export function DashboardClient() {
 
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
     const prevHasBackfillRunningRef = useRef(hasBackfillRunning);
-    const prevSyncStatusBySheetRef = useRef<Record<string, SyncConfig["syncStatus"]>>({});
+    const hasSyncError = useMemo(
+        () => syncConfigs.some((cfg) => cfg.syncStatus === "error"),
+        [syncConfigs],
+    );
+    const prevHasSyncErrorRef = useRef(hasSyncError);
+
+    useEffect(() => {
+        trackAmplitudeEvent("SyncStaq: Dashboard Viewed");
+    }, []);
 
     const filteredConfigs = useMemo(
         () =>
@@ -261,10 +269,6 @@ export function DashboardClient() {
     const activeWorkspace = workspaces.find((ws) => ws.id === activeSyncConfig?.spreadsheetId) ?? workspaces[0] ?? null;
     const archivedWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace?.id);
 
-    useEffect(() => {
-        trackAmplitudeEvent("SyncStaq: Dashboard Viewed");
-    }, []);
-
     const isOnboardingDone =
         activeSyncConfig &&
         (activeSyncConfig.syncStatus === "syncing" ||
@@ -340,51 +344,45 @@ export function DashboardClient() {
     // When initial backfill completes (no configs are "backfill_running"), close the intro modal
     useEffect(() => {
         if (prevHasBackfillRunningRef.current && !hasBackfillRunning) {
+            let onboardingToBackfillMs: number | null = null;
+            if (typeof window !== "undefined") {
+                const onboardingCompletedAt = window.localStorage.getItem(
+                    "syncstaq_onboarding_completed_at",
+                );
+                if (onboardingCompletedAt) {
+                    const startedAt = Date.parse(onboardingCompletedAt);
+                    if (Number.isFinite(startedAt)) {
+                        onboardingToBackfillMs = Date.now() - startedAt;
+                    }
+                    window.localStorage.removeItem("syncstaq_onboarding_completed_at");
+                }
+            }
             trackAmplitudeEvent("SyncStaq: Backfill Completed", {
                 spreadsheet_id: activeWorkspace?.id ?? null,
                 workspace_name: activeWorkspace?.name ?? null,
+                onboarding_to_first_backfill_ms: onboardingToBackfillMs,
             });
-
-            try {
-                const userId = user.profile?.userId;
-                if (typeof window !== "undefined" && userId) {
-                    const signupTrackedAtKey = `amplitude:signup-tracked-at:${userId}`;
-                    const trackedAtRaw = window.localStorage.getItem(signupTrackedAtKey);
-                    const trackedAtMs = trackedAtRaw ? Number(trackedAtRaw) : NaN;
-                    if (Number.isFinite(trackedAtMs) && trackedAtMs > 0) {
-                        const elapsedSeconds = Math.max(
-                            0,
-                            Math.floor((Date.now() - trackedAtMs) / 1000),
-                        );
-                        trackAmplitudeEvent("SyncStaq: Time To First Backfill Completed", {
-                            spreadsheet_id: activeWorkspace?.id ?? null,
-                            elapsed_seconds: elapsedSeconds,
-                        });
-                    }
-                }
-            } catch {
-                // Ignore storage access errors.
-            }
-        }
-        prevHasBackfillRunningRef.current = hasBackfillRunning;
-    }, [hasBackfillRunning, activeWorkspace?.id, activeWorkspace?.name, user.profile?.userId]);
-
-    useEffect(() => {
-        const nextStatuses: Record<string, SyncConfig["syncStatus"]> = {};
-        for (const cfg of syncConfigs) {
-            if (!cfg.spreadsheetId) continue;
-            nextStatuses[cfg.spreadsheetId] = cfg.syncStatus;
-            const prev = prevSyncStatusBySheetRef.current[cfg.spreadsheetId];
-            if (prev && prev !== "error" && cfg.syncStatus === "error") {
-                trackAmplitudeEvent("SyncStaq: Sync Error Detected", {
-                    spreadsheet_id: cfg.spreadsheetId,
-                    previous_sync_status: prev,
-                    current_sync_status: cfg.syncStatus,
+            if (onboardingToBackfillMs !== null) {
+                trackAmplitudeEvent("SyncStaq: Time To First Backfill Completed", {
+                    spreadsheet_id: activeWorkspace?.id ?? null,
+                    workspace_name: activeWorkspace?.name ?? null,
+                    duration_ms: onboardingToBackfillMs,
                 });
             }
         }
-        prevSyncStatusBySheetRef.current = nextStatuses;
-    }, [syncConfigs]);
+        prevHasBackfillRunningRef.current = hasBackfillRunning;
+    }, [hasBackfillRunning, activeWorkspace?.id, activeWorkspace?.name]);
+
+    useEffect(() => {
+        if (!prevHasSyncErrorRef.current && hasSyncError) {
+            const erroredSyncConfig = syncConfigs.find((cfg) => cfg.syncStatus === "error");
+            trackAmplitudeEvent("SyncStaq: Sync Error Detected", {
+                spreadsheet_id: erroredSyncConfig?.spreadsheetId ?? null,
+                stripe_account_id: erroredSyncConfig?.stripeAccountId ?? null,
+            });
+        }
+        prevHasSyncErrorRef.current = hasSyncError;
+    }, [hasSyncError, syncConfigs]);
 
     // Keep intro modal in sync with backfill status.
     useEffect(() => {
