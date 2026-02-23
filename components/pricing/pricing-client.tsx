@@ -167,6 +167,11 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
         setLoading(true);
         try {
+            trackAmplitudeEvent("SyncStaq: Checkout Started", {
+                source: "pricing_page",
+                plan_id: "pro",
+                interval,
+            });
             const res = await fetch("/api/billing/checkout", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -179,6 +184,11 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
             }
             const data = await res.json();
             if (data.url) {
+                trackAmplitudeEvent("SyncStaq: Checkout Session Created", {
+                    source: "pricing_page",
+                    plan_id: "pro",
+                    interval,
+                });
                 window.location.href = data.url;
             } else {
                 setLoading(false);

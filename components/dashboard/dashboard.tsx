@@ -151,6 +151,7 @@ export function DashboardClient() {
 
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
     const prevHasBackfillRunningRef = useRef(hasBackfillRunning);
+    const prevSyncStatusBySheetRef = useRef<Record<string, SyncConfig["syncStatus"]>>({});
 
     const filteredConfigs = useMemo(
         () =>
@@ -339,9 +340,47 @@ export function DashboardClient() {
                 spreadsheet_id: activeWorkspace?.id ?? null,
                 workspace_name: activeWorkspace?.name ?? null,
             });
+
+            try {
+                const userId = user.profile?.userId;
+                if (typeof window !== "undefined" && userId) {
+                    const signupTrackedAtKey = `amplitude:signup-tracked-at:${userId}`;
+                    const trackedAtRaw = window.localStorage.getItem(signupTrackedAtKey);
+                    const trackedAtMs = trackedAtRaw ? Number(trackedAtRaw) : NaN;
+                    if (Number.isFinite(trackedAtMs) && trackedAtMs > 0) {
+                        const elapsedSeconds = Math.max(
+                            0,
+                            Math.floor((Date.now() - trackedAtMs) / 1000),
+                        );
+                        trackAmplitudeEvent("SyncStaq: Time To First Backfill Completed", {
+                            spreadsheet_id: activeWorkspace?.id ?? null,
+                            elapsed_seconds: elapsedSeconds,
+                        });
+                    }
+                }
+            } catch {
+                // Ignore storage access errors.
+            }
         }
         prevHasBackfillRunningRef.current = hasBackfillRunning;
-    }, [hasBackfillRunning, activeWorkspace?.id, activeWorkspace?.name]);
+    }, [hasBackfillRunning, activeWorkspace?.id, activeWorkspace?.name, user.profile?.userId]);
+
+    useEffect(() => {
+        const nextStatuses: Record<string, SyncConfig["syncStatus"]> = {};
+        for (const cfg of syncConfigs) {
+            if (!cfg.spreadsheetId) continue;
+            nextStatuses[cfg.spreadsheetId] = cfg.syncStatus;
+            const prev = prevSyncStatusBySheetRef.current[cfg.spreadsheetId];
+            if (prev && prev !== "error" && cfg.syncStatus === "error") {
+                trackAmplitudeEvent("SyncStaq: Sync Error Detected", {
+                    spreadsheet_id: cfg.spreadsheetId,
+                    previous_sync_status: prev,
+                    current_sync_status: cfg.syncStatus,
+                });
+            }
+        }
+        prevSyncStatusBySheetRef.current = nextStatuses;
+    }, [syncConfigs]);
 
     // Keep intro modal in sync with backfill status.
     useEffect(() => {

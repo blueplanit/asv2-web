@@ -41,6 +41,12 @@ export function BillingBar() {
             }
             const data = await res.json();
             if (data.url) {
+                trackAmplitudeEvent("SyncStaq: Billing Portal Opened", {
+                    source: "billing_bar",
+                    plan_id: planId,
+                    subscription_status: status,
+                    subscription_raw_status: rawStatus,
+                });
                 window.open(data.url, "_blank");
             } else {
                 setPortalLoading(false);

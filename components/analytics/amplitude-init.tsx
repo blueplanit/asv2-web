@@ -7,6 +7,7 @@ import {
     identifyAmplitudeUser,
     initAmplitude,
     resetAmplitudeUser,
+    trackAmplitudeEvent,
 } from "@/lib/analytics/amplitude-client";
 
 export function AmplitudeInit() {
@@ -35,6 +36,20 @@ export function AmplitudeInit() {
                 userId,
                 email: session?.user?.email,
             });
+
+            try {
+                const signupTrackedKey = `amplitude:signup-tracked:${userId}`;
+                const signupTrackedAtKey = `amplitude:signup-tracked-at:${userId}`;
+                if (typeof window !== "undefined" && !window.sessionStorage.getItem(signupTrackedKey)) {
+                    trackAmplitudeEvent("SyncStaq: Signup Completed", {
+                        user_id: userId,
+                    });
+                    window.sessionStorage.setItem(signupTrackedKey, "1");
+                    window.localStorage.setItem(signupTrackedAtKey, String(Date.now()));
+                }
+            } catch {
+                // Ignore storage access errors.
+            }
             return;
         }
 
