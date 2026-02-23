@@ -1,6 +1,6 @@
 "use client";
 
-import * as amplitude from "amplitude-js";
+import amplitude from "amplitude-js";
 
 const AMPLITUDE_API_KEY = process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY;
 const AMPLITUDE_INSTANCE_NAME = "default";

@@ -122,7 +122,6 @@ export function OnboardingWizard() {
 
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
     const viewedOnboardingStepsRef = React.useRef<Set<number>>(new Set());
-    const onboardingCompletedRef = React.useRef(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
@@ -447,7 +446,6 @@ export function OnboardingWizard() {
                     selected_sync_objects: selectedDataSyncEntries,
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 });
-                onboardingCompletedRef.current = true;
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 setSubmitting(false);
