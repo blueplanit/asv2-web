@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  COLUMN_REQUEST_MAX_SCREENSHOTS,
+  COLUMN_REQUEST_MAX_PER_FILE_BYTES,
+  COLUMN_REQUEST_MAX_TOTAL_BYTES,
+} from "@/lib/column-request";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  userEmail?: string;
   workspaceName?: string;
   stripeAccountId?: string;
 };
@@ -23,7 +27,7 @@ function formatBytes(bytes: number) {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-export function RequestColumnModal({ open, onClose, userEmail, workspaceName, stripeAccountId }: Props) {
+export function RequestColumnModal({ open, onClose, workspaceName, stripeAccountId }: Props) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -37,7 +41,6 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
   useEffect(() => {
     if (!open) return;
     setStatus({ kind: "idle" });
-    // basic scroll lock
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -56,7 +59,12 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
   function addFiles(incoming: FileList | File[]) {
     const arr = Array.from(incoming);
     const imageOnly = arr.filter((f) => f.type.startsWith("image/"));
-    const next = imageOnly.map((file) => ({ id: crypto.randomUUID(), file }));
+    const space = COLUMN_REQUEST_MAX_SCREENSHOTS - files.length;
+    const next = imageOnly.slice(0, space).map((file) => ({ id: crypto.randomUUID(), file }));
+    if (imageOnly.length > space) {
+      // some files were dropped due to limit
+      setStatus({ kind: "err", msg: `Maximum ${COLUMN_REQUEST_MAX_SCREENSHOTS} screenshots allowed.` });
+    }
     setFiles((prev) => [...prev, ...next]);
   }
 
@@ -85,9 +93,17 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
       return;
     }
 
-    // keep attachments reasonable
-    const MAX_TOTAL = 10 * 1024 * 1024; // 10MB total
-    if (totalBytes > MAX_TOTAL) {
+    // keep attachments reasonable (must match API limits)
+    if (files.length > COLUMN_REQUEST_MAX_SCREENSHOTS) {
+      setStatus({ kind: "err", msg: `Maximum ${COLUMN_REQUEST_MAX_SCREENSHOTS} screenshots allowed.` });
+      return;
+    }
+    const overSize = files.find((f) => f.file.size > COLUMN_REQUEST_MAX_PER_FILE_BYTES);
+    if (overSize) {
+      setStatus({ kind: "err", msg: "Each screenshot must be 5MB or smaller." });
+      return;
+    }
+    if (totalBytes > COLUMN_REQUEST_MAX_TOTAL_BYTES) {
       setStatus({ kind: "err", msg: "Screenshots are too large (max 10MB total)." });
       return;
     }
@@ -96,10 +112,8 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
     try {
       const fd = new FormData();
       fd.set("columnsText", trimmed);
-      if (userEmail) fd.set("userEmail", userEmail);
       if (workspaceName) fd.set("workspaceName", workspaceName);
       if (stripeAccountId) fd.set("stripeAccountId", stripeAccountId);
-      fd.set("pageUrl", window.location.href);
 
       for (const item of files) fd.append("screenshots", item.file, item.file.name);
 
@@ -112,8 +126,7 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
       setStatus({ kind: "ok", msg: "Sent. Thanks — we’ll review it." });
       setColumnsText("");
       setFiles([]);
-      // close shortly after success
-      setTimeout(() => onClose(), 650);
+      setTimeout(() => onClose(), 1000);
     } catch (e: any) {
       setStatus({ kind: "err", msg: e?.message || "Something went wrong." });
     } finally {
@@ -146,7 +159,7 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Request a new Stripe column</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Tell us which columns you need. Add screenshots if helpful.
+              Tell us which columns you need. Screenshots are optional but helpful.
             </p>
           </div>
           <button
@@ -161,20 +174,16 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
         </div>
 
         <div className="mt-4">
-          <label className="text-sm font-medium text-slate-800">Columns needed (one per line)</label>
+          <label className="text-sm font-medium text-slate-800">Columns needed</label>
           <textarea
             value={columnsText}
             onChange={(e) => setColumnsText(e.target.value)}
             disabled={submitting}
             rows={6}
             className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-300 disabled:bg-slate-50"
-            placeholder={`Example:\ncharges.balance_transaction.fee\ninvoices.discount.coupon.id\ncustomers.metadata.plan`}
+            placeholder="Example: Conversion Rate from Transactions CSV export."
           />
-          <p className="mt-2 text-xs text-slate-500">
-            Include the Stripe object context if you know it (charges / invoices / subscriptions, etc.).
-          </p>
         </div>
-
         <div className="mt-4">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-slate-800">Screenshots (optional)</label>
@@ -184,13 +193,13 @@ export function RequestColumnModal({ open, onClose, userEmail, workspaceName, st
           <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-slate-700">
-                <div className="font-medium">Drag & drop images here</div>
-                <div className="text-xs text-slate-500">PNG/JPG/WebP. Max 10MB total.</div>
+                <div className="font-medium">Drag & drop screenshots here</div>
+                <div className="text-xs text-slate-500">JPEG / PNG / WEBP · Max {COLUMN_REQUEST_MAX_SCREENSHOTS} files, 5MB each, 10MB total.</div>
               </div>
               <button
                 type="button"
                 onClick={onBrowseClick}
-                disabled={submitting}
+                disabled={submitting || files.length >= COLUMN_REQUEST_MAX_SCREENSHOTS}
                 className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50"
               >
                 Browse

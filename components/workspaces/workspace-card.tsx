@@ -814,7 +814,6 @@ export function WorkspaceCard({
                     </div>
                     <div className="space-y-2"></div>
                     <RequestColumnButton
-                        userEmail={workspace.googleAccountEmail}
                         workspaceName={workspace.name}
                         stripeAccountId={stripeConnection?.stripeAccountId ?? undefined}
                     />

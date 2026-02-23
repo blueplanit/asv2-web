@@ -4,7 +4,6 @@ import { useState } from "react";
 import { RequestColumnModal } from "./request-column-modal";
 
 type Props = {
-  userEmail?: string | null;
   workspaceName?: string | null;
   stripeAccountId?: string | null;
 };
@@ -27,7 +26,6 @@ export function RequestColumnButton(props: Props) {
       <RequestColumnModal
         open={open}
         onClose={() => setOpen(false)}
-        userEmail={props.userEmail ?? undefined}
         workspaceName={props.workspaceName ?? undefined}
         stripeAccountId={props.stripeAccountId ?? undefined}
       />
