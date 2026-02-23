@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { getAllBlogPosts } from "@/lib/contentful-queries";
 import { APP_NAME } from "@/lib/constants";
+import { BlogPageViewTracker } from "@/components/analytics/blog-page-view-tracker";
 
 export const revalidate = 60;
 
@@ -37,6 +38,7 @@ export default async function BlogIndexPage() {
 
     return (
         <div className="mx-auto max-w-6xl px-4 py-14">
+            <BlogPageViewTracker />
             {/* Header */}
             <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>

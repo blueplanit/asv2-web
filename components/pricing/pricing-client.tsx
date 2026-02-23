@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing-config";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -106,6 +107,12 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [pricingLoading, setPricingLoading] = useState(true);
 
     useEffect(() => {
+        trackAmplitudeEvent("SyncStaq: Pricing Page Viewed", {
+            is_logged_in: isLoggedIn,
+        });
+    }, [isLoggedIn]);
+
+    useEffect(() => {
         let cancelled = false;
 
         setPricingLoading(true);
@@ -142,6 +149,12 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     }, [justLoggedIn]);
 
     async function handleSelectPlan() {
+        trackAmplitudeEvent("SyncStaq: Upgrade To Pro Clicked", {
+            source: "pricing_page",
+            is_logged_in: isLoggedIn,
+            interval,
+        });
+
         if (!isLoggedIn) {
             setLoading(true);
             try {

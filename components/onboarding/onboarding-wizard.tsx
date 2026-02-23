@@ -12,6 +12,7 @@ import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
 import { StripeDataSyncEntry } from "@blueplanit/asv2-shared";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 type StepStatus = "complete" | "current" | "upcoming";
 type InitSheetTabStates = Array<{
@@ -117,6 +118,7 @@ export function OnboardingWizard() {
     }, [searchParams]);
 
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
+    const viewedOnboardingStepsRef = React.useRef<Set<number>>(new Set());
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
@@ -201,6 +203,17 @@ export function OnboardingWizard() {
                     ? "Creating sheet…"
                     : "Starting trial & backfill...";
 
+    useEffect(() => {
+        if (viewedOnboardingStepsRef.current.has(currentStep.id)) {
+            return;
+        }
+        viewedOnboardingStepsRef.current.add(currentStep.id);
+        trackAmplitudeEvent("SyncStaq: Onboarding Step Viewed", {
+            step_id: currentStep.id,
+            step_name: currentStep.title,
+        });
+    }, [currentStep.id, currentStep.title]);
+
     async function createSheet() {
         try {
             const res = await fetch("/api/google/create-sheet", {
@@ -222,7 +235,13 @@ export function OnboardingWizard() {
             }
 
             await refresh(); // now userState has SyncConfig + sheet info
-            return res.json();
+            const data = await res.json();
+            trackAmplitudeEvent("SyncStaq: Onboarding Step Completed", {
+                step_id: 3,
+                step_name: "create_workspace_sheet",
+                spreadsheet_id: data?.spreadsheetId ?? null,
+            });
+            return data;
         } catch (e) {
             setError(`Failed to create sheet: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
             return false;
@@ -336,12 +355,20 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
+            trackAmplitudeEvent("SyncStaq: Onboarding Step Started", {
+                step_id: 1,
+                step_name: "connect_stripe",
+            });
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
             return;
         }
         else if (currentStep.id === 2) {
+            trackAmplitudeEvent("SyncStaq: Onboarding Step Started", {
+                step_id: 2,
+                step_name: "connect_google_sheets",
+            });
             setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
@@ -376,6 +403,19 @@ export function OnboardingWizard() {
                     setSubmitting(false);
                     return;
                 }
+
+                trackAmplitudeEvent("SyncStaq: Onboarding Step Completed", {
+                    step_id: 4,
+                    step_name: "configure_sync_and_start_backfill",
+                    spreadsheet_id: createdSpreadsheetId,
+                    selected_sync_objects: selectedDataSyncEntries,
+                    selected_sync_objects_count: selectedDataSyncEntries.length,
+                });
+                trackAmplitudeEvent("SyncStaq: Onboarding Completed", {
+                    spreadsheet_id: createdSpreadsheetId,
+                    selected_sync_objects: selectedDataSyncEntries,
+                    selected_sync_objects_count: selectedDataSyncEntries.length,
+                });
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 setSubmitting(false);

@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 export function BillingBar() {
     const { user } = useUserState();
@@ -77,6 +78,13 @@ export function BillingBar() {
                 <div className="flex items-center gap-2">
                     <Link
                         href="/pricing"
+                        onClick={() =>
+                            trackAmplitudeEvent("SyncStaq: Upgrade To Pro Clicked", {
+                                source: "dashboard_billing_bar",
+                                subscription_raw_status: rawStatus,
+                                cta_label: ctaLabel,
+                            })
+                        }
                         className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
                     >
                         {ctaLabel}

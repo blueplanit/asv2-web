@@ -20,6 +20,7 @@ import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
 import { POLL_INTERVAL_MS, POLL_MAX_MS } from "../dashboard/dashboard";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 export type RecoveryStatus = "requested" | "pulling" | "writing" | "success" | "failed";
 
@@ -258,6 +259,15 @@ export function WorkspaceCard({
         const next = isPaused ? "syncing" : "paused";
         onTogglePause(workspace.id, next);
         setMenuOpen(false);
+    }
+
+    function trackSpreadsheetLinkClick(source: string) {
+        trackAmplitudeEvent("SyncStaq: Spreadsheet Link Clicked", {
+            source,
+            spreadsheet_id: workspace.id,
+            workspace_name: workspace.name,
+            sheet_url: workspace.sheetUrl,
+        });
     }
 
     function formatNextSyncLabel(nextSyncAtIso: string): string {
@@ -563,6 +573,7 @@ export function WorkspaceCard({
                                 href={workspace.sheetUrl}
                                 target="_blank"
                                 rel="noreferrer"
+                                onClick={() => trackSpreadsheetLinkClick("workspace_card_title")}
                                 className="block max-w-full truncate text-lg font-semibold text-indigo-600 hover:underline"
                                 title={workspace.name}
                             ><span className={`flex items-center gap-2 ${isRetired ? "!text-lg" : "!text-2xl"}`}>{workspace.name}
