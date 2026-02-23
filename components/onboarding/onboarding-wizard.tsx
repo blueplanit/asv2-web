@@ -121,7 +121,6 @@ export function OnboardingWizard() {
     }, [searchParams]);
 
     const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
-    const viewedOnboardingStepsRef = React.useRef<Set<number>>(new Set());
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
@@ -223,17 +222,6 @@ export function OnboardingWizard() {
                 : currentStep.id === 3
                     ? "Creating sheet…"
                     : "Starting trial & backfill...";
-
-    useEffect(() => {
-        if (viewedOnboardingStepsRef.current.has(currentStep.id)) {
-            return;
-        }
-        viewedOnboardingStepsRef.current.add(currentStep.id);
-        trackAmplitudeEvent("Onboarding Step Viewed", {
-            step_id: currentStep.id,
-            step_name: currentStep.title,
-        });
-    }, [currentStep.id, currentStep.title]);
 
     async function createSheet() {
         try {
@@ -385,26 +373,21 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
-            trackAmplitudeEvent("Onboarding Step Started", {
-                step_id: 1,
-                step_name: "connect_stripe",
-            });
+            trackAmplitudeEvent("Onboarding Step 1 Started: Connect Stripe");
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
             return;
         }
         else if (currentStep.id === 2) {
-            trackAmplitudeEvent("Onboarding Step Started", {
-                step_id: 2,
-                step_name: "connect_google_sheets",
-            });
+            trackAmplitudeEvent("Onboarding Step 2 Started: Grant Sheets access");
             setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
             return;
         }
         else if (currentStep.id === 3) {
+            trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet");
             setSubmitting(true);
             // Create sheet
             const createSheetResponse = await createSheet();
@@ -414,6 +397,7 @@ export function OnboardingWizard() {
         }
         else if (currentStep.id === 4) {
             try {
+                trackAmplitudeEvent("Onboarding Step 4 Started: Configure sync and start backfill");
                 setSubmitting(true);
                 // Start trial
                 const trialOk = await handleStartTrial();
@@ -434,7 +418,7 @@ export function OnboardingWizard() {
                     return;
                 }
 
-                trackAmplitudeEvent("Onboarding Step Completed", {
+                trackAmplitudeEvent("Onboarding Step 4 Completed", {
                     step_id: 4,
                     step_name: "configure_sync_and_start_backfill",
                     spreadsheet_id: createdSpreadsheetId,
