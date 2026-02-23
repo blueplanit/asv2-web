@@ -261,6 +261,10 @@ export function DashboardClient() {
     const activeWorkspace = workspaces.find((ws) => ws.id === activeSyncConfig?.spreadsheetId) ?? workspaces[0] ?? null;
     const archivedWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace?.id);
 
+    useEffect(() => {
+        trackAmplitudeEvent("SyncStaq: Dashboard Viewed");
+    }, []);
+
     const isOnboardingDone =
         activeSyncConfig &&
         (activeSyncConfig.syncStatus === "syncing" ||
