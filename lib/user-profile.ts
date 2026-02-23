@@ -236,6 +236,7 @@ async function createUserProfileForGoogleLogin(params: {
                         ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
                     },
                 },
+                // Track user signup and increment user count
                 {
                     Update: {
                         TableName: TABLE_NAME,
