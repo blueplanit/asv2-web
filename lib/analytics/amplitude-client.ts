@@ -58,15 +58,19 @@ export function trackAmplitudeEvent(
     eventName: string,
     eventProperties?: Record<string, unknown>,
 ) {
-    const normalizedEventName = eventName.startsWith(EVENT_PREFIX)
-        ? eventName
-        : `${EVENT_PREFIX}${eventName}`;
+    try {
+        const normalizedEventName = eventName.startsWith(EVENT_PREFIX)
+            ? eventName
+            : `${EVENT_PREFIX}${eventName}`;
 
-    if (!hasInitialized) {
-        return;
+        if (!hasInitialized) {
+            return;
+        }
+
+        getAmplitudeInstance().logEvent(normalizedEventName, eventProperties);
+    } catch (error) {
+        console.error("Error tracking amplitude event", error);
     }
-
-    getAmplitudeInstance().logEvent(normalizedEventName, eventProperties);
 }
 
 export function trackAmplitudeError(
