@@ -36,7 +36,7 @@ export function AmplitudeInit() {
 
             identifyAmplitudeUser({
                 userId,
-                email: session?.user?.email,
+                email: session.user.email,
             });
             return;
         }

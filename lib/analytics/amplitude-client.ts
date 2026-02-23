@@ -3,13 +3,12 @@
 import amplitude from "amplitude-js";
 
 const AMPLITUDE_API_KEY = process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY;
-const AMPLITUDE_INSTANCE_NAME = "default";
 const EVENT_PREFIX = "SyncStaq: ";
 
 let hasInitialized = false;
 
 function getAmplitudeInstance() {
-    return amplitude.getInstance(AMPLITUDE_INSTANCE_NAME);
+    return amplitude.getInstance();
 }
 
 export function initAmplitude() {
@@ -59,13 +58,13 @@ export function trackAmplitudeEvent(
     eventProperties?: Record<string, unknown>,
 ) {
     try {
-        const normalizedEventName = eventName.startsWith(EVENT_PREFIX)
-            ? eventName
-            : `${EVENT_PREFIX}${eventName}`;
-
         if (!hasInitialized) {
             return;
         }
+        
+        const normalizedEventName = eventName.startsWith(EVENT_PREFIX)
+            ? eventName
+            : `${EVENT_PREFIX}${eventName}`;
 
         getAmplitudeInstance().logEvent(normalizedEventName, eventProperties);
     } catch (error) {

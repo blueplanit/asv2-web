@@ -113,7 +113,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
         trackAmplitudeEvent("Pricing Page Viewed", {
             is_logged_in: isLoggedIn,
         });
-    }, [isLoggedIn]);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
