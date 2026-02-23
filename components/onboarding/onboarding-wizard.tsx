@@ -416,18 +416,14 @@ export function OnboardingWizard() {
                     return;
                 }
 
-                trackAmplitudeEvent("Onboarding Step 4 Completed", {
-                    step_id: 4,
-                    step_name: "configure_sync_and_start_backfill",
+                const eventProperties = {
                     spreadsheet_id: createdSpreadsheetId,
                     selected_sync_objects: selectedDataSyncEntries,
                     selected_sync_objects_count: selectedDataSyncEntries.length,
-                });
-                trackAmplitudeEvent("Onboarding Completed", {
-                    spreadsheet_id: createdSpreadsheetId,
-                    selected_sync_objects: selectedDataSyncEntries,
-                    selected_sync_objects_count: selectedDataSyncEntries.length,
-                });
+                };
+
+                trackAmplitudeEvent("Onboarding Step 4 Completed", eventProperties);
+                trackAmplitudeEvent("Onboarding Completed", eventProperties);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 setSubmitting(false);
