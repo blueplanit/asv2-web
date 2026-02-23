@@ -38,7 +38,7 @@ export function WorkspaceStats({ sheetTabState, stripeDataSyncMap }: WorkspaceSt
     function handleToggleDetails() {
         const nextOpen = !open;
         if (nextOpen) {
-            trackAmplitudeEvent("SyncStaq: Workspace Details Expanded", {
+            trackAmplitudeEvent("Workspace Details Expanded", {
                 tab_count: tabStats.length,
             });
         }

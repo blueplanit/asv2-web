@@ -7,7 +7,10 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing-config";
-import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -107,7 +110,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [pricingLoading, setPricingLoading] = useState(true);
 
     useEffect(() => {
-        trackAmplitudeEvent("SyncStaq: Pricing Page Viewed", {
+        trackAmplitudeEvent("Pricing Page Viewed", {
             is_logged_in: isLoggedIn,
         });
     }, [isLoggedIn]);
@@ -149,7 +152,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     }, [justLoggedIn]);
 
     async function handleSelectPlan() {
-        trackAmplitudeEvent("SyncStaq: Upgrade To Pro Clicked", {
+        trackAmplitudeEvent("Upgrade To Pro Clicked", {
             source: "pricing_page",
             is_logged_in: isLoggedIn,
             interval,
@@ -167,7 +170,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
         setLoading(true);
         try {
-            trackAmplitudeEvent("SyncStaq: Checkout Started", {
+            trackAmplitudeEvent("Checkout Started", {
                 plan_id: "pro",
                 interval,
             });
@@ -178,32 +181,29 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
             });
             if (!res.ok) {
                 console.error("Failed to create checkout session");
-                trackAmplitudeEvent("SyncStaq: Checkout Session Failed", {
+                trackAmplitudeError("Checkout Session Failed", "Failed to create checkout session", {
                     interval,
-                    error_message: "Failed to create checkout session",
                 });
                 setLoading(false);
                 return;
             }
             const data = await res.json();
             if (data.url) {
-                trackAmplitudeEvent("SyncStaq: Checkout Session Created", {
+                trackAmplitudeEvent("Checkout Session Created", {
                     plan_id: "pro",
                     interval,
                 });
                 window.location.href = data.url;
             } else {
-                trackAmplitudeEvent("SyncStaq: Checkout Session Failed", {
+                trackAmplitudeError("Checkout Session Failed", "Checkout URL missing", {
                     interval,
-                    error_message: "Checkout URL missing",
                 });
                 setLoading(false);
             }
         } catch (err) {
             console.error("Error starting checkout", err);
-            trackAmplitudeEvent("SyncStaq: Checkout Session Failed", {
+            trackAmplitudeError("Checkout Session Failed", err, {
                 interval,
-                error_message: err instanceof Error ? err.message : "Error starting checkout",
             });
             setLoading(false);
         }

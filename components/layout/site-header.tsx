@@ -107,7 +107,7 @@ export function SiteHeader(props: SiteHeaderProps) {
                             setMenuOpen(false);
                             if (isAuthed) {
                                 try {
-                                    trackAmplitudeEvent("SyncStaq: User Logged Out", {
+                                    trackAmplitudeEvent("User Logged Out", {
                                         source: "site_header_desktop_menu",
                                         variant,
                                     });
@@ -129,7 +129,7 @@ export function SiteHeader(props: SiteHeaderProps) {
 
     function trackTopNavClick(href: string, location: "desktop" | "mobile") {
         if (href !== "/blog") return;
-        trackAmplitudeEvent("SyncStaq: Blog Navigation Clicked", {
+        trackAmplitudeEvent("Blog Navigation Clicked", {
             source: "site_header",
             location,
             variant,
@@ -235,7 +235,7 @@ export function SiteHeader(props: SiteHeaderProps) {
                                         onClick={async () => {
                                             setMobileNavOpen(false);
                                             try {
-                                                trackAmplitudeEvent("SyncStaq: User Logged Out", {
+                                                trackAmplitudeEvent("User Logged Out", {
                                                     source: "site_header_mobile_menu",
                                                     variant,
                                                 });

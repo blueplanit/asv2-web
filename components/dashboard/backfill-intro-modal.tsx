@@ -27,7 +27,7 @@ export function BackfillIntroModal({
     }
 
     function trackSpreadsheetLinkClick(source: string) {
-        trackAmplitudeEvent("SyncStaq: Spreadsheet Link Clicked", {
+        trackAmplitudeEvent("Spreadsheet Link Clicked", {
             source,
             workspace_name: workspaceName,
             sheet_url: sheetUrl,

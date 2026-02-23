@@ -158,7 +158,7 @@ export function DashboardClient() {
     const prevHasSyncErrorRef = useRef(hasSyncError);
 
     useEffect(() => {
-        trackAmplitudeEvent("SyncStaq: Dashboard Viewed");
+        trackAmplitudeEvent("Dashboard Viewed");
     }, []);
 
     const filteredConfigs = useMemo(
@@ -319,7 +319,7 @@ export function DashboardClient() {
                 console.error("Failed to update sync status");
                 return;
             }
-            trackAmplitudeEvent("SyncStaq: Sync Pause Toggled", {
+            trackAmplitudeEvent("Sync Pause Toggled", {
                 spreadsheet_id: spreadsheetId,
                 next_status: nextStatus,
                 action: nextStatus === "paused" ? "pause" : "unpause",
@@ -357,13 +357,13 @@ export function DashboardClient() {
                     window.localStorage.removeItem("syncstaq_onboarding_completed_at");
                 }
             }
-            trackAmplitudeEvent("SyncStaq: Backfill Completed", {
+            trackAmplitudeEvent("Backfill Completed", {
                 spreadsheet_id: activeWorkspace?.id ?? null,
                 workspace_name: activeWorkspace?.name ?? null,
                 onboarding_to_first_backfill_ms: onboardingToBackfillMs,
             });
             if (onboardingToBackfillMs !== null) {
-                trackAmplitudeEvent("SyncStaq: Time To First Backfill Completed", {
+                trackAmplitudeEvent("Time To First Backfill Completed", {
                     spreadsheet_id: activeWorkspace?.id ?? null,
                     workspace_name: activeWorkspace?.name ?? null,
                     duration_ms: onboardingToBackfillMs,
@@ -376,7 +376,7 @@ export function DashboardClient() {
     useEffect(() => {
         if (!prevHasSyncErrorRef.current && hasSyncError) {
             const erroredSyncConfig = syncConfigs.find((cfg) => cfg.syncStatus === "error");
-            trackAmplitudeEvent("SyncStaq: Sync Error Detected", {
+            trackAmplitudeEvent("Sync Error Detected", {
                 spreadsheet_id: erroredSyncConfig?.spreadsheetId ?? null,
                 stripe_account_id: erroredSyncConfig?.stripeAccountId ?? null,
             });

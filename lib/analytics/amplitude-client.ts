@@ -1,9 +1,10 @@
 "use client";
 
-import amplitude from "amplitude-js";
+import * as amplitude from "amplitude-js";
 
 const AMPLITUDE_API_KEY = process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY;
 const AMPLITUDE_INSTANCE_NAME = "default";
+const EVENT_PREFIX = "SyncStaq: ";
 
 let hasInitialized = false;
 
@@ -57,9 +58,31 @@ export function trackAmplitudeEvent(
     eventName: string,
     eventProperties?: Record<string, unknown>,
 ) {
+    const normalizedEventName = eventName.startsWith(EVENT_PREFIX)
+        ? eventName
+        : `${EVENT_PREFIX}${eventName}`;
+
     if (!hasInitialized) {
         return;
     }
 
-    getAmplitudeInstance().logEvent(eventName, eventProperties);
+    getAmplitudeInstance().logEvent(normalizedEventName, eventProperties);
+}
+
+export function trackAmplitudeError(
+    eventName: string,
+    error: unknown,
+    eventProperties?: Record<string, unknown>,
+) {
+    const errorMessage =
+        error instanceof Error
+            ? error.message
+            : typeof error === "string"
+                ? error
+                : JSON.stringify(error);
+
+    trackAmplitudeEvent(eventName, {
+        ...eventProperties,
+        error_message: errorMessage,
+    });
 }

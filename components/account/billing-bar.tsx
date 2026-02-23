@@ -4,7 +4,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
-import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 export function BillingBar() {
     const { user } = useUserState();
@@ -36,27 +39,21 @@ export function BillingBar() {
                 method: "POST",
             });
             if (!res.ok) {
-                trackAmplitudeEvent("SyncStaq: Billing Portal Open Failed", {
-                    error_message: "Failed to create billing portal session",
-                });
+                trackAmplitudeError("Billing Portal Open Failed", "Failed to create billing portal session");
                 setPortalLoading(false);
                 return;
             }
             const data = await res.json();
             if (data.url) {
-                trackAmplitudeEvent("SyncStaq: Billing Portal Opened");
+                trackAmplitudeEvent("Billing Portal Opened");
                 window.open(data.url, "_blank");
             } else {
-                trackAmplitudeEvent("SyncStaq: Billing Portal Open Failed", {
-                    error_message: "Billing portal URL missing",
-                });
+                trackAmplitudeError("Billing Portal Open Failed", "Billing portal URL missing");
                 setPortalLoading(false);
             }
         } catch {
             console.error("Error opening billing portal");
-            trackAmplitudeEvent("SyncStaq: Billing Portal Open Failed", {
-                error_message: "Error opening billing portal",
-            });
+            trackAmplitudeError("Billing Portal Open Failed", "Error opening billing portal");
         }
         finally {
             setPortalLoading(false);
@@ -89,7 +86,7 @@ export function BillingBar() {
                     <Link
                         href="/pricing"
                         onClick={() =>
-                            trackAmplitudeEvent("SyncStaq: Upgrade To Pro Clicked", {
+                            trackAmplitudeEvent("Upgrade To Pro Clicked", {
                                 source: "dashboard_billing_bar",
                                 subscription_raw_status: rawStatus,
                                 cta_label: ctaLabel,

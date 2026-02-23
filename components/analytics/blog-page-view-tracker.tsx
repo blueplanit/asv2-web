@@ -5,7 +5,7 @@ import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 export function BlogPageViewTracker() {
     useEffect(() => {
-        trackAmplitudeEvent("SyncStaq: Blog Page Viewed");
+        trackAmplitudeEvent("Blog Page Viewed");
     }, []);
 
     return null;

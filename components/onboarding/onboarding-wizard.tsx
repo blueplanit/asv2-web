@@ -12,7 +12,10 @@ import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
 import { StripeDataSyncEntry } from "@blueplanit/asv2-shared";
-import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 type StepStatus = "complete" | "current" | "upcoming";
 type InitSheetTabStates = Array<{
@@ -140,23 +143,36 @@ export function OnboardingWizard() {
         const stripeDesc = searchParams.get("desc");
         const googleError = searchParams.get("googleError");
         const stepParam = searchParams.get("step");
+        const stripeAttemptPending =
+            typeof window !== "undefined" &&
+            window.localStorage.getItem("syncstaq_oauth_pending_stripe") === "1";
+        const googleAttemptPending =
+            typeof window !== "undefined" &&
+            window.localStorage.getItem("syncstaq_oauth_pending_google") === "1";
 
-        if (stripeError) {
-            trackAmplitudeEvent("SyncStaq: Stripe Connect Failed", {
-                error_code: stripeError,
-                reason: stripeReason ?? null,
-                description: stripeDesc ?? null,
-            });
-        } else if (stepParam === "2") {
-            trackAmplitudeEvent("SyncStaq: Stripe Connect Succeeded");
+        if (stripeAttemptPending) {
+            if (stripeError) {
+                trackAmplitudeError("Stripe Connect Failed", stripeDesc ?? stripeError, {
+                    error_code: stripeError,
+                    reason: stripeReason ?? null,
+                });
+                window.localStorage.removeItem("syncstaq_oauth_pending_stripe");
+            } else if (stepParam === "2") {
+                trackAmplitudeEvent("Stripe Connect Succeeded");
+                window.localStorage.removeItem("syncstaq_oauth_pending_stripe");
+            }
         }
 
-        if (googleError) {
-            trackAmplitudeEvent("SyncStaq: Google Connect Failed", {
-                error_code: googleError,
-            });
-        } else if (stepParam === "3") {
-            trackAmplitudeEvent("SyncStaq: Google Connect Succeeded");
+        if (googleAttemptPending) {
+            if (googleError) {
+                trackAmplitudeError("Google Connect Failed", googleError, {
+                    error_code: googleError,
+                });
+                window.localStorage.removeItem("syncstaq_oauth_pending_google");
+            } else if (stepParam === "3") {
+                trackAmplitudeEvent("Google Connect Succeeded");
+                window.localStorage.removeItem("syncstaq_oauth_pending_google");
+            }
         }
 
         if (mismatch === "1") {
@@ -233,7 +249,7 @@ export function OnboardingWizard() {
             return;
         }
         viewedOnboardingStepsRef.current.add(currentStep.id);
-        trackAmplitudeEvent("SyncStaq: Onboarding Step Viewed", {
+        trackAmplitudeEvent("Onboarding Step Viewed", {
             step_id: currentStep.id,
             step_name: currentStep.title,
         });
@@ -256,15 +272,13 @@ export function OnboardingWizard() {
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to create sheet");
-                trackAmplitudeEvent("SyncStaq: Create Sheet Failed", {
-                    error_message: text || "Failed to create sheet",
-                });
+                trackAmplitudeError("Create Sheet Failed", text || "Failed to create sheet");
                 return;
             }
 
             await refresh(); // now userState has SyncConfig + sheet info
             const data = await res.json();
-            trackAmplitudeEvent("SyncStaq: Onboarding Step Completed", {
+            trackAmplitudeEvent("Onboarding Step Completed", {
                 step_id: 3,
                 step_name: "create_workspace_sheet",
                 spreadsheet_id: data?.spreadsheetId ?? null,
@@ -272,9 +286,7 @@ export function OnboardingWizard() {
             return data;
         } catch (e) {
             setError(`Failed to create sheet: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
-            trackAmplitudeEvent("SyncStaq: Create Sheet Failed", {
-                error_message: e instanceof Error ? e.message : JSON.stringify(e),
-            });
+            trackAmplitudeError("Create Sheet Failed", e);
             return false;
         }
     }
@@ -329,21 +341,17 @@ export function OnboardingWizard() {
             if (!res.ok) {
                 const message = await res.text();
                 setError(message || "Failed to start trial");
-                trackAmplitudeEvent("SyncStaq: Start Trial Failed", {
-                    error_message: message || "Failed to start trial",
-                });
+                trackAmplitudeError("Start Trial Failed", message || "Failed to start trial");
                 return;
             }
 
             const data = await res.json();
             if (!data.ok) {
                 setError(data.error || "Failed to start trial");
-                trackAmplitudeEvent("SyncStaq: Start Trial Failed", {
-                    error_message: data.error || "Failed to start trial",
-                });
+                trackAmplitudeError("Start Trial Failed", data.error || "Failed to start trial");
                 return;
             }
-            trackAmplitudeEvent("SyncStaq: Start Trial Succeeded", {
+            trackAmplitudeEvent("Start Trial Succeeded", {
                 status: data.status ?? null,
                 trial_ends_at: data.trialEndsAt ?? null,
             });
@@ -351,9 +359,7 @@ export function OnboardingWizard() {
             // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
-            trackAmplitudeEvent("SyncStaq: Start Trial Failed", {
-                error_message: e instanceof Error ? e.message : "Failed to start trial",
-            });
+            trackAmplitudeError("Start Trial Failed", e instanceof Error ? e.message : "Failed to start trial");
             return false;
         }
         return true;
@@ -399,7 +405,10 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
-            trackAmplitudeEvent("SyncStaq: Onboarding Step Started", {
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem("syncstaq_oauth_pending_stripe", "1");
+            }
+            trackAmplitudeEvent("Onboarding Step Started", {
                 step_id: 1,
                 step_name: "connect_stripe",
             });
@@ -409,7 +418,10 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 2) {
-            trackAmplitudeEvent("SyncStaq: Onboarding Step Started", {
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem("syncstaq_oauth_pending_google", "1");
+            }
+            trackAmplitudeEvent("Onboarding Step Started", {
                 step_id: 2,
                 step_name: "connect_google_sheets",
             });
@@ -448,14 +460,14 @@ export function OnboardingWizard() {
                     return;
                 }
 
-                trackAmplitudeEvent("SyncStaq: Onboarding Step Completed", {
+                trackAmplitudeEvent("Onboarding Step Completed", {
                     step_id: 4,
                     step_name: "configure_sync_and_start_backfill",
                     spreadsheet_id: createdSpreadsheetId,
                     selected_sync_objects: selectedDataSyncEntries,
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 });
-                trackAmplitudeEvent("SyncStaq: Onboarding Completed", {
+                trackAmplitudeEvent("Onboarding Completed", {
                     spreadsheet_id: createdSpreadsheetId,
                     selected_sync_objects: selectedDataSyncEntries,
                     selected_sync_objects_count: selectedDataSyncEntries.length,
