@@ -246,9 +246,7 @@ export function OnboardingWizard() {
 
             await refresh(); // now userState has SyncConfig + sheet info
             const data = await res.json();
-            trackAmplitudeEvent("Onboarding Step Completed", {
-                step_id: 3,
-                step_name: "create_workspace_sheet",
+            trackAmplitudeEvent("Onboarding Step 3 Completed: Create sheet", {
                 spreadsheet_id: data?.spreadsheetId ?? null,
             });
             return data;
