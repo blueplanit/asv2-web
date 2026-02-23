@@ -38,3 +38,21 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## For shared schemas package
 npm install via "export NPM_TOKEN_PAT=your github user PAT; npm i @blueplanit/asv2-shared"
+
+## Amplitude analytics
+
+Set this environment variable to enable client analytics:
+
+```bash
+NEXT_PUBLIC_AMPLITUDE_API_KEY=your_amplitude_project_api_key
+```
+
+Amplitude initializes in `components/providers/app-providers.tsx` through `components/analytics/amplitude-init.tsx`.
+
+To track custom events in client components, use:
+
+```ts
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+
+trackAmplitudeEvent("Button Clicked", { source: "pricing_page" });
+```
