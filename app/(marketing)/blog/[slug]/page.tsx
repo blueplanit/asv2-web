@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import {
     getAllBlogPostSlugs,
     getBlogPostBySlug,
-} from "@/lib/contentful-queries";
+} from "@/lib/contentful/contentful-queries";
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";

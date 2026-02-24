@@ -1,6 +1,6 @@
 // app/blog/page.tsx
 import Link from "next/link";
-import { getAllBlogPosts } from "@/lib/contentful-queries";
+import { getAllBlogPosts } from "@/lib/contentful/contentful-queries";
 import { APP_NAME } from "@/lib/constants";
 
 export const revalidate = 60;
