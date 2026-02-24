@@ -793,9 +793,18 @@ export function WorkspaceCard({
 
                     {/* Configuration / objects */}
                     <div className="space-y-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            Stripe data synced
-                        </h3>
+						<div className="flex items-center justify-between">
+							<h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+								Stripe data synced
+							</h3>
+							<RequestColumnButton
+								workspaceName={workspace.name}
+								stripeAccountId={
+									stripeConnection?.stripeAccountId ??
+									undefined
+								}
+							/>
+						</div>
                         {workspace.objectsEnabled.length === 0 ? (
                             <p className="text-sm text-slate-600">
                                 No Stripe objects selected yet. Finish onboarding to choose data.
@@ -813,11 +822,6 @@ export function WorkspaceCard({
                             </div>
                         )}
                     </div>
-                    <div className="space-y-2"></div>
-                    <RequestColumnButton
-                        workspaceName={workspace.name}
-                        stripeAccountId={stripeConnection?.stripeAccountId ?? undefined}
-                    />
                 </div>
             )}
 
