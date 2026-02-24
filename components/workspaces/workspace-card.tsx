@@ -20,6 +20,10 @@ import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
 import { POLL_INTERVAL_MS, POLL_MAX_MS } from "../dashboard/dashboard";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 export type RecoveryStatus = "requested" | "pulling" | "writing" | "success" | "failed";
 
@@ -230,6 +234,10 @@ export function WorkspaceCard({
                     setRecovering(false);
                     setRecoveryTimedOut(false);
                     setRecoveryUiError(null);
+                    trackAmplitudeEvent("Recovery Succeeded", {
+                        spreadsheet_id: workspace.id,
+                        run_id: localRecoveryRunId,
+                    });
                     // Refresh full user state so health/syncStatus are up to date.
                     refresh().catch(() => { });
                 } else if (data.recoveryStatus === "failed") {
@@ -240,6 +248,15 @@ export function WorkspaceCard({
                     setRecoveryUiError(
                         data.recoveryLastErrorMessage ||
                         "Recovery failed. Check your connections and try again.",
+                    );
+                    trackAmplitudeError(
+                        "Recovery Failed",
+                        data.recoveryLastErrorMessage ||
+                            "Recovery failed. Check your connections and try again.",
+                        {
+                            spreadsheet_id: workspace.id,
+                            run_id: localRecoveryRunId,
+                        },
                     );
                     refresh().catch(() => { });
                 }
@@ -258,6 +275,15 @@ export function WorkspaceCard({
         const next = isPaused ? "syncing" : "paused";
         onTogglePause(workspace.id, next);
         setMenuOpen(false);
+    }
+
+    function trackSpreadsheetLinkClick(source: string) {
+        trackAmplitudeEvent("Spreadsheet Link Clicked", {
+            source,
+            spreadsheet_id: workspace.id,
+            workspace_name: workspace.name,
+            sheet_url: workspace.sheetUrl,
+        });
     }
 
     function formatNextSyncLabel(nextSyncAtIso: string): string {
@@ -348,6 +374,13 @@ export function WorkspaceCard({
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 console.error("Failed to rotate sheet:", text);
+                trackAmplitudeError(
+                    "Workspace Rotation Failed",
+                    text || "Failed to rotate sheet",
+                    {
+                        spreadsheet_id: workspace.id,
+                    },
+                );
                 setRotateError(
                     "We couldn’t create a new sheet. Please try again or contact support.",
                 );
@@ -359,6 +392,11 @@ export function WorkspaceCard({
                 await initSheetTabState(data.newSyncConfig.spreadsheetId, data.newSyncConfig.stripeDataSyncMap);
             }
 
+            trackAmplitudeEvent("Workspace Rotated", {
+                previous_spreadsheet_id: workspace.id,
+                new_spreadsheet_id: data?.newSyncConfig?.spreadsheetId ?? null,
+                workspace_name: workspace.name,
+            });
             await refresh();
             if (setTitlesRequested) {
                 setTitlesRequested(true);
@@ -366,6 +404,9 @@ export function WorkspaceCard({
             setRotateModalOpen(false);
         } catch (e) {
             console.error("Failed to rotate sheet:", e);
+            trackAmplitudeError("Workspace Rotation Failed", e, {
+                spreadsheet_id: workspace.id,
+            });
             setRotateError(
                 "Unexpected error while rotating the sheet. Please try again or contact support.",
             );
@@ -425,6 +466,14 @@ export function WorkspaceCard({
                         "An error occurred while starting recovery. Please try again in a moment. If the issue persists, please contact support.",
                     );
                 }
+                trackAmplitudeError(
+                    "Recovery Failed",
+                    apiMessage || "Recovery failed to start",
+                    {
+                        spreadsheet_id: workspace.id,
+                        status_code: res.status,
+                    },
+                );
                 setRecovering(false);
                 return;
             }
@@ -433,8 +482,15 @@ export function WorkspaceCard({
 
             setLocalRecoveryRunId(data.runId);
             setLocalRecoveryStatus("requested");
+            trackAmplitudeEvent("Recovery Started", {
+                spreadsheet_id: workspace.id,
+                run_id: data.runId,
+            });
         } catch (err) {
             console.error("Failed to start recovery", err);
+            trackAmplitudeError("Recovery Failed", err, {
+                spreadsheet_id: workspace.id,
+            });
             setRecoveryUiError(
                 "Unexpected error starting recovery. Please try again in a moment. If the issue persists, please contact support.",
             );
@@ -563,6 +619,7 @@ export function WorkspaceCard({
                                 href={workspace.sheetUrl}
                                 target="_blank"
                                 rel="noreferrer"
+                                onClick={() => trackSpreadsheetLinkClick("workspace_card_title")}
                                 className="block max-w-full truncate text-lg font-semibold text-indigo-600 hover:underline"
                                 title={workspace.name}
                             ><span className={`flex items-center gap-2 ${isRetired ? "!text-lg" : "!text-2xl"}`}>{workspace.name}

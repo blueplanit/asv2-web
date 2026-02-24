@@ -8,6 +8,7 @@ import { User, LogOut, Menu, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Brand } from "@/components/brand/brand";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 type NavItem = { href: string; label: string };
 
@@ -106,6 +107,10 @@ export function SiteHeader(props: SiteHeaderProps) {
                             setMenuOpen(false);
                             if (isAuthed) {
                                 try {
+                                    trackAmplitudeEvent("User Logged Out", {
+                                        source: "site_header_desktop_menu",
+                                        variant,
+                                    });
                                     await signOut({ callbackUrl: "/login", redirect: true });
                                 } catch (error) {
                                     console.error("Error signing out", error);
@@ -122,6 +127,15 @@ export function SiteHeader(props: SiteHeaderProps) {
         </div>
     )
 
+    function trackTopNavClick(href: string, location: "desktop" | "mobile") {
+        if (href !== "/blog") return;
+        trackAmplitudeEvent("Blog Navigation Clicked", {
+            source: "site_header",
+            location,
+            variant,
+        });
+    }
+
     return (
         <header className="relative z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
             <div className="mx-auto w-full px-4 sm:px-6">
@@ -137,6 +151,7 @@ export function SiteHeader(props: SiteHeaderProps) {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                onClick={() => trackTopNavClick(item.href, "desktop")}
                                 className={clsx(
                                     "rounded-full px-3 py-1 font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900",
                                 )}
@@ -189,7 +204,10 @@ export function SiteHeader(props: SiteHeaderProps) {
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    onClick={() => setMobileNavOpen(false)}
+                                    onClick={() => {
+                                        trackTopNavClick(item.href, "mobile");
+                                        setMobileNavOpen(false);
+                                    }}
                                     className="rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
                                 >
                                     {item.label}
@@ -217,6 +235,10 @@ export function SiteHeader(props: SiteHeaderProps) {
                                         onClick={async () => {
                                             setMobileNavOpen(false);
                                             try {
+                                                trackAmplitudeEvent("User Logged Out", {
+                                                    source: "site_header_mobile_menu",
+                                                    variant,
+                                                });
                                                 await signOut({ callbackUrl: "/login", redirect: true });
                                             } catch (error) {
                                                 console.error("Error signing out", error);

@@ -4,6 +4,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 export function BillingBar() {
     const { user } = useUserState();
@@ -35,17 +39,21 @@ export function BillingBar() {
                 method: "POST",
             });
             if (!res.ok) {
+                trackAmplitudeError("Billing Portal Open Failed", "Failed to create billing portal session");
                 setPortalLoading(false);
                 return;
             }
             const data = await res.json();
             if (data.url) {
+                trackAmplitudeEvent("Billing Portal Opened");
                 window.open(data.url, "_blank");
             } else {
+                trackAmplitudeError("Billing Portal Open Failed", "Billing portal URL missing");
                 setPortalLoading(false);
             }
         } catch {
             console.error("Error opening billing portal");
+            trackAmplitudeError("Billing Portal Open Failed", "Error opening billing portal");
         }
         finally {
             setPortalLoading(false);
@@ -77,6 +85,13 @@ export function BillingBar() {
                 <div className="flex items-center gap-2">
                     <Link
                         href="/pricing"
+                        onClick={() =>
+                            trackAmplitudeEvent("Upgrade To Pro Clicked", {
+                                source: "dashboard_billing_bar",
+                                subscription_raw_status: rawStatus,
+                                cta_label: ctaLabel,
+                            })
+                        }
                         className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
                     >
                         {ctaLabel}

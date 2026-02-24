@@ -3,6 +3,7 @@ import { SheetTabState, SYNCED_CELL_BUDGET } from "@blueplanit/asv2-shared";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useState, useMemo } from "react";
 import type { StripeDataSyncEntry } from "@/lib/schemas/sync-config";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -33,6 +34,16 @@ type TabStat = {
 
 export function WorkspaceStats({ sheetTabState, stripeDataSyncMap }: WorkspaceStatsProps) {
     const [open, setOpen] = useState(false);
+
+    function handleToggleDetails() {
+        const nextOpen = !open;
+        if (nextOpen) {
+            trackAmplitudeEvent("Workspace Details Expanded", {
+                tab_count: tabStats.length,
+            });
+        }
+        setOpen(nextOpen);
+    }
 
     // Create a map from sheetId to StripeDataSyncEntry for quick lookup
     const sheetIdToEntry = useMemo(() => {
@@ -89,7 +100,7 @@ export function WorkspaceStats({ sheetTabState, stripeDataSyncMap }: WorkspaceSt
         <section className="border-t border-slate-100 pt-4">
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
+                onClick={handleToggleDetails}
                 className="cursor-pointer flex w-full items-center justify-between gap-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
             >
                 <span>Details</span>
