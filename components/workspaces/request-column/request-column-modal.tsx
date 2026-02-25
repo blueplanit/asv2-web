@@ -5,6 +5,8 @@ import {
   COLUMN_REQUEST_MAX_SCREENSHOTS,
   COLUMN_REQUEST_MAX_PER_FILE_BYTES,
   COLUMN_REQUEST_MAX_TOTAL_BYTES,
+  COLUMN_REQUEST_MAX_TEXT_LENGTH,
+  COLUMN_REQUEST_ALLOWED_MIME,
 } from "@/lib/column-request";
 
 type Props = {
@@ -58,7 +60,8 @@ export function RequestColumnModal({ open, onClose, workspaceName, stripeAccount
 
   function addFiles(incoming: FileList | File[]) {
     const arr = Array.from(incoming);
-    const imageOnly = arr.filter((f) => f.type.startsWith("image/"));
+    const allowedSet = new Set<string>(COLUMN_REQUEST_ALLOWED_MIME);
+    const imageOnly = arr.filter((f) => allowedSet.has(f.type));
     const space = COLUMN_REQUEST_MAX_SCREENSHOTS - files.length;
     const next = imageOnly.slice(0, space).map((file) => ({ id: crypto.randomUUID(), file }));
     if (imageOnly.length > space) {
@@ -180,6 +183,7 @@ export function RequestColumnModal({ open, onClose, workspaceName, stripeAccount
             onChange={(e) => setColumnsText(e.target.value)}
             disabled={submitting}
             rows={6}
+            maxLength={COLUMN_REQUEST_MAX_TEXT_LENGTH}
             className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-300 disabled:bg-slate-50"
             placeholder="Example: Conversion Rate from Transactions CSV export."
           />
@@ -207,7 +211,7 @@ export function RequestColumnModal({ open, onClose, workspaceName, stripeAccount
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept={COLUMN_REQUEST_ALLOWED_MIME.join(",")}
                 multiple
                 className="hidden"
                 onChange={(e) => {
