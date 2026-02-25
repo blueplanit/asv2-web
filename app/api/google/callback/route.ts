@@ -4,14 +4,14 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { putGoogleConnection } from "@/lib/google-connection";
+import { putGoogleConnection } from "@/lib/google/google-connection";
 import { createTokenCipher, googleConnectionAad, googleConnectSk, parseKeyringJson, userPk } from "@blueplanit/asv2-shared";
-import { getGoogleClientConfigForShard } from "@/lib/google-oauth-sharding";
+import { getGoogleClientConfigForShard } from "@/lib/google/google-oauth-sharding";
 import {
     verifyGoogleOAuthState,
     GOOGLE_OAUTH_NONCE_COOKIE,
-} from "@/lib/google-oauth-state";
-import { sanitizeReturnTo } from "@/lib/oauth-state-core";
+} from "@/lib/google/google-oauth-state";
+import { sanitizeReturnTo } from "@/lib/app-state/oauth-state-core";
 
 // add (module-level cipher)
 const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;

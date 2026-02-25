@@ -1,6 +1,6 @@
 // components/marketing/how-it-works-section.tsx
 import React from "react";
-import type { MarketingCopy } from "@/lib/marketing-copy";
+import type { MarketingCopy } from "@/lib/marketing/marketing-copy";
 import {
     LinkIcon,
     ArrowPathIcon,

@@ -1,13 +1,13 @@
 // app/(marketing)/pages/[slug]/page.tsx
 import { notFound } from "next/navigation";
-import { getPageBySlug } from "@/lib/contentful-queries";
+import { getPageBySlug } from "@/lib/contentful/contentful-queries";
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";
 import {
     contentfulRichTextOptions,
     type ContentfulRichTextDocument,
-} from "@/lib/contentful-rich-text";
+} from "@/lib/contentful/contentful-rich-text";
 
 export const revalidate = 60;
 

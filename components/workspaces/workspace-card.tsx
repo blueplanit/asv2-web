@@ -20,6 +20,7 @@ import { useUserState } from "../user-state-provider";
 import { RotateSheetModal } from "../dashboard/rotate-sheet-modal";
 import { SyncStatus, WorkspaceHealth } from "@/lib/types/sync-status";
 import { POLL_INTERVAL_MS, POLL_MAX_MS } from "../dashboard/dashboard";
+import { RequestColumnButton } from "./request-column/request-column-button";
 import {
     trackAmplitudeError,
     trackAmplitudeEvent,
@@ -722,35 +723,36 @@ export function WorkspaceCard({
                                     </Tooltip>
                                 )
                             }
-
-                            {workspace.syncStatus !== "backfill_running" && !canRecoverByState && <button
-                                type="button"
-                                aria-haspopup="menu"
-                                aria-expanded={menuOpen}
-                                onClick={() => setMenuOpen((v) => !v)}
-                                className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                            >
-                                <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                            }
-
-                            {menuOpen && (
-                                <div
-                                    ref={menuRef}
-                                    className="absolute z-20 mt-10 w-48 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
-                                >
+                            { workspace.syncStatus !== "backfill_running" && !canRecoverByState && (
+                                <div className="relative">
                                     <button
                                         type="button"
-                                        onClick={handlePauseClick}
-                                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                                        aria-haspopup="menu"
+                                        aria-expanded={menuOpen}
+                                        onClick={() => setMenuOpen((v) => !v)}
+                                        className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                                     >
-                                        {isPaused ? (
-                                            <PlayCircleIcon className="h-4 w-4" aria-hidden="true" />
-                                        ) : (
-                                            <PauseCircleIcon className="h-4 w-4" aria-hidden="true" />
-                                        )}
-                                        <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
+                                        <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
                                     </button>
+                                    {menuOpen && (
+                                        <div
+                                            ref={menuRef}
+                                            className="absolute right-0 z-20 w-48 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={handlePauseClick}
+                                                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+                                            >
+                                                {isPaused ? (
+                                                    <PlayCircleIcon className="h-4 w-4" aria-hidden="true" />
+                                                ) : (
+                                                    <PauseCircleIcon className="h-4 w-4" aria-hidden="true" />
+                                                )}
+                                                <span>{isPaused ? "Resume syncing" : "Pause syncing"}</span>
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -760,7 +762,7 @@ export function WorkspaceCard({
 
             {/* BODY GRID */}
             {!isRetired && (
-                <div className="grid gap-6 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2">
                     {/* Sync status column */}
                     <div className="space-y-2">
                         <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -848,9 +850,18 @@ export function WorkspaceCard({
 
                     {/* Configuration / objects */}
                     <div className="space-y-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            Stripe data synced
-                        </h3>
+						<div className="flex items-center justify-between">
+							<h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+								Stripe data synced
+							</h3>
+							<RequestColumnButton
+								workspaceName={workspace.name}
+								stripeAccountId={
+									stripeConnection?.stripeAccountId ??
+									undefined
+								}
+							/>
+						</div>
                         {workspace.objectsEnabled.length === 0 ? (
                             <p className="text-sm text-slate-600">
                                 No Stripe objects selected yet. Finish onboarding to choose data.

@@ -2,7 +2,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { confirmCheckoutSessionAndActivateUser } from "@/lib/billing-confirm";
+import { confirmCheckoutSessionAndActivateUser } from "@/lib/billing/billing-confirm";
 
 type SearchParams = {
     session_id?: string;

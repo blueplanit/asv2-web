@@ -1,6 +1,6 @@
 // app/blog/page.tsx
 import Link from "next/link";
-import { getAllBlogPosts } from "@/lib/contentful-queries";
+import { getAllBlogPosts } from "@/lib/contentful/contentful-queries";
 import { APP_NAME } from "@/lib/constants";
 import { BlogPageViewTracker } from "@/components/analytics/blog-page-view-tracker";
 

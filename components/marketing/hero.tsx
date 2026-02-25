@@ -1,6 +1,6 @@
 // components/marketing/hero.tsx
 import Link from "next/link";
-import type { HeroCopy } from "@/lib/marketing-copy";
+import type { HeroCopy } from "@/lib/marketing/marketing-copy";
 import { SpreadsheetMockup } from "./spreadsheet-mockup";
 
 type HeroProps = {

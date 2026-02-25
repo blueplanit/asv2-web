@@ -4,14 +4,14 @@ import type { Metadata } from "next";
 import {
     getAllBlogPostSlugs,
     getBlogPostBySlug,
-} from "@/lib/contentful-queries";
+} from "@/lib/contentful/contentful-queries";
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";
 import { type Document } from "@contentful/rich-text-types";
 import {
     contentfulRichTextOptions,
-} from "@/lib/contentful-rich-text";
+} from "@/lib/contentful/contentful-rich-text";
 import { APP_NAME } from "@/lib/constants";
 
 export const revalidate = 60;

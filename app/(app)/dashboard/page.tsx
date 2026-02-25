@@ -3,7 +3,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { loadUserState } from "@/lib/user-state";
+import { loadUserState } from "@/lib/app-state/user-state";
 
 export default async function DashboardPage() {
     const session = await getServerSession(authOptions);
