@@ -8,6 +8,10 @@ import {
     COLUMN_REQUEST_MAX_TEXT_LENGTH,
     COLUMN_REQUEST_ALLOWED_MIME,
 } from "@/lib/column-request";
+import {
+    trackAmplitudeEvent,
+    trackAmplitudeError,
+} from "@/lib/analytics/amplitude-client";
 
 type Props = {
     open: boolean;
@@ -84,6 +88,13 @@ export function RequestColumnModal({
                 msg: `Maximum ${COLUMN_REQUEST_MAX_SCREENSHOTS} screenshots allowed.`,
             });
         }
+        if (next.length > 0) {
+            trackAmplitudeEvent("Column Request Screenshots Added", {
+                count: next.length,
+                total_after: files.length + next.length,
+                workspace_name: workspaceName ?? null,
+            });
+        }
         setFiles((prev) => [...prev, ...next]);
     }
 
@@ -100,6 +111,10 @@ export function RequestColumnModal({
     }
 
     function removeFile(id: string) {
+        trackAmplitudeEvent("Column Request Screenshot Removed", {
+            remaining: files.length - 1,
+            workspace_name: workspaceName ?? null,
+        });
         setFiles((prev) => prev.filter((f) => f.id !== id));
     }
 
@@ -138,6 +153,15 @@ export function RequestColumnModal({
             return;
         }
 
+        const eventProps = {
+            workspace_name: workspaceName ?? null,
+            stripe_account_id: stripeAccountId ?? null,
+            text_length: trimmed.length,
+            screenshot_count: files.length,
+        };
+
+        trackAmplitudeEvent("Column Request Submitted", eventProps);
+
         setSubmitting(true);
         try {
             const fd = new FormData();
@@ -157,11 +181,13 @@ export function RequestColumnModal({
                 throw new Error(text || `Request failed (${res.status})`);
             }
 
+            trackAmplitudeEvent("Column Request Succeeded", eventProps);
             setStatus({ kind: "ok", msg: "Sent. Thanks — we’ll review it." });
             setColumnsText("");
             setFiles([]);
             setTimeout(() => onClose(), 1000);
         } catch (e: any) {
+            trackAmplitudeError("Column Request Failed", e, eventProps);
             setStatus({
                 kind: "err",
                 msg: e?.message || "Something went wrong.",
