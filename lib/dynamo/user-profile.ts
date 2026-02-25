@@ -7,7 +7,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 import { ddb } from ".";
-import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, UpdateCommand, QueryCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { UserProfileSchema, type UserProfile } from "../schemas/user-profile";
 import { ulid } from "ulid";
 import { googleConnectSk, userPk, AccountRole } from "@blueplanit/asv2-shared";
@@ -227,10 +227,28 @@ async function createUserProfileForGoogleLogin(params: {
     UserProfileSchema.parse(item);
 
     await ddb.send(
-        new PutCommand({
-            TableName: TABLE_NAME,
-            Item: item,
-            ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
+        new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Put: {
+                        TableName: TABLE_NAME,
+                        Item: item,
+                        ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
+                    },
+                },
+                // Track user signup and increment user count
+                {
+                    Update: {
+                        TableName: TABLE_NAME,
+                        Key: { pk: "STATS#USERS", sk: "COUNTER" },
+                        UpdateExpression: "ADD totalUsers :one SET updatedAt = :now",
+                        ExpressionAttributeValues: {
+                            ":one": 1,
+                            ":now": now,
+                        },
+                    },
+                },
+            ],
         }),
     );
 

@@ -6,12 +6,13 @@ import { WorkspaceCard, type Workspace } from "@/components/workspaces/workspace
 import { useUserState } from "@/components/user-state-provider";
 import type { SyncConfig } from "@/lib/schemas/sync-config";
 import { Squares2X2Icon, UserCircleIcon } from "@heroicons/react/20/solid";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountPageClient } from "@/components/account/account-page-client";
 import { BillingBar } from "@/components/account/billing-bar";
 import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -149,6 +150,16 @@ export function DashboardClient() {
     const router = useRouter();
 
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
+    const prevHasBackfillRunningRef = useRef(hasBackfillRunning);
+    const hasSyncError = useMemo(
+        () => syncConfigs.some((cfg) => cfg.syncStatus === "error"),
+        [syncConfigs],
+    );
+    const prevHasSyncErrorRef = useRef(hasSyncError);
+
+    useEffect(() => {
+        trackAmplitudeEvent("Dashboard Viewed");
+    }, []);
 
     const filteredConfigs = useMemo(
         () =>
@@ -308,6 +319,11 @@ export function DashboardClient() {
                 console.error("Failed to update sync status");
                 return;
             }
+            trackAmplitudeEvent("Sync Pause Toggled", {
+                spreadsheet_id: spreadsheetId,
+                next_status: nextStatus,
+                action: nextStatus === "paused" ? "pause" : "unpause",
+            });
             await refresh();
         } catch (err) {
             console.error("Error updating sync status", err);
@@ -326,6 +342,28 @@ export function DashboardClient() {
     }, [searchParams, router]);
 
     // When initial backfill completes (no configs are "backfill_running"), close the intro modal
+    useEffect(() => {
+        if (prevHasBackfillRunningRef.current && !hasBackfillRunning) {
+            trackAmplitudeEvent("Backfill Completed", {
+                spreadsheet_id: activeWorkspace?.id ?? null,
+                workspace_name: activeWorkspace?.name ?? null,
+            });
+        }
+        prevHasBackfillRunningRef.current = hasBackfillRunning;
+    }, [hasBackfillRunning, activeWorkspace?.id, activeWorkspace?.name]);
+
+    useEffect(() => {
+        if (!prevHasSyncErrorRef.current && hasSyncError) {
+            const erroredSyncConfig = syncConfigs.find((cfg) => cfg.syncStatus === "error");
+            trackAmplitudeEvent("Sync Error Detected", {
+                spreadsheet_id: erroredSyncConfig?.spreadsheetId ?? null,
+                stripe_account_id: erroredSyncConfig?.stripeAccountId ?? null,
+            });
+        }
+        prevHasSyncErrorRef.current = hasSyncError;
+    }, [hasSyncError, syncConfigs]);
+
+    // Keep intro modal in sync with backfill status.
     useEffect(() => {
         if (!backfillModalOpen) return;
         if (!hasBackfillRunning) {

@@ -7,6 +7,10 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing/pricing-config";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -106,6 +110,12 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [pricingLoading, setPricingLoading] = useState(true);
 
     useEffect(() => {
+        trackAmplitudeEvent("Pricing Page Viewed", {
+            is_logged_in: isLoggedIn,
+        });
+    }, []);
+
+    useEffect(() => {
         let cancelled = false;
 
         setPricingLoading(true);
@@ -142,6 +152,12 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     }, [justLoggedIn]);
 
     async function handleSelectPlan() {
+        trackAmplitudeEvent("Upgrade To Pro Clicked", {
+            source: "pricing_page",
+            is_logged_in: isLoggedIn,
+            interval,
+        });
+
         if (!isLoggedIn) {
             setLoading(true);
             try {
@@ -154,6 +170,10 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
         setLoading(true);
         try {
+            trackAmplitudeEvent("Checkout Started", {
+                plan_id: "pro",
+                interval,
+            });
             const res = await fetch("/api/billing/checkout", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -161,17 +181,30 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
             });
             if (!res.ok) {
                 console.error("Failed to create checkout session");
+                trackAmplitudeError("Checkout Session Failed", "Failed to create checkout session", {
+                    interval,
+                });
                 setLoading(false);
                 return;
             }
             const data = await res.json();
             if (data.url) {
+                trackAmplitudeEvent("Checkout Session Created", {
+                    plan_id: "pro",
+                    interval,
+                });
                 window.location.href = data.url;
             } else {
+                trackAmplitudeError("Checkout Session Failed", "Checkout URL missing", {
+                    interval,
+                });
                 setLoading(false);
             }
         } catch (err) {
             console.error("Error starting checkout", err);
+            trackAmplitudeError("Checkout Session Failed", err, {
+                interval,
+            });
             setLoading(false);
         }
     }

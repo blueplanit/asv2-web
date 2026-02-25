@@ -12,6 +12,10 @@ import { StripeObjectsStep } from "./stripe-objects-config";
 import { Spinner } from "@/components/ui/spinner";
 import { Snackbar } from "@/components/ui/snackbar";
 import { StripeDataSyncEntry } from "@blueplanit/asv2-shared";
+import {
+    trackAmplitudeError,
+    trackAmplitudeEvent,
+} from "@/lib/analytics/amplitude-client";
 
 type StepStatus = "complete" | "current" | "upcoming";
 type InitSheetTabStates = Array<{
@@ -132,6 +136,24 @@ export function OnboardingWizard() {
 
     useEffect(() => {
         const mismatch = searchParams.get("googleMismatch");
+        const stripeError = searchParams.get("stripeError");
+        const stripeReason = searchParams.get("reason");
+        const stripeDesc = searchParams.get("desc");
+        const googleError = searchParams.get("googleError");
+
+        if (stripeError) {
+            trackAmplitudeError("Stripe Connect Failed", stripeDesc ?? stripeError, {
+                error_code: stripeError,
+                reason: stripeReason ?? null,
+            });
+        }
+
+        if (googleError) {
+            trackAmplitudeError("Google Connect Failed", googleError, {
+                error_code: googleError,
+            });
+        }
+
         if (mismatch === "1") {
             const expectedEmail = searchParams.get("expectedEmail");
             const actualEmail = searchParams.get("actualEmail");
@@ -218,13 +240,19 @@ export function OnboardingWizard() {
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to create sheet");
+                trackAmplitudeError("Create Sheet Failed", text || "Failed to create sheet");
                 return;
             }
 
             await refresh(); // now userState has SyncConfig + sheet info
-            return res.json();
+            const data = await res.json();
+            trackAmplitudeEvent("Onboarding Step 3 Completed: Create sheet", {
+                spreadsheet_id: data?.spreadsheetId ?? null,
+            });
+            return data;
         } catch (e) {
             setError(`Failed to create sheet: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
+            trackAmplitudeError("Create Sheet Failed", e);
             return false;
         }
     }
@@ -279,18 +307,25 @@ export function OnboardingWizard() {
             if (!res.ok) {
                 const message = await res.text();
                 setError(message || "Failed to start trial");
+                trackAmplitudeError("Start Trial Failed", message || "Failed to start trial");
                 return;
             }
 
             const data = await res.json();
             if (!data.ok) {
                 setError(data.error || "Failed to start trial");
+                trackAmplitudeError("Start Trial Failed", data.error || "Failed to start trial");
                 return;
             }
+            trackAmplitudeEvent("Start Trial Succeeded", {
+                status: data.status ?? null,
+                trial_ends_at: data.trialEndsAt ?? null,
+            });
             // Optional: show trial end date from data.trialEndsAt
             // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
+            trackAmplitudeError("Start Trial Failed", e instanceof Error ? e.message : "Failed to start trial");
             return false;
         }
         return true;
@@ -336,18 +371,21 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
+            trackAmplitudeEvent("Onboarding Step 1 Started: Connect Stripe");
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
             return;
         }
         else if (currentStep.id === 2) {
+            trackAmplitudeEvent("Onboarding Step 2 Started: Grant Sheets access");
             setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
             return;
         }
         else if (currentStep.id === 3) {
+            trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet");
             setSubmitting(true);
             // Create sheet
             const createSheetResponse = await createSheet();
@@ -357,6 +395,7 @@ export function OnboardingWizard() {
         }
         else if (currentStep.id === 4) {
             try {
+                trackAmplitudeEvent("Onboarding Step 4 Started: Configure sync and start backfill");
                 setSubmitting(true);
                 // Start trial
                 const trialOk = await handleStartTrial();
@@ -376,6 +415,15 @@ export function OnboardingWizard() {
                     setSubmitting(false);
                     return;
                 }
+
+                const eventProperties = {
+                    spreadsheet_id: createdSpreadsheetId,
+                    selected_sync_objects: selectedDataSyncEntries,
+                    selected_sync_objects_count: selectedDataSyncEntries.length,
+                };
+
+                trackAmplitudeEvent("Onboarding Step 4 Completed", eventProperties);
+                trackAmplitudeEvent("Onboarding Completed", eventProperties);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 setSubmitting(false);

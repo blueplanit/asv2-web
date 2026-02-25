@@ -3,6 +3,7 @@
 
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/20/solid";
 import { ExternalLinkIcon } from "lucide-react";
+import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 type BackfillIntroModalProps = {
     open: boolean;
@@ -25,6 +26,14 @@ export function BackfillIntroModal({
         onOpenChange(false);
     }
 
+    function trackSpreadsheetLinkClick(source: string) {
+        trackAmplitudeEvent("Spreadsheet Link Clicked", {
+            source,
+            workspace_name: workspaceName,
+            sheet_url: sheetUrl,
+        });
+    }
+
     return (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4">
             <div
@@ -40,8 +49,11 @@ export function BackfillIntroModal({
                     <h2 className="text-lg font-semibold text-slate-900">
                         Nice! We’re loading your Stripe data into{" "}
                         <span className="text-indigo-700">{nameLoading ? <div className="mt-1 h-6 w-64 animate-pulse rounded bg-slate-200" /> : 
-                        <span className="flex items-center gap-1"><a href={sheetUrl} target="_blank" rel="noreferrer" className="hover:underline">{workspaceName}</a>
-                        <ExternalLinkIcon className="h-4 w-4 cursor-pointer" aria-hidden="true" onClick={() => window.open(sheetUrl, '_blank')}/></span>}</span>
+                        <span className="flex items-center gap-1"><a href={sheetUrl} target="_blank" rel="noreferrer" className="hover:underline" onClick={() => trackSpreadsheetLinkClick("backfill_intro_modal_title")}>{workspaceName}</a>
+                        <ExternalLinkIcon className="h-4 w-4 cursor-pointer" aria-hidden="true" onClick={() => {
+                            trackSpreadsheetLinkClick("backfill_intro_modal_icon");
+                            window.open(sheetUrl, "_blank");
+                        }}/></span>}</span>
                     </h2>
                     <p className="text-sm text-slate-700">
                         This may take a few minutes depending on volume. You can safely leave this page.
@@ -53,6 +65,7 @@ export function BackfillIntroModal({
                         href={sheetUrl}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={() => trackSpreadsheetLinkClick("backfill_intro_modal_button")}
                         className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                     >
                         <span className="flex items-center gap-2">
