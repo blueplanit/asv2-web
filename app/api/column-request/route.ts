@@ -33,7 +33,9 @@ function safeOrigin(req: Request) {
     const origin = req.headers.get("origin");
     if (!origin) return true;
     return (
-        origin === "https://syncstaq.com" || origin === "http://localhost:3000"
+        origin === "https://syncstaq.com" ||
+        origin === "https://www.syncstaq.com" ||
+        origin === "http://localhost:3000"
     );
 }
 
