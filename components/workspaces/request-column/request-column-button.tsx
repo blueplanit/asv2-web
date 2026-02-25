@@ -27,7 +27,7 @@ export function RequestColumnButton(props: Props) {
                             trackAmplitudeEvent("Request Data Button Clicked");
                             setOpen(true);
                         }}
-                        className="inline-flex items-center justify-center rounded-full border border-indigo-600 bg-transparent px-2 py-0.5 text-[11px] font-medium leading-tight text-indigo-600 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                        className="cursor-pointer inline-flex items-center justify-center rounded-full border border-indigo-600 bg-transparent px-2 py-0.5 text-[11px] font-medium leading-tight text-indigo-600 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                         aria-label="Request a new column"
                     >
                         <span className="text-[11px] leading-none mr-0.5">

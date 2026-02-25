@@ -232,7 +232,7 @@ export function RequestColumnModal({
                         type="button"
                         onClick={onClose}
                         disabled={submitting}
-                        className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                        className="cursor-pointer rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
                         aria-label="Close"
                     >
                         ✕
@@ -285,7 +285,7 @@ export function RequestColumnModal({
                                     files.length >=
                                         COLUMN_REQUEST_MAX_SCREENSHOTS
                                 }
-                                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                                className="cursor-pointer inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50"
                             >
                                 Browse
                             </button>
@@ -322,7 +322,7 @@ export function RequestColumnModal({
                                             type="button"
                                             onClick={() => removeFile(item.id)}
                                             disabled={submitting}
-                                            className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                                            className="cursor-pointer rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
                                         >
                                             Remove
                                         </button>
@@ -351,7 +351,7 @@ export function RequestColumnModal({
                         type="button"
                         onClick={onClose}
                         disabled={submitting}
-                        className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                        className="cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                     >
                         Cancel
                     </button>
@@ -359,7 +359,7 @@ export function RequestColumnModal({
                         type="button"
                         onClick={submit}
                         disabled={submitting}
-                        className="inline-flex items-center justify-center rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60"
+                        className="cursor-pointer inline-flex items-center justify-center rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60"
                     >
                         {submitting ? "Sending…" : "Send request"}
                     </button>
