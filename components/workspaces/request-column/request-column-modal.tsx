@@ -198,7 +198,7 @@ export function RequestColumnModal({
                             Request data to add to your workspace
                         </h2>
                         <p className="mt-1 text-sm text-slate-600">
-                            Tell us what data you need and we'll add it to your
+                            Tell us what data you need and we'll work on adding it to your
                             spreadsheet. Screenshots are optional but helpful.
                         </p>
                     </div>
