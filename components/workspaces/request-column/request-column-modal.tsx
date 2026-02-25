@@ -157,9 +157,9 @@ export function RequestColumnModal({ open, onClose, workspaceName, stripeAccount
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Request a new Stripe column</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Request data to add to your workspace</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Tell us which columns you need. Screenshots are optional but helpful.
+              Tell us what data you need and we'll add it to your spreadsheet. Screenshots are optional but helpful.
             </p>
           </div>
           <button
@@ -174,7 +174,7 @@ export function RequestColumnModal({ open, onClose, workspaceName, stripeAccount
         </div>
 
         <div className="mt-4">
-          <label className="text-sm font-medium text-slate-800">Columns needed</label>
+          <label className="text-sm font-medium text-slate-800">Data requested:</label>
           <textarea
             value={columnsText}
             onChange={(e) => setColumnsText(e.target.value)}
@@ -194,7 +194,7 @@ export function RequestColumnModal({ open, onClose, workspaceName, stripeAccount
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-slate-700">
                 <div className="font-medium">Drag & drop screenshots here</div>
-                <div className="text-xs text-slate-500">JPEG / PNG / WEBP · Max {COLUMN_REQUEST_MAX_SCREENSHOTS} files, 5MB each, 10MB total.</div>
+                <div className="text-xs text-slate-500">JPEG / PNG / WEBP · Max {COLUMN_REQUEST_MAX_SCREENSHOTS} files, 10MB total</div>
               </div>
               <button
                 type="button"
