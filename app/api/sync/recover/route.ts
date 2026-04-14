@@ -33,6 +33,7 @@ type StripeEventPullMessage = {
     cursor?: string;
     lastSyncAt?: string | null;
     scheduledAt?: string;
+    recoveryRunId?: string;
 };
 
 type Body = {
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
         stripeAccountId,
         lastSyncAt: null,
         scheduledAt: new Date().toISOString(),
+        recoveryRunId: runId,
     };
 
     const sqs = getSqsClient();
