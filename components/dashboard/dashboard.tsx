@@ -58,7 +58,7 @@ function mapSyncConfigToWorkspace(args: {
     const objectsEnabled = cfg.stripeDataSyncMap?.filter((o) => o.enabled).map((o) => (STRIPE_OBJECT_LABELS[o.id] ?? o.id)) ?? [];
 
     let health: Workspace["health"] = "healthy";
-    if (cfg.syncStatus === "backfill_running") health = "backfilling" as any;
+    if (cfg.syncStatus === "backfill_running" || cfg.syncStatus === "gap_backfill_running") health = "backfilling" as any;
     else if (cfg.syncStatus === "paused") health = "paused" as any;
     else if (cfg.syncStatus === "error") health = "error" as any;
     else if (cfg.syncStatus === "retired") health = "retired" as any;
