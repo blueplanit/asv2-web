@@ -40,17 +40,17 @@ function deriveDisplayedRecoveryStatus(cfg: SyncConfig): RecoveryStatus | null {
     }
 
     if (syncStatus === "syncing") {
-        const lastSyncAt = cfg.lastSyncAt;
+        const recoveryCompletedAt = cfg.recoveryCompletedAt;
         const recoveryRequestedAt = cfg.recoveryRequestedAt;
         if (
-            typeof lastSyncAt === "string" &&
+            typeof recoveryCompletedAt === "string" &&
             typeof recoveryRequestedAt === "string" &&
-            lastSyncAt &&
+            recoveryCompletedAt &&
             recoveryRequestedAt
         ) {
-            const lastMs = Date.parse(lastSyncAt);
-            const reqMs = Date.parse(recoveryRequestedAt);
-            if (!Number.isNaN(lastMs) && !Number.isNaN(reqMs) && lastMs > reqMs) {
+            const completedMs = Date.parse(recoveryCompletedAt);
+            const requestedMs = Date.parse(recoveryRequestedAt);
+            if (!Number.isNaN(completedMs) && !Number.isNaN(requestedMs) && completedMs >= requestedMs) {
                 return "success";
             }
         }
