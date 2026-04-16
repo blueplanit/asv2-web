@@ -273,6 +273,7 @@ export function DashboardClient() {
         activeSyncConfig &&
         (activeSyncConfig.syncStatus === "syncing" ||
             activeSyncConfig.syncStatus === "backfill_running" ||
+            activeSyncConfig.syncStatus === "gap_backfill_running" ||
             activeSyncConfig.syncStatus === "paused" ||
             activeSyncConfig.syncStatus === "error");
 
