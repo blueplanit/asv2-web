@@ -275,7 +275,7 @@ export function AccountPageClient() {
                 <p className="text-xs text-slate-600">
                     Billing is handled securely by Stripe. {helpText}
                     For questions about how billing interacts with sync limits or
-                    workspaces, contact support.
+                    workspaces, <a href="/pages/contact" className="underline hover:text-slate-900">contact support</a>.
                 </p>
             </section>
         </div>
