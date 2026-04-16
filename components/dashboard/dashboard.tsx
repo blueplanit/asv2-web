@@ -198,6 +198,12 @@ export function DashboardClient() {
                     }),
                 });
                 if (!res.ok) {
+                    if (res.status === 403) {
+                        const body = await res.json().catch(() => null);
+                        if (body?.code === "google_auth_revoked") {
+                            await refresh(); // picks up updated connection status from DynamoDB
+                        }
+                    }
                     console.error("Failed to fetch sheet titles");
                     return;
                 }

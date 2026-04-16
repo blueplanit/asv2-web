@@ -25,7 +25,14 @@ if (!TOKEN_CIPHER_KEYRING_JSON) {
 }
 const tokenCipher = createTokenCipher(parseKeyringJson(TOKEN_CIPHER_KEYRING_JSON));
 
-async function markGoogleConnectionIncident(args: {
+export class GoogleAuthRevokedError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "GoogleAuthRevokedError";
+    }
+}
+
+export async function markGoogleConnectionIncident(args: {
     pk: string;
     sk: string;
     status: "error" | "revoked";
@@ -58,7 +65,7 @@ function parseGoogleTokenError(text: string): { error?: string; error_descriptio
 }
 
 // Assumes exactly one GoogleConnection per user for now
-export async function getGoogleAccessTokenForUser(userState: UserState): Promise<{
+export async function getGoogleAccessTokenForUser(userState: UserState, opts?: { forceRefresh?: boolean }): Promise<{
     accessToken: string;
     googleUserId: string;
     email: string;
@@ -112,7 +119,7 @@ export async function getGoogleAccessTokenForUser(userState: UserState): Promise
     const aboutToExpire =
         typeof expiresAt === "number" && expiresAt - now < 60_000; // 60s buffer
 
-    if (!accessToken || aboutToExpire) {
+    if (!accessToken || aboutToExpire || opts?.forceRefresh) {
         // 2) Refresh access token
         const body = new URLSearchParams({
             client_id: clientId,
@@ -141,6 +148,8 @@ export async function getGoogleAccessTokenForUser(userState: UserState): Promise
                     errorCode: "refresh_invalid",
                     errorMessage: msg,
                 });
+                console.error("Google token revoked (invalid_grant):", tokenRes.status, msg);
+                throw new GoogleAuthRevokedError(msg);
             } else {
                 await markGoogleConnectionIncident({
                     pk,
@@ -149,14 +158,9 @@ export async function getGoogleAccessTokenForUser(userState: UserState): Promise
                     errorCode: "unknown",
                     errorMessage: msg,
                 });
+                console.error("Google refresh_token exchange failed:", tokenRes.status, msg);
+                throw new Error("Failed to refresh Google access token");
             }
-
-            console.error(
-                "Google refresh_token exchange failed:",
-                tokenRes.status,
-                await tokenRes.text(),
-            );
-            throw new Error("Failed to refresh Google access token");
         }
 
         const tokenJson = (await tokenRes.json()) as {
