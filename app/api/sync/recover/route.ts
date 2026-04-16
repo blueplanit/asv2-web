@@ -9,22 +9,32 @@ import { getSqsClient } from "@/lib/sqs/sqs";
 import { getSyncConfig } from "@/lib/dynamo/sync-config";
 import type { UserState } from "@/lib/app-state/user-state";
 import { userPk, syncCursorSk, SyncConfig, BACKFILL_LEASE_DURATION_SECONDS } from "@blueplanit/asv2-shared";
-import type { RecoveryBackfillMessage } from "@blueplanit/asv2-shared";
 import { beginRecoveryRun, RecoveryLockError, releaseRecoveryLock } from "@/lib/recovery/recovery-queries";
 import { GetCommand } from "@aws-sdk/lib-dynamodb";
 import { preflightRecovery } from "@/lib/recovery/recovery-preflight";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME;
-const BACKFILL_QUEUE_URL = process.env.BACKFILL_STANDARD_QUEUE_URL;
+const STRIPE_PULL_QUEUE_URL = process.env.STRIPE_PULL_QUEUE_URL;
 
 if (!TABLE_NAME) {
     throw new Error("DYNAMO_TABLE_NAME env var is required");
 }
-if (!BACKFILL_QUEUE_URL) {
-    throw new Error("BACKFILL_STANDARD_QUEUE_URL env var is required");
+if (!STRIPE_PULL_QUEUE_URL) {
+    throw new Error("STRIPE_PULL_QUEUE_URL env var is required");
 }
 
 export const runtime = "nodejs";
+
+/** Same shape as serverless `StripeEventPullMessage` (stripe-events-pull lambda). */
+type StripeEventPullMessage = {
+    userId: string;
+    spreadsheetId: string;
+    stripeAccountId: string;
+    cursor?: string;
+    lastSyncAt?: string | null;
+    scheduledAt?: string;
+    recoveryRunId?: string;
+};
 
 type Body = {
     spreadsheetId: string;
@@ -70,7 +80,7 @@ export async function POST(req: Request) {
         googleUserId,
         stripeAccountId,
     });
-    
+
     if (!preflight.ok) {
         return NextResponse.json(
             { code: preflight.code, message: preflight.message },
@@ -84,7 +94,7 @@ export async function POST(req: Request) {
         return new NextResponse(gateError.message, { status: gateError.status });
     }
 
-    // 2) Pre-flight: load SyncCursor (must exist to know where to backfill from)
+    // 2) Pre-flight: load SyncCursor (must exist so stripe-events-pull has a starting cursor)
     const cursorKey = {
         pk: userPk(userId),
         sk: syncCursorSk(stripeAccountId, spreadsheetId),
@@ -110,7 +120,7 @@ export async function POST(req: Request) {
 
     // 3) Atomic lock on SyncConfig
     let lockData: { runId: string };
-    
+
     try {
         lockData = await beginRecoveryRun({ syncConfig, fromCursor: lastSyncedEventId, leaseSeconds: BACKFILL_LEASE_DURATION_SECONDS });
     } catch (err) {
@@ -123,15 +133,14 @@ export async function POST(req: Request) {
 
     const { runId } = lockData;
 
-    // 4) Enqueue SQS message; if this fails, attempt to mark recovery as failed
-    const message: RecoveryBackfillMessage = {
-        kind: "recovery_backfill_v1",
-        runId,
+    // 4) Enqueue stripe-events-pull (gap detection + normal sync); if this fails, rollback lock
+    const message: StripeEventPullMessage = {
         userId,
         spreadsheetId,
         stripeAccountId,
-        googleUserId,
-        fromCursor: lastSyncedEventId,
+        lastSyncAt: null,
+        scheduledAt: new Date().toISOString(),
+        recoveryRunId: runId,
     };
 
     const sqs = getSqsClient();
@@ -139,14 +148,12 @@ export async function POST(req: Request) {
     try {
         await sqs.send(
             new SendMessageCommand({
-                QueueUrl: BACKFILL_QUEUE_URL,
+                QueueUrl: STRIPE_PULL_QUEUE_URL,
                 MessageBody: JSON.stringify(message),
             }),
         );
     } catch (err) {
-        // Best-effort rollback of the lock so user is not stuck.
-        console.error("Failed to enqueue recovery backfill message", err);
-        // Rollback lock
+        console.error("Failed to enqueue recovery stripe pull message", err);
         await releaseRecoveryLock(userId, spreadsheetId, runId);
         return new NextResponse("Failed to enqueue recovery job", { status: 502 });
     }
@@ -168,8 +175,11 @@ function gateRecoveryStart(syncConfig: SyncConfig): GateError | null {
         writerBlocked,
         writerBlockedReason,
         recoveryStatus,
+        recoveryLeaseUntil,
         stripeDataSyncMap,
     } = syncConfig;
+
+    const nowEpoch = Math.floor(Date.now() / 1000);
 
     // Retired workspace: never recover. Explicitly dead.
     if (syncStatus === "retired") {
@@ -188,17 +198,22 @@ function gateRecoveryStart(syncConfig: SyncConfig): GateError | null {
         };
     }
 
-    // Recovery already in-flight in the recovery state machine.
+    // Recovery already in-flight while lease is still valid (duplicate click / overlapping run).
     if (
         recoveryStatus &&
         (recoveryStatus === "requested" ||
             recoveryStatus === "pulling" ||
             recoveryStatus === "writing")
     ) {
-        return {
-            status: 409,
-            message: "A recovery run is already in progress for this workspace.",
-        };
+        const leaseActive =
+            recoveryLeaseUntil != null && recoveryLeaseUntil > nowEpoch;
+        if (leaseActive) {
+            return {
+                status: 409,
+                message: "A recovery run is already in progress for this workspace.",
+            };
+        }
+        // Expired lease: treat as stale; allow a new recovery below.
     }
 
     // Already backfilling at the sync layer.
