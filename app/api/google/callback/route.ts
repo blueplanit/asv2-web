@@ -122,6 +122,15 @@ export async function GET(req: NextRequest) {
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
 
+    // Verify the user granted the required Drive scope before touching the DB
+    const grantedScopes = tokenJson.scope ? tokenJson.scope.split(" ") : [];
+    if (!grantedScopes.includes("https://www.googleapis.com/auth/drive.file")) {
+        console.error("Google OAuth scope denied: drive.file not in granted scopes", { grantedScopes, userId, flow });
+        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        errUrl.searchParams.set("googleError", "scope_denied");
+        return clearNonceCookie(NextResponse.redirect(errUrl));
+    }
+
     // 2) Get the Sheets account identity (sub + email)
     const userinfoRes = await fetch(
         "https://www.googleapis.com/oauth2/v3/userinfo",

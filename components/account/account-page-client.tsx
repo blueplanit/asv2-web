@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
 import type { GoogleConnection } from "@blueplanit/asv2-shared";
+import { AlertTriangle, X } from "lucide-react";
 
 function googleStatusCopy(conn: GoogleConnection) {
     if (conn.status === "connected") return null;
@@ -27,7 +28,12 @@ function googleStatusCopy(conn: GoogleConnection) {
     }
 }
 
-export function AccountPageClient() {
+type AccountPageClientProps = {
+    scopeError?: boolean;
+    onDismissScopeError?: () => void;
+};
+
+export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPageClientProps) {
     const { user } = useUserState();
     const [portalLoading, setPortalLoading] = useState(false);
 
@@ -228,6 +234,26 @@ export function AccountPageClient() {
                         </p>
                         {primaryGoogle ? (
                             <div className="mt-1 space-y-2">
+                                {scopeError && (
+                                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                                        <div className="flex-1">
+                                            <p className="text-xs font-semibold text-amber-900">Permission required</p>
+                                            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700">
+                                                Insufficient permissions. Please reconnect and check <span className="font-medium">"See, edit, create, and delete only the specific Google Drive files you use with this app."</span>
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={onDismissScopeError}
+                                            className="cursor-pointer mt-0.5 flex-shrink-0 rounded-full p-0.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700"
+                                            aria-label="Dismiss"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                )}
+
                                 <div className="space-y-1">
                                     <p className="text-sm font-semibold text-slate-900">{primaryGoogle.email}</p>
 
@@ -249,7 +275,7 @@ export function AccountPageClient() {
                                     ) : null}
                                 </div>
 
-                                {googleNeedsReconnect ? (
+                                {(googleNeedsReconnect || scopeError) ? (
                                     <div className="flex flex-wrap gap-2">
                                         <a
                                             href="/api/google/reconnect?returnTo=/dashboard"

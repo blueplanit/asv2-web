@@ -143,6 +143,7 @@ export function DashboardClient() {
     }, [sortedSyncConfigs]);
 
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
+    const [googleScopeError, setGoogleScopeError] = useState(false);
     const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
     const [titlesRequested, setTitlesRequested] = useState(false);
 
@@ -345,6 +346,14 @@ export function DashboardClient() {
         setBackfillModalOpen(true);
 
         // Clean the URL so refreshes don't re-trigger the param
+        router.replace("/dashboard", { scroll: false });
+    }, [searchParams, router]);
+
+    // Redirect to account view and surface an inline error when Google OAuth scope was denied
+    useEffect(() => {
+        if (searchParams.get("googleError") !== "scope_denied") return;
+        setActiveView("account");
+        setGoogleScopeError(true);
         router.replace("/dashboard", { scroll: false });
     }, [searchParams, router]);
 
@@ -609,7 +618,10 @@ export function DashboardClient() {
 
                         </>
                     ) : (
-                        <AccountPageClient />
+                        <AccountPageClient
+                            scopeError={googleScopeError}
+                            onDismissScopeError={() => setGoogleScopeError(false)}
+                        />
                     )}
                 </div>
             </main>
