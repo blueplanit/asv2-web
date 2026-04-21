@@ -240,7 +240,7 @@ export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPa
                                         <div className="flex-1">
                                             <p className="text-xs font-semibold text-amber-900">Permission required</p>
                                             <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700">
-                                                Insufficient permissions. Please reconnect and check <span className="font-medium">"See, edit, create, and delete only the specific Google Drive files you use with this app."</span>
+                                                Insufficient permissions. Please reconnect and ensure <span className="font-medium">"See, edit, create, and delete only the specific Google Drive files you use with this app." is enabled.</span>
                                             </p>
                                         </div>
                                         <button
