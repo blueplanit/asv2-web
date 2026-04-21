@@ -7,6 +7,7 @@ import {
     GoogleAuthRevokedError,
     markGoogleConnectionIncident,
 } from "./google-auth";
+import { errorSyncConfigsForGoogleIncident } from "../dynamo/sync-config";
 import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
 import type { UserState } from "../app-state/user-state";
 import { userPk, googleConnectSk } from "@blueplanit/asv2-shared";
@@ -69,6 +70,7 @@ export async function callGoogleApi<T>(
                 errorCode: "refresh_invalid",
                 errorMessage: "API returned 401 after successful token refresh — scopes likely removed",
             });
+            await errorSyncConfigsForGoogleIncident(userId, googleUserId, "Google account permissions were removed — please reconnect your Google account").catch(() => {});
             throw new GoogleAuthRevokedError("Google API returned 401 after token refresh");
         }
     }

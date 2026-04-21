@@ -12,6 +12,7 @@ import {
 import { getGoogleClientConfigForShard } from "./google-oauth-sharding";
 import { UserState } from "../app-state/user-state";
 import { getGoogleConnection } from "./google-connection";
+import { errorSyncConfigsForGoogleIncident } from "../dynamo/sync-config";
 import {
     userPk,
     googleConnectSk,
@@ -109,6 +110,7 @@ export async function getGoogleAccessTokenForUser(userState: UserState, opts?: {
             errorCode: "unknown",
             errorMessage: "Failed to decrypt stored Google tokens",
         });
+        await errorSyncConfigsForGoogleIncident(userId, googleUserId, "Google account authentication error — please reconnect your Google account").catch(() => {});
         throw e;
     }
 
@@ -148,6 +150,7 @@ export async function getGoogleAccessTokenForUser(userState: UserState, opts?: {
                     errorCode: "refresh_invalid",
                     errorMessage: msg,
                 });
+                await errorSyncConfigsForGoogleIncident(userId, googleUserId, "Google account access was revoked — please reconnect your Google account").catch(() => {});
                 console.error("Google token revoked (invalid_grant):", tokenRes.status, msg);
                 throw new GoogleAuthRevokedError(msg);
             } else {
@@ -158,6 +161,7 @@ export async function getGoogleAccessTokenForUser(userState: UserState, opts?: {
                     errorCode: "unknown",
                     errorMessage: msg,
                 });
+                await errorSyncConfigsForGoogleIncident(userId, googleUserId, "Google account authentication failed — please reconnect your Google account").catch(() => {});
                 console.error("Google refresh_token exchange failed:", tokenRes.status, msg);
                 throw new Error("Failed to refresh Google access token");
             }

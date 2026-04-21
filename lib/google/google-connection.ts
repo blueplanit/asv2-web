@@ -1,7 +1,7 @@
 // lib/google/google-connection.ts
 import "server-only";
 import { ddb } from "../dynamo";
-import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
     GoogleConnectionSchema,
     type GoogleConnection,
@@ -46,6 +46,20 @@ export async function putGoogleConnection(params: {
     );
 
     return item;
+}
+
+export async function getGoogleConnections(userId: string): Promise<GoogleConnection[]> {
+    const res = await ddb.send(
+        new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
+            ExpressionAttributeValues: {
+                ":pk": userPk(userId),
+                ":sk": "GOOGLE#",
+            },
+        }),
+    );
+    return (res.Items ?? []).map((item) => GoogleConnectionSchema.parse(item));
 }
 
 export async function getGoogleConnection(userId: string, googleUserId: string) {
