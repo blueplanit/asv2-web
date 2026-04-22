@@ -3,8 +3,17 @@
 
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
-import type { GoogleConnection } from "@blueplanit/asv2-shared";
+import type { GoogleConnection, StripeConnection } from "@blueplanit/asv2-shared";
 import { AlertTriangle, X } from "lucide-react";
+
+function stripeStatusCopy(conn: StripeConnection) {
+    if (conn.status === "connected") return null;
+    if (conn.status === "revoked") {
+        return "Stripe access was revoked. Reconnect to resume syncing.";
+    }
+    // status === "error"
+    return "Your Stripe connection is in an error state. Reconnect to resume syncing.";
+}
 
 function googleStatusCopy(conn: GoogleConnection) {
     if (conn.status === "connected") return null;
@@ -96,6 +105,11 @@ export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPa
         !!primaryGoogle && (primaryGoogle.status === "error" || primaryGoogle.status === "revoked");
 
     const googleCopy = primaryGoogle ? googleStatusCopy(primaryGoogle) : null;
+
+    const stripeNeedsReconnect =
+        !!primaryStripe && (primaryStripe.status === "error" || primaryStripe.status === "revoked");
+
+    const stripeCopy = primaryStripe ? stripeStatusCopy(primaryStripe) : null;
 
     return (
         <div className="space-y-6">
@@ -205,20 +219,36 @@ export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPa
                             Stripe
                         </p>
                         {primaryStripe ? (
-                            <div className="mt-1 space-y-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                    {primaryStripe.businessName || "Connected Stripe account"}
-                                </p>
-                                <p className="text-xs text-slate-600">
-                                    Status:{" "}
-                                    <span className="font-medium text-slate-900">
-                                        {primaryStripe.status === "connected"
-                                            ? "Connected"
-                                            : primaryStripe.status === "revoked"
-                                                ? "Revoked"
-                                                : "Error"}
-                                    </span>
-                                </p>
+                            <div className="mt-1 space-y-2">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-slate-900">
+                                        {primaryStripe.businessName || "Connected Stripe account"}
+                                    </p>
+                                    <p className="text-xs text-slate-600">
+                                        Status:{" "}
+                                        <span className="font-medium text-slate-900">
+                                            {primaryStripe.status === "connected"
+                                                ? "Connected"
+                                                : primaryStripe.status === "revoked"
+                                                    ? "Revoked"
+                                                    : "Action required"}
+                                        </span>
+                                    </p>
+                                    {stripeCopy ? (
+                                        <p className="text-xs text-slate-600">{stripeCopy}</p>
+                                    ) : null}
+                                </div>
+
+                                {stripeNeedsReconnect ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        <a
+                                            href="/api/stripe/connect?returnTo=/dashboard"
+                                            className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                                        >
+                                            Reconnect Stripe
+                                        </a>
+                                    </div>
+                                ) : null}
                             </div>
                         ) : (
                             <p className="mt-1 text-xs text-slate-600">
