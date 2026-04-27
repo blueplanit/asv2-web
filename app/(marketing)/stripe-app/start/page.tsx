@@ -57,10 +57,9 @@ export default async function StripeAppStartPage(props: {
         return (
             <LoginForm
                 callbackUrl={callbackUrl}
-                eyebrow="Stripe App"
-                title="Finish setting up SyncStaq"
-                description="SyncStaq is installed in Stripe. Continue on SyncStaq.com to sign up with Google, connect Stripe and Google Drive, create your sheet, and start syncing Stripe data to Google Sheets."
-                footerNote="You’ll finish setup on SyncStaq.com, then you can reopen SyncStaq from Stripe anytime."
+                title="Welcome to SyncStaq"
+                description="You’re in the right place to finish setting up SyncStaq. Continue with Google to connect Stripe and Google Drive, create your sheet, and start syncing Stripe data to Google Sheets."
+                footerNote="You’ll finish setup on SyncStaq.com, and you can always reopen SyncStaq from Stripe when you need it."
             />
         );
     }
