@@ -7,10 +7,11 @@ import {
     type StripeDataSyncEntry,
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
-import { userPk, syncConfigSk } from "@blueplanit/asv2-shared";
+import { userPk, syncConfigSk, stripeAccountGsiPk } from "@blueplanit/asv2-shared";
 import { getGoogleConnections } from "@/lib/google/google-connection";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
+const STRIPE_ACCOUNT_GSI_NAME = "STRIPE_ACCOUNT_GSI";
 
 export async function getSyncConfigs(
     userId: string,
@@ -187,6 +188,50 @@ export async function getSyncConfig(userId: string, spreadsheetId: string) {
 }
 
 // For toggling which Stripe objects are enabled, or history settings, from the UI
+// Two-step lookup: GSI → userIds from StripeConnection items → SyncConfigs per user
+export async function getSyncConfigsByStripeAccountId(
+    stripeAccountId: string,
+): Promise<SyncConfig[]> {
+    const connectionsRes = await ddb.send(
+        new QueryCommand({
+            TableName: TABLE_NAME,
+            IndexName: STRIPE_ACCOUNT_GSI_NAME,
+            KeyConditionExpression: "STRIPE_ACCOUNT_GSI_PK = :gsiPk",
+            ExpressionAttributeValues: {
+                ":gsiPk": stripeAccountGsiPk(stripeAccountId),
+            },
+        }),
+    );
+
+    const connectionItems = connectionsRes.Items ?? [];
+    if (connectionItems.length === 0) return [];
+
+    const userIds = [...new Set(
+        connectionItems.map((item) => item.userId as string).filter(Boolean),
+    )];
+
+    const results = await Promise.all(
+        userIds.map((userId) =>
+            ddb.send(
+                new QueryCommand({
+                    TableName: TABLE_NAME,
+                    KeyConditionExpression: "pk = :pk AND begins_with(sk, :sk)",
+                    FilterExpression: "stripeAccountId = :stripeAccountId",
+                    ExpressionAttributeValues: {
+                        ":pk": userPk(userId),
+                        ":sk": "SYNC#",
+                        ":stripeAccountId": stripeAccountId,
+                    },
+                }),
+            ),
+        ),
+    );
+
+    return results.flatMap((res) =>
+        (res.Items ?? []).map((item) => SyncConfigSchema.parse(item)),
+    );
+}
+
 /**
  * Marks all non-retired sync configs for a user as errored.
  * Called when the user's Google connection transitions to "revoked" or "error"

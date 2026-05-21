@@ -1,13 +1,18 @@
 // lib/stripe/stripe-connection.ts
 import { ddb } from "../dynamo";
-import { PutCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import {
+    GetCommand,
+    PutCommand,
+    QueryCommand,
+} from "@aws-sdk/lib-dynamodb";
 import {
     StripeConnectionSchema,
     type StripeConnection,
 } from "@/lib/schemas/stripe-connection";
-import { userPk } from "@blueplanit/asv2-shared";
+import { userPk, stripeAccountGsiPk } from "@blueplanit/asv2-shared";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
+const STRIPE_ACCOUNT_GSI_NAME = "STRIPE_ACCOUNT_GSI";
 
 export async function putStripeConnection(params: {
     userId: string;
@@ -23,6 +28,7 @@ export async function putStripeConnection(params: {
         type: "StripeConnection",
         userId: userId,
         stripeAccountId,
+        STRIPE_ACCOUNT_GSI_PK: stripeAccountGsiPk(stripeAccountId),
         businessName,
         status: "connected",
         createdAt: now,
@@ -76,4 +82,30 @@ export async function getStripeAccountIdForUser(
         res.Items[0],
     ) as StripeConnection;
     return conn.stripeAccountId;
+}
+
+async function queryStripeConnectionsByAccountId(
+    stripeAccountId: string,
+): Promise<StripeConnection[]> {
+    const res = await ddb.send(
+        new QueryCommand({
+            TableName: TABLE_NAME,
+            IndexName: STRIPE_ACCOUNT_GSI_NAME,
+            KeyConditionExpression: "STRIPE_ACCOUNT_GSI_PK = :gsiPk",
+            ExpressionAttributeValues: {
+                ":gsiPk": stripeAccountGsiPk(stripeAccountId),
+            },
+        }),
+    );
+
+    return (res.Items ?? []).map((item) => StripeConnectionSchema.parse(item));
+}
+
+export async function listStripeConnectionsByAccountId(params: {
+    stripeAccountId: string;
+}) {
+    const { stripeAccountId } = params;
+    return {
+        connections: await queryStripeConnectionsByAccountId(stripeAccountId),
+    };
 }
