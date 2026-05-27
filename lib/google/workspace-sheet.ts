@@ -10,6 +10,7 @@ import {
 } from "@/lib/schemas/sync-config";
 import { getStripeAccountIdForUser } from "@/lib/stripe/stripe-connection";
 import { createSyncConfig, ensureSyncConfigForSheet } from "@/lib/dynamo/sync-config";
+import { DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS } from "@blueplanit/asv2-shared";
 import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
 import { UserState } from "../app-state/user-state";
 
@@ -186,7 +187,7 @@ export async function createWorkspaceSheetAndConfig(
         stripeAccountId,
         stripeDataSyncMap: boundStripeDataSyncMap,
         historyMode: baseSyncConfig?.historyMode ?? "since",
-        historySinceDays: baseSyncConfig?.historySinceDays ?? 90,
+        historySinceDays: baseSyncConfig?.historySinceDays ?? DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS,
         syncStatus: "syncing",
         timezone: resolvedTimezone,
         locale: resolvedLocale,
