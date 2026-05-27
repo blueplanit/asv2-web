@@ -519,7 +519,7 @@ export function WorkspaceCard({
             return "Backfilling Stripe data into your sheet.";
         }
         if (isPaused) return "The sync is paused. No new Stripe data is being written.";
-        if (isError) return "The sync is currently erroring. Fix connections if necessary and run recovery. If it's another issue, please contact support.";
+        if (isError) return <>The sync is currently erroring. Fix connections if necessary and run recovery. If it&apos;s another issue, <a href="/pages/contact" className="underline hover:text-slate-900">please contact support</a>.</>;
         if (workspace.syncStatus === "syncing") return "The sync is active on the regular polling schedule.";
         if (isRetired) return "The sync is retired and not syncing data.";
         return "The sync will start once setup is complete.";
@@ -642,7 +642,7 @@ export function WorkspaceCard({
                             {workspace.stripeAccountName}
                         </span>
                         {!stripeConnectionHealthy && (
-                            <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
+                            <span className="ml-2 inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
                                 {stripeConnectionLabel ?? "Stripe connection needs attention"}
                             </span>
                         )}
@@ -656,7 +656,7 @@ export function WorkspaceCard({
                         </span>
 
                         {!googleConnectionHealthy && (
-                                <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
+                                <span className="ml-2 inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-100">
                                     {googleConnectionLabel ?? "Google connection needs attention"}
                                 </span>
                             )}

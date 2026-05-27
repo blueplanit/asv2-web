@@ -8,6 +8,7 @@ import {
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
 import { userPk, syncConfigSk, stripeAccountGsiPk } from "@blueplanit/asv2-shared";
+import { getGoogleConnections } from "@/lib/google/google-connection";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const STRIPE_ACCOUNT_GSI_NAME = "STRIPE_ACCOUNT_GSI";
@@ -228,6 +229,47 @@ export async function getSyncConfigsByStripeAccountId(
 
     return results.flatMap((res) =>
         (res.Items ?? []).map((item) => SyncConfigSchema.parse(item)),
+    );
+}
+
+/**
+ * Marks all non-retired sync configs for a user as errored.
+ * Called when the user's Google connection transitions to "revoked" or "error"
+ * so that the sync health state stays consistent with the connection state.
+ */
+export async function errorSyncConfigsForGoogleIncident(
+    userId: string,
+    googleUserId: string,
+    lastError: string,
+): Promise<void> {
+    // If the user has multiple Google connections we can't determine which sync
+    // configs belong to the affected account (SyncConfig has no googleUserId field).
+    // Skip and let the sync worker error the right configs on its next cycle.
+    // TODO: When SyncConfig gains a googleUserId field, replace this guard with a filter.
+    const googleConnections = await getGoogleConnections(userId);
+    if (googleConnections.length > 1) return;
+
+    const configs = await getSyncConfigs(userId);
+    const toUpdate = configs.filter((c) => c.syncStatus !== "retired");
+    if (toUpdate.length === 0) return;
+
+    const now = new Date().toISOString();
+    await Promise.all(
+        toUpdate.map((cfg) =>
+            ddb.send(
+                new UpdateCommand({
+                    TableName: TABLE_NAME,
+                    Key: { pk: userPk(userId), sk: syncConfigSk(cfg.spreadsheetId) },
+                    UpdateExpression: "SET syncStatus = :sts, lastError = :err, updatedAt = :now",
+                    ConditionExpression: "attribute_exists(pk)",
+                    ExpressionAttributeValues: {
+                        ":sts": "error",
+                        ":err": lastError,
+                        ":now": now,
+                    },
+                }),
+            ),
+        ),
     );
 }
 

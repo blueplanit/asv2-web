@@ -3,7 +3,17 @@
 
 import { useState } from "react";
 import { useUserState } from "@/components/user-state-provider";
-import type { GoogleConnection } from "@blueplanit/asv2-shared";
+import type { GoogleConnection, StripeConnection } from "@blueplanit/asv2-shared";
+import { AlertTriangle, X } from "lucide-react";
+
+function stripeStatusCopy(conn: StripeConnection) {
+    if (conn.status === "connected") return null;
+    if (conn.status === "revoked") {
+        return "Stripe access was revoked. Reconnect to resume syncing.";
+    }
+    // status === "error"
+    return "Your Stripe connection is in an error state. Reconnect to resume syncing.";
+}
 
 function googleStatusCopy(conn: GoogleConnection) {
     if (conn.status === "connected") return null;
@@ -27,7 +37,12 @@ function googleStatusCopy(conn: GoogleConnection) {
     }
 }
 
-export function AccountPageClient() {
+type AccountPageClientProps = {
+    scopeError?: boolean;
+    onDismissScopeError?: () => void;
+};
+
+export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPageClientProps) {
     const { user } = useUserState();
     const [portalLoading, setPortalLoading] = useState(false);
 
@@ -90,6 +105,11 @@ export function AccountPageClient() {
         !!primaryGoogle && (primaryGoogle.status === "error" || primaryGoogle.status === "revoked");
 
     const googleCopy = primaryGoogle ? googleStatusCopy(primaryGoogle) : null;
+
+    const stripeNeedsReconnect =
+        !!primaryStripe && (primaryStripe.status === "error" || primaryStripe.status === "revoked");
+
+    const stripeCopy = primaryStripe ? stripeStatusCopy(primaryStripe) : null;
 
     return (
         <div className="space-y-6">
@@ -199,20 +219,36 @@ export function AccountPageClient() {
                             Stripe
                         </p>
                         {primaryStripe ? (
-                            <div className="mt-1 space-y-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                    {primaryStripe.businessName || "Connected Stripe account"}
-                                </p>
-                                <p className="text-xs text-slate-600">
-                                    Status:{" "}
-                                    <span className="font-medium text-slate-900">
-                                        {primaryStripe.status === "connected"
-                                            ? "Connected"
-                                            : primaryStripe.status === "revoked"
-                                                ? "Revoked"
-                                                : "Error"}
-                                    </span>
-                                </p>
+                            <div className="mt-1 space-y-2">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-slate-900">
+                                        {primaryStripe.businessName || "Connected Stripe account"}
+                                    </p>
+                                    <p className="text-xs text-slate-600">
+                                        Status:{" "}
+                                        <span className="font-medium text-slate-900">
+                                            {primaryStripe.status === "connected"
+                                                ? "Connected"
+                                                : primaryStripe.status === "revoked"
+                                                    ? "Revoked"
+                                                    : "Action required"}
+                                        </span>
+                                    </p>
+                                    {stripeCopy ? (
+                                        <p className="text-xs text-slate-600">{stripeCopy}</p>
+                                    ) : null}
+                                </div>
+
+                                {stripeNeedsReconnect ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        <a
+                                            href="/api/stripe/connect?returnTo=/dashboard"
+                                            className="cursor-pointer inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                                        >
+                                            Reconnect Stripe
+                                        </a>
+                                    </div>
+                                ) : null}
                             </div>
                         ) : (
                             <p className="mt-1 text-xs text-slate-600">
@@ -228,6 +264,26 @@ export function AccountPageClient() {
                         </p>
                         {primaryGoogle ? (
                             <div className="mt-1 space-y-2">
+                                {scopeError && (
+                                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                                        <div className="flex-1">
+                                            <p className="text-xs font-semibold text-amber-900">Permission required</p>
+                                            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700">
+                                                Insufficient permissions. Please reconnect and ensure <span className="font-medium">"See, edit, create, and delete only the specific Google Drive files you use with this app." is enabled.</span>
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={onDismissScopeError}
+                                            className="cursor-pointer mt-0.5 flex-shrink-0 rounded-full p-0.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700"
+                                            aria-label="Dismiss"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                )}
+
                                 <div className="space-y-1">
                                     <p className="text-sm font-semibold text-slate-900">{primaryGoogle.email}</p>
 
@@ -249,7 +305,7 @@ export function AccountPageClient() {
                                     ) : null}
                                 </div>
 
-                                {googleNeedsReconnect ? (
+                                {(googleNeedsReconnect || scopeError) ? (
                                     <div className="flex flex-wrap gap-2">
                                         <a
                                             href="/api/google/reconnect?returnTo=/dashboard"
@@ -275,7 +331,7 @@ export function AccountPageClient() {
                 <p className="text-xs text-slate-600">
                     Billing is handled securely by Stripe. {helpText}
                     For questions about how billing interacts with sync limits or
-                    workspaces, contact support.
+                    workspaces, <a href="/pages/contact" className="underline hover:text-slate-900">contact support</a>.
                 </p>
             </section>
         </div>
