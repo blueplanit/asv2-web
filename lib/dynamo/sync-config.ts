@@ -13,11 +13,15 @@ import { getGoogleConnections } from "@/lib/google/google-connection";
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const STRIPE_ACCOUNT_GSI_NAME = "STRIPE_ACCOUNT_GSI";
 
-const defaultHistoryDays = (() => {
+export const defaultHistoryDays = (() => {
     const raw = process.env.INITIAL_BACKFILL_HISTORY_DAYS;
     if (!raw) return DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS;
     const parsed = parseInt(raw, 10);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS;
+    if (isNaN(parsed) || parsed <= 0) {
+        console.warn(`INITIAL_BACKFILL_HISTORY_DAYS="${raw}" is invalid; falling back to ${DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS}`);
+        return DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS;
+    }
+    return parsed;
 })();
 
 export async function getSyncConfigs(
