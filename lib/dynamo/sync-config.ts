@@ -7,11 +7,22 @@ import {
     type StripeDataSyncEntry,
     buildDefaultStripeDataSyncMap,
 } from "@/lib/schemas/sync-config";
-import { userPk, syncConfigSk, stripeAccountGsiPk } from "@blueplanit/asv2-shared";
+import { userPk, syncConfigSk, stripeAccountGsiPk, DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS } from "@blueplanit/asv2-shared";
 import { getGoogleConnections } from "@/lib/google/google-connection";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 const STRIPE_ACCOUNT_GSI_NAME = "STRIPE_ACCOUNT_GSI";
+
+export const defaultHistoryDays = (() => {
+    const raw = process.env.INITIAL_BACKFILL_HISTORY_DAYS;
+    if (!raw) return DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS;
+    const parsed = parseInt(raw, 10);
+    if (isNaN(parsed) || parsed <= 0) {
+        console.warn(`INITIAL_BACKFILL_HISTORY_DAYS="${raw}" is invalid; falling back to ${DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS}`);
+        return DEFAULT_INITIAL_BACKFILL_HISTORY_DAYS;
+    }
+    return parsed;
+})();
 
 export async function getSyncConfigs(
     userId: string,
@@ -75,6 +86,7 @@ export async function ensureSyncConfigForSheet(params: {
         userId: userId,
         spreadsheetId,
         stripeAccountId,
+        historySinceDays: defaultHistoryDays,
         lastSyncAt: null,
         lastError: null,
         createdAt: now,
@@ -116,7 +128,7 @@ export async function createSyncConfig(params: {
         stripeAccountId,
         stripeDataSyncMap,
         historyMode = "since",
-        historySinceDays = 90,
+        historySinceDays = defaultHistoryDays,
         syncStatus = "onboarding",
         timezone,
         locale,

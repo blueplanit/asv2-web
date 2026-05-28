@@ -9,7 +9,7 @@ import {
     type SyncConfig,
 } from "@/lib/schemas/sync-config";
 import { getStripeAccountIdForUser } from "@/lib/stripe/stripe-connection";
-import { createSyncConfig, ensureSyncConfigForSheet } from "@/lib/dynamo/sync-config";
+import { createSyncConfig, ensureSyncConfigForSheet, defaultHistoryDays } from "@/lib/dynamo/sync-config";
 import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
 import { UserState } from "../app-state/user-state";
 
@@ -186,7 +186,7 @@ export async function createWorkspaceSheetAndConfig(
         stripeAccountId,
         stripeDataSyncMap: boundStripeDataSyncMap,
         historyMode: baseSyncConfig?.historyMode ?? "since",
-        historySinceDays: baseSyncConfig?.historySinceDays ?? 90,
+        historySinceDays: baseSyncConfig?.historySinceDays ?? defaultHistoryDays,
         syncStatus: "syncing",
         timezone: resolvedTimezone,
         locale: resolvedLocale,
