@@ -29,6 +29,8 @@ export async function getAllBlogPostSlugs(): Promise<string[]> {
 
 // Single blog post by slug
 export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | null> {
+    if (!slug) return null;
+
     const res = await contentfulClient.getEntries({
         content_type: "blogPostASv2",
         limit: 1,
@@ -47,6 +49,8 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | 
 
 // CMS Page by slug (terms/privacy/about/etc.)
 export async function getPageBySlug(slug: string): Promise<PageFields | null> {
+    if (!slug) return null;
+
     const res = await contentfulClient.getEntries({
         content_type: "pageASv2", // ID of your Page content type
         limit: 1,

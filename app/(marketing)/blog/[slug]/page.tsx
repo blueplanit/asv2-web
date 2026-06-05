@@ -22,9 +22,11 @@ export async function generateStaticParams() {
 }
 
 // SEO metadata: use excerpt as meta description
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+    const { slug } = await params;
+
     try {
-        const post = await getBlogPostBySlug(params.slug);
+        const post = await getBlogPostBySlug(slug);
         if (!post) {
             return {
                 title: `Post not found | ${APP_NAME} Blog`,
@@ -44,7 +46,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
                 title,
                 description,
                 type: "article",
-                url: `/blog/${params.slug}`,
+                url: `/blog/${slug}`,
             },
             twitter: {
                 card: "summary",
@@ -53,7 +55,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
             },
         };
     } catch (err) {
-        console.error("generateMetadata error for blog post", { slug: params.slug, err });
+        console.error("generateMetadata error for blog post", { slug, err });
         return {
             title: `Post not available | ${APP_NAME} Blog`,
             description: "There was an error loading this blog post.",
@@ -64,9 +66,11 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function BlogPostPage({
     params,
 }: {
-    params: { slug: string };
+    params: Promise<{ slug: string }>;
 }) {
-    const post = await getBlogPostBySlug(params.slug);
+    const { slug } = await params;
+
+    const post = await getBlogPostBySlug(slug);
     if (!post) return notFound();
 
     const bodyDoc = post.body as unknown as Document;
