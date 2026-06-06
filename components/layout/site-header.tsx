@@ -6,7 +6,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { User, LogOut, Menu, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { Brand } from "@/components/brand/brand";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
@@ -14,13 +14,7 @@ type NavItem = { href: string; label: string };
 
 type SiteHeaderProps = {
     variant: "public" | "app";
-
-    // App (private) nav
     appNavItems?: NavItem[];
-
-    // Auth state (used mostly for app variant, but you can reuse on public)
-    isAuthed?: boolean;
-    userEmail?: string | null;
 };
 
 const baseNavItems = [
@@ -30,7 +24,10 @@ const baseNavItems = [
 ];
 
 export function SiteHeader(props: SiteHeaderProps) {
-    const { variant, appNavItems = [], isAuthed, userEmail } = props;
+    const { variant, appNavItems = [] } = props;
+    const { data: session, status } = useSession();
+    const isAuthed = status === "authenticated";
+    const userEmail = session?.user?.email ?? null;
     const router = useRouter();
     const [menuOpen, setMenuOpen] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
