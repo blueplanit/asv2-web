@@ -1,26 +1,10 @@
 // lib/contentful/contentful-rich-text.tsx
 import type { Options } from "@contentful/rich-text-react-renderer";
-import {
-    BLOCKS,
-    INLINES,
-    type Document,
-} from "@contentful/rich-text-types";
-import React from "react";
+import { documentToReactComponents } from "@contentful/rich-text-react-renderer";
+import { BLOCKS, INLINES, type Document } from "@contentful/rich-text-types";
 
 export type ContentfulRichTextDocument = Document;
-
-const STANDARD_CTA_PREFIX = "Stop rebuilding Stripe reports from CSV exports.";
 const SITE_ORIGIN = "https://www.syncstaq.com";
-
-function getNodeText(node: unknown): string {
-    if (!node || typeof node !== "object") return "";
-
-    const maybeText = node as { value?: unknown; content?: unknown };
-    if (typeof maybeText.value === "string") return maybeText.value;
-    if (!Array.isArray(maybeText.content)) return "";
-
-    return maybeText.content.map(getNodeText).join("");
-}
 
 export const contentfulRichTextOptions: Options = {
     renderNode: {
@@ -39,17 +23,7 @@ export const contentfulRichTextOptions: Options = {
                 {children}
             </h3>
         ),
-        [BLOCKS.PARAGRAPH]: (node, children) => {
-            const isStandardCta = getNodeText(node).startsWith(STANDARD_CTA_PREFIX);
-
-            if (isStandardCta) {
-                return (
-                    <p className="mt-10 rounded-md border border-indigo-100 bg-indigo-50/70 px-5 py-4 text-base leading-7 text-slate-800 shadow-sm [&_a]:font-semibold">
-                        {children}
-                    </p>
-                );
-            }
-
+        [BLOCKS.PARAGRAPH]: (_, children) => {
             return (
                 <p className="mt-4 text-base leading-8 text-slate-700">
                     {children}
@@ -116,6 +90,19 @@ export const contentfulRichTextOptions: Options = {
             );
         },
 
+        [BLOCKS.EMBEDDED_ENTRY]: (node) => {
+            const contentType = node.data.target?.sys?.contentType?.sys?.id;
+            if (contentType === "ctaBlock") {
+                const body = node.data.target?.fields?.ctaBodyText as Document | undefined;
+                return (
+                    <div className="mt-10 rounded-md border border-indigo-100 bg-indigo-50/70 px-5 py-4 text-base leading-7 text-slate-800 shadow-sm [&_a]:font-semibold [&_p]:m-0">
+                        {body && documentToReactComponents(body, contentfulRichTextOptions)}
+                    </div>
+                );
+            }
+            return null;
+        },
+
         [INLINES.HYPERLINK]: (node, children) => {
             const url = node.data.uri as string;
 
@@ -146,6 +133,5 @@ export const contentfulRichTextOptions: Options = {
                 </a>
             );
         },
-
     },
 };
