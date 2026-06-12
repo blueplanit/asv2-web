@@ -33,9 +33,9 @@ export const metadata: Metadata = {
         type: "website",
         images: [
             {
-                url: "/brand/syncstaq-icon.svg",
-                width: 512,
-                height: 512,
+                url: "/og/syncstaq-banner.png",
+                width: 1200,
+                height: 630,
                 alt: "SyncStaq syncs Stripe billing data into Google Sheets.",
             },
         ],
