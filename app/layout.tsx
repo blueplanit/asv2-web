@@ -33,7 +33,7 @@ export const metadata: Metadata = {
         type: "website",
         images: [
             {
-                url: "/android-chrome-512x512.png",
+                url: "/brand/syncstaq-icon.svg",
                 width: 512,
                 height: 512,
                 alt: "SyncStaq syncs Stripe billing data into Google Sheets.",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
         title: `${APP_NAME} | Stripe billing data in Google Sheets`,
         description:
             "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
-        images: ["/android-chrome-512x512.png"],
+        images: ["/brand/syncstaq-icon.svg"],
     },
     icons: {
         icon: [
