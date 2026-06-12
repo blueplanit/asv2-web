@@ -20,8 +20,33 @@ const geistMono = Geist_Mono({
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
-    title: APP_NAME,
-    description: "Sync your Stripe data to your Google Sheets.",
+    metadataBase: new URL("https://www.syncstaq.com"),
+    title: `${APP_NAME} | Stripe billing data in Google Sheets`,
+    description:
+        "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
+    openGraph: {
+        title: `${APP_NAME} | Stripe billing data in Google Sheets`,
+        description:
+            "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
+        url: "https://www.syncstaq.com/",
+        siteName: APP_NAME,
+        type: "website",
+        images: [
+            {
+                url: "/android-chrome-512x512.png",
+                width: 512,
+                height: 512,
+                alt: "SyncStaq syncs Stripe billing data into Google Sheets.",
+            },
+        ],
+    },
+    twitter: {
+        card: "summary",
+        title: `${APP_NAME} | Stripe billing data in Google Sheets`,
+        description:
+            "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
+        images: ["/android-chrome-512x512.png"],
+    },
     icons: {
         icon: [
             { url: "/favicon.ico" },
