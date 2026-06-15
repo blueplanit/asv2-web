@@ -12,6 +12,12 @@ import {
     GOOGLE_OAUTH_NONCE_COOKIE,
 } from "@/lib/google/google-oauth-state";
 import { sanitizeReturnTo } from "@/lib/app-state/oauth-state-core";
+import { loadUserState } from "@/lib/app-state/user-state";
+import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
+import { APP_NAME } from "@/lib/constants";
+
+const WORKSPACE_SHEET_TITLE = `My ${APP_NAME} Workspace`;
+const FOLDER_NAME = APP_NAME;
 
 // add (module-level cipher)
 const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
@@ -32,6 +38,12 @@ function clearNonceCookie(res: NextResponse) {
 function redirectFor(flow: "google-connect" | "google-reconnect", returnTo?: string) {
     if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
     return "/onboarding?step=3";
+}
+
+function onboardingUrlWithSheetError(base: string) {
+    const url = new URL(base, process.env.NEXTAUTH_URL);
+    url.searchParams.set("sheetError", "1");
+    return url.pathname + url.search;
 }
 
 export async function GET(req: NextRequest) {
@@ -204,7 +216,30 @@ export async function GET(req: NextRequest) {
         googleProjectShard: payload.shard,
     });
 
-    // 5) Back to onboarding, step 3 (Create sheet)
+    // 5) Onboarding connect flow: auto-create workspace sheet, then land on step 3
+    if (flow === "google-connect") {
+        try {
+            const userState = await loadUserState(userId);
+            const existingOnboardingSheet = userState.syncConfigs.find(
+                (cfg) => cfg.syncStatus === "onboarding" && cfg.spreadsheetId,
+            );
+            if (!existingOnboardingSheet) {
+                await createWorkspaceSheetAndConfig({
+                    userState,
+                    folderName: FOLDER_NAME,
+                    workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
+                });
+            }
+        } catch (err) {
+            console.error("Auto-create workspace sheet failed after Google connect:", err);
+            const errUrl = new URL(
+                onboardingUrlWithSheetError(base),
+                process.env.NEXTAUTH_URL,
+            );
+            return clearNonceCookie(NextResponse.redirect(errUrl));
+        }
+    }
+
     const onboardingUrl = new URL(base, process.env.NEXTAUTH_URL);
     return clearNonceCookie(NextResponse.redirect(onboardingUrl));
 }

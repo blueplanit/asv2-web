@@ -13,6 +13,7 @@ import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+import type { SurveyStep } from "@/lib/onboarding/survey-options";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -103,12 +104,11 @@ function getNextOnboardingStep(onboardingStage: string): number {
         case "stripe_connected":
             return 2; // connect Google
         case "connections_linked":
-            return 3; // create sheet
         case "sheet_created":
-            return 4; // choose objects
+            return 3; // choose objects (sheet auto-created after Google connect)
         case "ready":
         default:
-            return 4;
+            return 3;
     }
 }
 
@@ -151,6 +151,7 @@ export function DashboardClient() {
     const router = useRouter();
 
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
+    const [surveyStep, setSurveyStep] = useState<SurveyStep>("q1");
     const prevHasBackfillRunningRef = useRef(hasBackfillRunning);
     const hasSyncError = useMemo(
         () => syncConfigs.some((cfg) => cfg.syncStatus === "error"),
@@ -379,14 +380,14 @@ export function DashboardClient() {
         prevHasSyncErrorRef.current = hasSyncError;
     }, [hasSyncError, syncConfigs]);
 
-    // Keep intro modal in sync with backfill status.
+    // Keep intro modal in sync with backfill status — only auto-close on the confirmation card.
     useEffect(() => {
         if (!backfillModalOpen) return;
-        if (!hasBackfillRunning) {
-            // use the same handler so localStorage "dismissed" logic still applies
+        if (surveyStep !== "done") return;
+        if (prevHasBackfillRunningRef.current && !hasBackfillRunning) {
             handleBackfillModalOpenChange(false);
         }
-    }, [backfillModalOpen, hasBackfillRunning]);
+    }, [backfillModalOpen, hasBackfillRunning, surveyStep]);
 
     function handleBackfillModalOpenChange(open: boolean) {
         if (!open && activeWorkspace && user.profile?.userId) {
@@ -633,6 +634,7 @@ export function DashboardClient() {
                         sheetUrl={activeWorkspace.sheetUrl}
                         workspaceName={activeWorkspace.name}
                         nameLoading={activeWorkspace.nameLoading ?? false}
+                        onSurveyStepChange={setSurveyStep}
                     />
                 )}
 

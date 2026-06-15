@@ -56,3 +56,32 @@ import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 trackAmplitudeEvent("Button Clicked", { source: "pricing_page" });
 ```
+
+## Onboarding survey responses (Google Sheet via SSM)
+
+Survey answers from the post-activation modal are appended to an internal Google Sheet. Credentials are read from **AWS Systems Manager Parameter Store** (dev and prod).
+
+### SSM parameters
+
+| Parameter | Type | Value |
+|-----------|------|--------|
+| `/${project}/${stage}/google-service-account/reporting-sheet-writer` | SecureString | Existing reporting service-account JSON (reused) |
+| `/${project}/${stage}/survey/responses-sheet-id` | String | Google Spreadsheet ID for survey responses |
+
+### Web app env vars (parameter names only)
+
+```bash
+SURVEY_SERVICE_ACCOUNT_PARAM_NAME=/${project}/${stage}/google-service-account/reporting-sheet-writer
+SURVEY_RESPONSES_SHEET_ID_PARAM_NAME=/${project}/${stage}/survey/responses-sheet-id
+```
+
+The web app IAM user needs `ssm:GetParameter` on both parameters (granted in `asv2-serverless` `app-stack.ts`).
+
+### One-time setup (dev + prod)
+
+1. Create a Google Sheet with header row: `timestamp`, `userId`, `email`, `role`, `problem`, `roleOther`, `problemOther`.
+2. Share the sheet with the **reporting service-account** email (`client_email` from the SSM JSON) as Editor.
+3. Create the `survey/responses-sheet-id` SSM String parameter with the spreadsheet ID.
+4. Set `SURVEY_*_PARAM_NAME` env vars on the web app host.
+
+Local dev skips the Sheets write unless `WRITE_SURVEY_RESPONSES=1` is set (mirrors `SEND_EMAILS` for column requests).

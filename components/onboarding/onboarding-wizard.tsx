@@ -61,17 +61,11 @@ const steps: Step[] = [
     {
         id: 2,
         title: "Grant Sheets access",
-        description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive.`,
+        description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive. We'll create your workspace sheet automatically after you connect.`,
         ctaLabel: "Connect Google Sheets",
     },
     {
         id: 3,
-        title: "Create your workspace sheet",
-        description: `We’ll create a new Google Sheets file named “${WORKSPACE_SHEET_TITLE}” in the “${FOLDER_NAME}” folder in your Drive to hold your Stripe data.`,
-        ctaLabel: "Create sheet",
-    },
-    {
-        id: 4,
         title: "Choose Stripe data & start your 14-day trial",
         description: "Pick which Stripe data objects to sync into your newly created Google Sheet. Then, start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
@@ -169,6 +163,14 @@ export function OnboardingWizard() {
             // Strip the mismatch params so refreshes don't retrigger the snackbar
             router.replace("/onboarding?step=2", { scroll: false });
         }
+
+        const sheetError = searchParams.get("sheetError");
+        if (sheetError === "1") {
+            setError(
+                "We couldn't create your workspace sheet automatically. Click \"Create sheet\" below to try again.",
+            );
+            router.replace("/onboarding?step=3", { scroll: false });
+        }
     }, [searchParams, router]);
 
     // Spreadsheet ID associated with the onboarding config (if any)
@@ -213,13 +215,15 @@ export function OnboardingWizard() {
     const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
+    const needsSheetCreation = !createdSpreadsheetId && currentStep.id === 3;
+    const primaryCtaLabel = needsSheetCreation ? "Create sheet" : currentStep.ctaLabel;
 
     const primaryLoadingLabel =
         currentStep.id === 1
             ? "Redirecting to Stripe…"
             : currentStep.id === 2
                 ? "Redirecting to Google…"
-                : currentStep.id === 3
+                : needsSheetCreation
                     ? "Creating sheet…"
                     : "Starting trial & backfill...";
 
@@ -385,22 +389,20 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 3) {
-            trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet");
-            setSubmitting(true);
-            // Create sheet
-            const createSheetResponse = await createSheet();
-            setSubmitting(false);
-            if (!createSheetResponse || !createSheetResponse.spreadsheetId) return;
-            setCreatedSpreadsheetId(createSheetResponse.spreadsheetId);
-        }
-        else if (currentStep.id === 4) {
-            try {
-                trackAmplitudeEvent("Onboarding Step 4 Started: Configure sync and start backfill");
+            if (needsSheetCreation) {
+                trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet (fallback)");
                 setSubmitting(true);
-                // Start trial
-                const trialOk = await handleStartTrial();
+                const createSheetResponse = await createSheet();
+                setSubmitting(false);
+                if (!createSheetResponse || !createSheetResponse.spreadsheetId) return;
+                setCreatedSpreadsheetId(createSheetResponse.spreadsheetId);
+                return;
+            }
 
-                // Save sync config selection
+            try {
+                trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
+                setSubmitting(true);
+                const trialOk = await handleStartTrial();
                 const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
 
                 if (!trialOk || !saveConfigOk) {
@@ -408,7 +410,6 @@ export function OnboardingWizard() {
                     return;
                 }
 
-                // 3) Trigger initial backfill Lambda
                 const backfillOk = await startInitialBackfill(createdSpreadsheetId);
 
                 if (!backfillOk) {
@@ -422,7 +423,7 @@ export function OnboardingWizard() {
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 };
 
-                trackAmplitudeEvent("Onboarding Step 4 Completed", eventProperties);
+                trackAmplitudeEvent("Onboarding Step 3 Completed", eventProperties);
                 trackAmplitudeEvent("Onboarding Completed", eventProperties);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
@@ -505,12 +506,17 @@ export function OnboardingWizard() {
 
                                         </div>
                                     </div>
-                                    {currentStep.id === 4 && (
+                                    {currentStep.id === 3 && !needsSheetCreation && (
                                         <StripeObjectsStep
                                             value={selectedDataSyncEntries}
                                             onChange={setSelectedDataSyncEntries}
                                             disabled={submitting}
                                         />
+                                    )}
+                                    {currentStep.id === 3 && needsSheetCreation && (
+                                        <p className="text-sm text-slate-600">
+                                            We&apos;ll create a new Google Sheets file named &ldquo;{WORKSPACE_SHEET_TITLE}&rdquo; in the &ldquo;{FOLDER_NAME}&rdquo; folder in your Drive.
+                                        </p>
                                     )}
                                     <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                                         <div className="flex gap-2">
@@ -529,7 +535,7 @@ export function OnboardingWizard() {
                                                 type="button"
                                                 onClick={handlePrimaryAction}
                                                 disabled={submitting}
-                                                aria-label={currentStep.ctaLabel}
+                                                aria-label={primaryCtaLabel}
                                             >
                                                 {submitting ? (
                                                     <>
@@ -537,12 +543,12 @@ export function OnboardingWizard() {
                                                         {primaryLoadingLabel}
                                                     </>
                                                 ) : (
-                                                    currentStep.ctaLabel
+                                                    primaryCtaLabel
                                                 )}
                                             </button>
                                         </div>
 
-                                        {currentStep.id === 4 && (
+                                        {currentStep.id === 3 && !needsSheetCreation && (
                                             <p className="text-[11px] text-slate-500 text-right sm:text-left max-w-xs">
                                                 <span className="inline-flex items-center gap-2  text-[11px] font-medium text-emerald-700 ">
                                                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Your 14-day free trial starts after this. No card required!
