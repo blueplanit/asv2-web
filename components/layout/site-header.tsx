@@ -17,8 +17,16 @@ type SiteHeaderProps = {
     appNavItems?: NavItem[];
 };
 
-const baseNavItems = [
+const publicNavItems = [
+    { href: "/how-it-works", label: "How it works" },
+    { href: "/sample-sheet", label: "Sample Sheet" },
+    { href: "/pricing", label: "Pricing" },
+];
+
+const appBaseNavItems = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/how-it-works", label: "How it works" },
+    { href: "/sample-sheet", label: "Sample Sheet" },
     { href: "/pricing", label: "Pricing" },
     { href: "/blog", label: "Blog" },
 ];
@@ -74,7 +82,7 @@ export function SiteHeader(props: SiteHeaderProps) {
     }, [mobileNavOpen]);
 
     const isPublic = variant === "public";
-    const navItems = baseNavItems.concat(appNavItems);
+    const navItems = (isPublic ? publicNavItems : appBaseNavItems).concat(appNavItems);
 
     const userMenu = (
         <div className="relative ml-2" ref={menuRef}>
