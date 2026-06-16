@@ -36,6 +36,7 @@ export async function POST(req: Request) {
             return new NextResponse("Forbidden", { status: 403 });
         }
 
+
         const session = (await getServerSession(authOptions)) as Session;
         if (!session?.user?.email || !(session.user as { userId?: string }).userId) {
             return new NextResponse(
@@ -65,17 +66,15 @@ export async function POST(req: Request) {
             return new NextResponse("role and problem are required", { status: 400 });
         }
 
-        if (IS_DEV && !process.env.WRITE_SURVEY_RESPONSES) {
-            return NextResponse.json({ ok: true, skipped: true });
-        }
+        // if (IS_DEV) {
+        //     return NextResponse.json({ ok: true, skipped: true });
+        // }
 
         await appendSurveyResponseRow({
             userId,
             email,
-            role,
-            problem,
-            roleOther: roleOther || undefined,
-            problemOther: problemOther || undefined,
+            role: role ?? roleOther,
+            problem: problem ?? problemOther,
         });
 
         return NextResponse.json({ ok: true });
