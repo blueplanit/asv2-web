@@ -45,7 +45,7 @@ export const metadata: Metadata = {
         title: `${APP_NAME} | Stripe billing data in Google Sheets`,
         description:
             "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
-        images: ["/brand/syncstaq-icon.svg"],
+        images: ["/og/syncstaq-banner.png"],
     },
     icons: {
         icon: [
