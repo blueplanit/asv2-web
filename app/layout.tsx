@@ -5,7 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, APP_URL } from "@/lib/constants";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -20,8 +20,33 @@ const geistMono = Geist_Mono({
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
-    title: APP_NAME,
-    description: "Sync your Stripe data to your Google Sheets.",
+    metadataBase: new URL(APP_URL),
+    title: `${APP_NAME} | Stripe billing data in Google Sheets`,
+    description:
+        "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
+    openGraph: {
+        title: `${APP_NAME} | Stripe billing data in Google Sheets`,
+        description:
+            "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
+        url: APP_URL,
+        siteName: APP_NAME,
+        type: "website",
+        images: [
+            {
+                url: "/og/syncstaq-banner.png",
+                width: 1200,
+                height: 630,
+                alt: "SyncStaq syncs Stripe billing data into Google Sheets.",
+            },
+        ],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `${APP_NAME} | Stripe billing data in Google Sheets`,
+        description:
+            "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
+        images: ["/og/syncstaq-banner.png"],
+    },
     icons: {
         icon: [
             { url: "/favicon.ico" },
