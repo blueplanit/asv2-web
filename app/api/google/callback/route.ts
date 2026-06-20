@@ -35,9 +35,14 @@ function clearNonceCookie(res: NextResponse) {
     return res;
 }
 
-function redirectFor(flow: "google-connect" | "google-reconnect", returnTo?: string) {
+function redirectForSuccess(flow: "google-connect" | "google-reconnect", returnTo?: string) {
     if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
     return "/onboarding?step=3";
+}
+
+function redirectForError(flow: "google-connect" | "google-reconnect", returnTo?: string) {
+    if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
+    return "/onboarding?step=2";
 }
 
 function onboardingUrlWithSheetError(base: string) {
@@ -81,10 +86,11 @@ export async function GET(req: NextRequest) {
 
     const { payload } = verified;
     const flow = payload.flow;
-    const base = redirectFor(flow, payload.returnTo);
+    const successBase = redirectForSuccess(flow, payload.returnTo);
+    const errorBase = redirectForError(flow, payload.returnTo);
 
     if (error || !code) {
-        const errorUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errorUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errorUrl.searchParams.set("googleError", "oauth");
         return clearNonceCookie(NextResponse.redirect(errorUrl));
     }
@@ -110,7 +116,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
         console.error("Google token exchange failed:", tokenRes.status, await tokenRes.text());
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "token_exchange");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -129,7 +135,7 @@ export async function GET(req: NextRequest) {
 
     if (!accessToken || !refreshToken) {
         console.error("Missing access/refresh token from Google:", tokenJson);
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "missing_tokens");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -138,7 +144,7 @@ export async function GET(req: NextRequest) {
     const grantedScopes = tokenJson.scope ? tokenJson.scope.split(" ") : [];
     if (!grantedScopes.includes("https://www.googleapis.com/auth/drive.file")) {
         console.error("Google OAuth scope denied: drive.file not in granted scopes", { grantedScopes, userId, flow });
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "scope_denied");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -153,7 +159,7 @@ export async function GET(req: NextRequest) {
 
     if (!userinfoRes.ok) {
         console.error("Google userinfo failed:", userinfoRes.status, await userinfoRes.text());
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "userinfo");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -177,7 +183,7 @@ export async function GET(req: NextRequest) {
             actualEmail: email,
         });
 
-        const mismatchUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const mismatchUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         mismatchUrl.searchParams.set("googleMismatch", "1");
         mismatchUrl.searchParams.set("expectedEmail", sessionEmail);
         mismatchUrl.searchParams.set("actualEmail", email);
@@ -233,13 +239,13 @@ export async function GET(req: NextRequest) {
         } catch (err) {
             console.error("Auto-create workspace sheet failed after Google connect:", err);
             const errUrl = new URL(
-                onboardingUrlWithSheetError(base),
+                onboardingUrlWithSheetError(successBase),
                 process.env.NEXTAUTH_URL,
             );
             return clearNonceCookie(NextResponse.redirect(errUrl));
         }
     }
 
-    const onboardingUrl = new URL(base, process.env.NEXTAUTH_URL);
+    const onboardingUrl = new URL(successBase, process.env.NEXTAUTH_URL);
     return clearNonceCookie(NextResponse.redirect(onboardingUrl));
 }

@@ -44,26 +44,27 @@ export async function GET(req: NextRequest) {
             cookieNonce,
         });
 
-        // Decide where to go after callback
-        const returnTo =
+        // Success lands on step 2; failures/cancellations return to step 1
+        const successReturnTo =
             verified.ok && verified.payload.returnTo ? verified.payload.returnTo : "/onboarding?step=2";
+        const errorReturnTo = "/onboarding?step=1";
 
         if (!verified.ok) {
-            const errUrl = new URL(returnTo, process.env.NEXTAUTH_URL);
+            const errUrl = new URL(errorReturnTo, process.env.NEXTAUTH_URL);
             errUrl.searchParams.set("stripeError", "state");
             errUrl.searchParams.set("reason", verified.reason);
             return clearNonceCookie(NextResponse.redirect(errUrl));
         }
 
         if (error) {
-            const errUrl = new URL(returnTo, process.env.NEXTAUTH_URL);
+            const errUrl = new URL(errorReturnTo, process.env.NEXTAUTH_URL);
             errUrl.searchParams.set("stripeError", error);
             if (errorDescription) errUrl.searchParams.set("desc", errorDescription);
             return clearNonceCookie(NextResponse.redirect(errUrl));
         }
 
         if (!code) {
-            const errUrl = new URL(returnTo, process.env.NEXTAUTH_URL);
+            const errUrl = new URL(errorReturnTo, process.env.NEXTAUTH_URL);
             errUrl.searchParams.set("stripeError", "missing_code");
             return clearNonceCookie(NextResponse.redirect(errUrl));
         }
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
             stripeAccountId: connectedAccountId,
             businessName,
         });
-        return clearNonceCookie(NextResponse.redirect(new URL(returnTo, process.env.NEXTAUTH_URL)));
+        return clearNonceCookie(NextResponse.redirect(new URL(successReturnTo, process.env.NEXTAUTH_URL)));
     } catch (err) {
         console.error("Error in Stripe Connect callback:", err);
         return new Response("Internal Server Error", { status: 500 });

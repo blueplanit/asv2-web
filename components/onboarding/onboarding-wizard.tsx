@@ -106,19 +106,37 @@ export function OnboardingWizard() {
         [user.syncConfigs],
     );
 
-    // Derive initial step from ?step= query, default to 1
-    const initialIndex = React.useMemo(() => {
+    const hasStripe = user.stripeConnections.some((c) => c.status === "connected");
+    const hasGoogle = user.googleConnections.some((c) => c.status === "connected");
+    const connectedStripeConnection = user.stripeConnections.find(
+        (c) => c.status === "connected",
+    );
+    const connectedGoogleConnection = user.googleConnections.find(
+        (c) => c.status === "connected",
+    );
+
+    const maxAllowedIndex = React.useMemo(() => {
+        if (!hasStripe) return 0;
+        if (!hasGoogle) return 1;
+        return 2;
+    }, [hasStripe, hasGoogle]);
+
+    // Derive requested step from ?step= query, default to 1
+    const requestedStepIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
         const stepNumber = stepParam ? parseInt(stepParam, 10) : 1;
         if (!Number.isFinite(stepNumber)) return 0;
         return Math.min(Math.max(stepNumber - 1, 0), steps.length - 1);
     }, [searchParams]);
 
-    const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
+    const clampedStepIndex = Math.min(requestedStepIndex, maxAllowedIndex);
+
+    const [currentStepIndex, setCurrentStepIndex] = React.useState(clampedStepIndex);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
-    const [snackbarDescription, setSnackbarDescription] = useState<string>()
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarTitle, setSnackbarTitle] = useState("Action required");
+    const [snackbarDescription, setSnackbarDescription] = useState<string>();
 
     // If there is no onboarding config but there *is* an active config,
     // the user is past onboarding → send them to dashboard.
@@ -140,12 +158,35 @@ export function OnboardingWizard() {
                 error_code: stripeError,
                 reason: stripeReason ?? null,
             });
+
+            const description =
+                stripeDesc ??
+                (stripeError === "access_denied"
+                    ? "Stripe connection was cancelled. Connect your Stripe account to continue."
+                    : "Stripe connection failed. Please try again.");
+
+            setSnackbarTitle("Stripe connection required");
+            setSnackbarDescription(description);
+            setSnackbarOpen(true);
+            router.replace("/onboarding?step=1", { scroll: false });
         }
 
         if (googleError) {
             trackAmplitudeError("Google Connect Failed", googleError, {
                 error_code: googleError,
             });
+
+            const description =
+                googleError === "scope_denied"
+                    ? "Google Sheets access is required. Please grant permission on the next screen."
+                    : googleError === "oauth"
+                        ? "Google connection was cancelled. Grant Sheets access to continue."
+                        : "Google connection failed. Please try again.";
+
+            setSnackbarTitle("Google Sheets access required");
+            setSnackbarDescription(description);
+            setSnackbarOpen(true);
+            router.replace("/onboarding?step=2", { scroll: false });
         }
 
         if (mismatch === "1") {
@@ -157,6 +198,7 @@ export function OnboardingWizard() {
                     ? `You're signed in as ${expectedEmail} but tried to connect ${actualEmail}. Please choose the same Google account you signed up with on the next screen.`
                     : "Please choose the same Google account you signed up with on the Google consent screen.";
 
+            setSnackbarTitle("Please connect the same Google account");
             setSnackbarDescription(description);
             setSnackbarOpen(true);
 
@@ -205,10 +247,26 @@ export function OnboardingWizard() {
 
     const [selectedDataSyncEntries, setSelectedDataSyncEntries] = useState<DataSyncEntryId[]>(initialStripeDataSyncEntries);
 
+    // Redirect when URL step exceeds what connections allow (manual edits, stale tabs, bad callbacks)
+    useEffect(() => {
+        if (searchParams.get("stripeError") || searchParams.get("googleError")) return;
+        if (requestedStepIndex <= maxAllowedIndex) return;
+
+        const allowedStep = steps[maxAllowedIndex];
+        const description = !hasStripe
+            ? "Connect your Stripe account before continuing."
+            : "Grant Google Sheets access before continuing.";
+
+        setSnackbarTitle("Complete the previous step");
+        setSnackbarDescription(description);
+        setSnackbarOpen(true);
+        router.replace(`/onboarding?step=${allowedStep.id}`, { scroll: false });
+    }, [requestedStepIndex, maxAllowedIndex, hasStripe, router, searchParams]);
+
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
-        setCurrentStepIndex(initialIndex);
-    }, [initialIndex]);
+        setCurrentStepIndex(clampedStepIndex);
+    }, [clampedStepIndex]);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
@@ -216,13 +274,23 @@ export function OnboardingWizard() {
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
     const needsSheetCreation = !createdSpreadsheetId && currentStep.id === 3;
-    const primaryCtaLabel = needsSheetCreation ? "Create sheet" : currentStep.ctaLabel;
+    const primaryCtaLabel = needsSheetCreation
+        ? "Create sheet"
+        : currentStep.id === 1 && hasStripe
+            ? "Continue"
+            : currentStep.id === 2 && hasGoogle
+                ? "Continue"
+                : currentStep.ctaLabel;
 
     const primaryLoadingLabel =
         currentStep.id === 1
-            ? "Redirecting to Stripe…"
+            ? hasStripe
+                ? "Continuing…"
+                : "Redirecting to Stripe…"
             : currentStep.id === 2
-                ? "Redirecting to Google…"
+                ? hasGoogle
+                    ? "Continuing…"
+                    : "Redirecting to Google…"
                 : needsSheetCreation
                     ? "Creating sheet…"
                     : "Starting trial & backfill...";
@@ -375,6 +443,10 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
+            if (hasStripe) {
+                goToStepByIndex(1);
+                return;
+            }
             trackAmplitudeEvent("Onboarding Step 1 Started: Connect Stripe");
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
@@ -382,6 +454,10 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 2) {
+            if (hasGoogle) {
+                goToStepByIndex(2);
+                return;
+            }
             trackAmplitudeEvent("Onboarding Step 2 Started: Grant Sheets access");
             setSubmitting(true);
             // Sheets access → Google OAuth
@@ -389,6 +465,15 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 3) {
+            if (!hasStripe || !hasGoogle) {
+                setError(
+                    !hasStripe
+                        ? "Connect a Stripe account before starting sync."
+                        : "Grant Google Sheets access before starting sync.",
+                );
+                return;
+            }
+
             if (needsSheetCreation) {
                 trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet (fallback)");
                 setSubmitting(true);
@@ -502,6 +587,18 @@ export function OnboardingWizard() {
                                                         {currentStep.helper}
                                                     </p>
                                                 )}
+                                                {currentStep.id === 1 && hasStripe && connectedStripeConnection && (
+                                                    <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-100">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                        <span className="truncate">
+                                                            Connected:{" "}
+                                                            <span className="font-semibold">
+                                                                {connectedStripeConnection.businessName ||
+                                                                    connectedStripeConnection.stripeAccountId}
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                         </div>
@@ -560,7 +657,18 @@ export function OnboardingWizard() {
 
                                 {currentStep.id === 2 && (
                                     <div className="space-y-3">
-                                        {user.profile?.email && (
+                                        {hasGoogle && connectedGoogleConnection && (
+                                            <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-100">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                <span className="truncate">
+                                                    Connected:{" "}
+                                                    <span className="font-semibold">
+                                                        {connectedGoogleConnection.email}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        )}
+                                        {user.profile?.email && !hasGoogle && (
                                             <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                                 <span className="truncate">
@@ -595,7 +703,7 @@ export function OnboardingWizard() {
                     open={snackbarOpen}
                     onClose={() => setSnackbarOpen(false)}
                     variant="warning"
-                    title="Please connect the same Google account"
+                    title={snackbarTitle}
                     description={snackbarDescription}
                     animated
                     autoHideMs={10000}
