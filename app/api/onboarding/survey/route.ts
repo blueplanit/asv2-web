@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getServerSession, type Session } from "next-auth";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { IS_DEV } from "@/lib/constants";
 import { appendSurveyResponseRow } from "@/lib/google/survey-responses-sheet";
 
 export const runtime = "nodejs";
@@ -59,22 +58,16 @@ export async function POST(req: Request) {
         const body = await req.json().catch(() => ({}));
         const role = sanitizeText(body.role, SURVEY_MAX_TEXT_LENGTH);
         const problem = sanitizeText(body.problem, SURVEY_MAX_TEXT_LENGTH);
-        const roleOther = sanitizeText(body.roleOther, SURVEY_MAX_TEXT_LENGTH);
-        const problemOther = sanitizeText(body.problemOther, SURVEY_MAX_TEXT_LENGTH);
 
         if (!role || !problem) {
             return new NextResponse("role and problem are required", { status: 400 });
         }
 
-        // if (IS_DEV) {
-        //     return NextResponse.json({ ok: true, skipped: true });
-        // }
-
         await appendSurveyResponseRow({
             userId,
             email,
-            role: role ?? roleOther,
-            problem: problem ?? problemOther,
+            role,
+            problem,
         });
 
         return NextResponse.json({ ok: true });

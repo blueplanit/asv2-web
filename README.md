@@ -79,9 +79,9 @@ The web app IAM user needs `ssm:GetParameter` on both parameters (granted in `as
 
 ### One-time setup (dev + prod)
 
-1. Create a Google Sheet with header row: `timestamp`, `userId`, `email`, `role`, `problem`, `roleOther`, `problemOther`.
+1. Create a Google Sheet with header row: `timestamp`, `userId`, `email`, `role`, `problem`.
 2. Share the sheet with the **reporting service-account** email (`client_email` from the SSM JSON) as Editor.
 3. Create the `survey/responses-sheet-id` SSM String parameter with the spreadsheet ID.
 4. Set `SURVEY_*_PARAM_NAME` env vars on the web app host.
 
-Local dev skips the Sheets write unless `WRITE_SURVEY_RESPONSES=1` is set (mirrors `SEND_EMAILS` for column requests).
+Survey answers are written with `valueInputOption: "RAW"` and formula-trigger characters are neutralized to prevent spreadsheet formula injection.

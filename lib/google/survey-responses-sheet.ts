@@ -51,9 +51,20 @@ export type SurveyResponseRow = {
     email: string;
     role: string;
     problem: string;
-    roleOther?: string;
-    problemOther?: string;
 };
+
+// Neutralize spreadsheet formula injection: a cell whose value begins with a
+// formula trigger character is treated as a formula by Sheets/Excel (including
+// after CSV export), which can exfiltrate other rows or run side effects when
+// the sheet is opened. Prefixing with a single quote forces the cell to text.
+const FORMULA_TRIGGERS = new Set(["=", "+", "-", "@", "\t", "\r", "\n"]);
+
+function neutralizeFormula(value: string): string {
+    if (value.length > 0 && FORMULA_TRIGGERS.has(value[0])) {
+        return `'${value}`;
+    }
+    return value;
+}
 
 export async function appendSurveyResponseRow(row: SurveyResponseRow): Promise<void> {
     const { sheets, spreadsheetId } = await getSurveySheetsClient();
@@ -61,19 +72,17 @@ export async function appendSurveyResponseRow(row: SurveyResponseRow): Promise<v
 
     await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: "A:G",
-        valueInputOption: "USER_ENTERED",
+        range: "A:E",
+        valueInputOption: "RAW",
         insertDataOption: "INSERT_ROWS",
         requestBody: {
             values: [
                 [
                     timestamp,
                     row.userId,
-                    row.email,
-                    row.role,
-                    row.problem,
-                    row.roleOther ?? "",
-                    row.problemOther ?? "",
+                    neutralizeFormula(row.email),
+                    neutralizeFormula(row.role),
+                    neutralizeFormula(row.problem),
                 ],
             ],
         },

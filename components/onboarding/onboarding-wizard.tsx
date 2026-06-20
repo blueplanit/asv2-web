@@ -410,12 +410,12 @@ export function OnboardingWizard() {
                     return;
                 }
 
-                // DEBUG: backfill call disabled
-                // const backfillOk = await startInitialBackfill(createdSpreadsheetId);
-                // if (!backfillOk) {
-                //     setSubmitting(false);
-                //     return;
-                // }
+                const backfillOk = await startInitialBackfill(createdSpreadsheetId);
+
+                if (!backfillOk) {
+                    setSubmitting(false);
+                    return;
+                }
 
                 const eventProperties = {
                     spreadsheet_id: createdSpreadsheetId,

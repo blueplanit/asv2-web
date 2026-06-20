@@ -1,7 +1,7 @@
 // components/dashboard/backfill-intro-modal.tsx
 "use client";
 
-import * as React from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/20/solid";
 import { ExternalLinkIcon } from "lucide-react";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
@@ -24,12 +24,12 @@ export function BackfillIntroModal({
     nameLoading,
     onSurveyStepChange,
 }: BackfillIntroModalProps) {
-    const [surveyStep, setSurveyStep] = React.useState<SurveyStep>("q1");
-    const [roleOther, setRoleOther] = React.useState("");
-    const [problemOther, setProblemOther] = React.useState("");
-    const [submitting, setSubmitting] = React.useState(false);
+    const [surveyStep, setSurveyStep] = useState<SurveyStep>("q1");
+    const [role, setRole] = useState("");
+    const [problem, setProblem] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
-    const goToStep = React.useCallback(
+    const goToStep = useCallback(
         (next: SurveyStep) => {
             setSurveyStep(next);
             onSurveyStepChange?.(next);
@@ -37,11 +37,11 @@ export function BackfillIntroModal({
         [onSurveyStepChange],
     );
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (!open) return;
         setSurveyStep("q1");
-        setRoleOther("");
-        setProblemOther("");
+        setRole("");
+        setProblem("");
         setSubmitting(false);
         onSurveyStepChange?.("q1");
     }, [open, onSurveyStepChange]);
@@ -54,8 +54,15 @@ export function BackfillIntroModal({
         onOpenChange(false);
     }
 
-    function handleSkip() {
-        goToStep("done");
+    async function handleSkip() {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await submitSurveyAnswers({ skipped: true });
+        } finally {
+            goToStep("done");
+            setSubmitting(false);
+        }
     }
 
     function trackSpreadsheetLinkClick(source: string) {
@@ -67,33 +74,47 @@ export function BackfillIntroModal({
     }
 
     function canSubmitSurvey() {
-        return problemOther.trim().length > 0;
+        return problem.trim().length > 0;
     }
 
-    function submitSurveyAnswers() {
-        void fetch("/api/onboarding/survey", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                role: roleOther.trim(),
-                problem: problemOther.trim(),
-            }),
-        }).catch(() => {
+    async function submitSurveyAnswers(skipped?: { skipped: boolean }) {
+        const body: Record<string, string> = {
+            role: role.trim(),
+            problem: problem.trim(),
+        };
+        if (skipped) {
+            body.role = "skipped";
+            body.problem = "skipped";
+        }
+        try {
+            const response = await fetch("/api/onboarding/survey", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                console.error("Failed to submit survey answers");
+            }
+        } catch {
             console.error("Failed to submit survey answers");
-        });
+        }
     }
 
     function handleQ1Next() {
-        if (!roleOther.trim()) return;
+        if (!role.trim()) return;
         goToStep("q2");
     }
 
-    function handleQ2Submit() {
+    async function handleQ2Submit() {
         if (!canSubmitSurvey()) return;
+        if (submitting) return;
         setSubmitting(true);
-        submitSurveyAnswers();
-        goToStep("done");
-        setSubmitting(false);
+        try {
+            await submitSurveyAnswers();
+        } finally {
+            goToStep("done");
+            setSubmitting(false);
+        }
     }
 
     return (
@@ -119,8 +140,8 @@ export function BackfillIntroModal({
                         </div>
                         <input
                             type="text"
-                            value={roleOther}
-                            onChange={(e) => setRoleOther(e.target.value)}
+                            value={role}
+                            onChange={(e) => setRole(e.target.value)}
                             placeholder="Founder, CEO, Finance Manager, Operations Manager ..."
                             className="w-full rounded-xl border border-indigo-200 px-4 py-3 text-base text-slate-900 placeholder:text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             maxLength={120}
@@ -129,6 +150,7 @@ export function BackfillIntroModal({
                             <button
                                 type="button"
                                 onClick={handleSkip}
+                                disabled={submitting}
                                 className="inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >
                                 Skip
@@ -136,7 +158,7 @@ export function BackfillIntroModal({
                             <button
                                 type="button"
                                 onClick={handleQ1Next}
-                                disabled={!roleOther.trim()}
+                                disabled={!role.trim()}
                                 className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Next
@@ -159,8 +181,8 @@ export function BackfillIntroModal({
                         </div>
                         <input
                             type="text"
-                            value={problemOther}
-                            onChange={(e) => setProblemOther(e.target.value)}
+                            value={problem}
+                            onChange={(e) => setProblem(e.target.value)}
                             placeholder="Sync Stripe payments to Google Sheets, track payouts, avoid manual CSV exports..."
                             className="w-full rounded-xl border border-indigo-200 px-4 py-3 text-base text-slate-900 placeholder:text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             maxLength={280}
@@ -169,6 +191,7 @@ export function BackfillIntroModal({
                             <button
                                 type="button"
                                 onClick={handleSkip}
+                                disabled={submitting}
                                 className="inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >
                                 Skip
@@ -187,15 +210,15 @@ export function BackfillIntroModal({
 
                 {surveyStep === "done" && (
                     <>
-                        <div className="w-full space-y-3">
-                            <p className="text-lg font-semibold uppercase tracking-[0.18em] text-indigo-600">
+                        <div className="w-full space-y-4">
+                            <p className="text-lg font-bold uppercase tracking-tight text-indigo-600">
                                 Onboarding complete!
                             </p>
                             <h2 className="text-lg font-semibold text-slate-900">
                                 Nice! We&apos;re loading your Stripe data into{" "}
                                 <span className="text-indigo-700">
                                     {nameLoading ? (
-                                        <div className="mt-1 h-6 w-64 animate-pulse rounded bg-slate-200" />
+                                        <span className="mt-1 inline-block h-6 w-64 animate-pulse rounded bg-slate-200" />
                                     ) : (
                                         <span className="flex items-center gap-1">
                                             <a
@@ -211,9 +234,10 @@ export function BackfillIntroModal({
                                             >
                                                 {workspaceName}
                                             </a>
-                                            <ExternalLinkIcon
-                                                className="h-4 w-4 cursor-pointer"
-                                                aria-hidden="true"
+                                            <button
+                                                type="button"
+                                                aria-label="Open spreadsheet in new tab"
+                                                className="inline-flex items-center justify-center rounded text-slate-600 hover:text-slate-800"
                                                 onClick={() => {
                                                     trackSpreadsheetLinkClick(
                                                         "backfill_intro_modal_icon",
@@ -221,9 +245,15 @@ export function BackfillIntroModal({
                                                     window.open(
                                                         sheetUrl,
                                                         "_blank",
+                                                        "noopener,noreferrer",
                                                     );
                                                 }}
-                                            />
+                                            >
+                                                <ExternalLinkIcon
+                                                    className="h-4 w-4"
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
                                         </span>
                                     )}
                                 </span>
@@ -234,7 +264,7 @@ export function BackfillIntroModal({
                             </p>
                         </div>
 
-                        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-between">
+                        <div className="w-full mt-5 flex flex-col gap-2 sm:flex-row sm:justify-between">
                             <a
                                 href={sheetUrl}
                                 target="_blank"
