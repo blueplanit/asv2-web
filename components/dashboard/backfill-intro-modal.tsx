@@ -5,7 +5,8 @@ import { useEffect, useState, useCallback } from "react";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/20/solid";
 import { ExternalLinkIcon } from "lucide-react";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
-import { type SurveyStep } from "@/lib/onboarding/survey-options";
+
+type SurveyStep = "q1" | "q2" | "done";
 
 type BackfillIntroModalProps = {
     open: boolean;
@@ -54,17 +55,6 @@ export function BackfillIntroModal({
         onOpenChange(false);
     }
 
-    async function handleSkip() {
-        if (submitting) return;
-        setSubmitting(true);
-        try {
-            await submitSurveyAnswers({ skipped: true });
-        } finally {
-            goToStep("done");
-            setSubmitting(false);
-        }
-    }
-
     function trackSpreadsheetLinkClick(source: string) {
         trackAmplitudeEvent("Spreadsheet Link Clicked", {
             source,
@@ -77,15 +67,17 @@ export function BackfillIntroModal({
         return problem.trim().length > 0;
     }
 
-    async function submitSurveyAnswers(skipped?: { skipped: boolean }) {
-        const body: Record<string, string> = {
-            role: role.trim(),
-            problem: problem.trim(),
-        };
-        if (skipped) {
-            body.role = "skipped";
-            body.problem = "skipped";
-        }
+    async function submitSurveyAnswers(skipped: boolean) {
+        const trimmedRole = role.trim();
+        const trimmedProblem = problem.trim();
+        // On skip, still capture anything the user already typed; only fall back
+        // to "skipped" for fields left blank (the API requires both non-empty).
+        const body = skipped
+            ? {
+                  role: trimmedRole || "skipped",
+                  problem: trimmedProblem || "skipped",
+              }
+            : { role: trimmedRole, problem: trimmedProblem };
         try {
             const response = await fetch("/api/onboarding/survey", {
                 method: "POST",
@@ -100,21 +92,26 @@ export function BackfillIntroModal({
         }
     }
 
+    // Send answers (fire-and-forget) and advance to the confirmation card.
+    async function finishSurvey(skipped: boolean) {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await submitSurveyAnswers(skipped);
+        } finally {
+            goToStep("done");
+            setSubmitting(false);
+        }
+    }
+
     function handleQ1Next() {
         if (!role.trim()) return;
         goToStep("q2");
     }
 
-    async function handleQ2Submit() {
+    function handleQ2Submit() {
         if (!canSubmitSurvey()) return;
-        if (submitting) return;
-        setSubmitting(true);
-        try {
-            await submitSurveyAnswers();
-        } finally {
-            goToStep("done");
-            setSubmitting(false);
-        }
+        void finishSurvey(false);
     }
 
     return (
@@ -149,7 +146,7 @@ export function BackfillIntroModal({
                         <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
                             <button
                                 type="button"
-                                onClick={handleSkip}
+                                onClick={() => void finishSurvey(true)}
                                 disabled={submitting}
                                 className="inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >
@@ -190,7 +187,7 @@ export function BackfillIntroModal({
                         <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
                             <button
                                 type="button"
-                                onClick={handleSkip}
+                                onClick={() => void finishSurvey(true)}
                                 disabled={submitting}
                                 className="inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >

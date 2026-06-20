@@ -61,6 +61,16 @@ trackAmplitudeEvent("Button Clicked", { source: "pricing_page" });
 
 Survey answers from the post-activation modal are appended to an internal Google Sheet. Credentials are read from **AWS Systems Manager Parameter Store** (dev and prod).
 
+### How it works
+
+After onboarding, the backfill intro modal (`components/dashboard/backfill-intro-modal.tsx`) shows a two-question, free-text survey before the confirmation card:
+
+1. **Q1** — "What best describes your role?" (free text, optional)
+2. **Q2** — "What problem are you trying to solve with SyncStaq?" (free text, required to submit)
+3. **Confirmation** — "We're loading your Stripe data…" with Open Sheet / Got it
+
+Both questions are skippable and jump to the confirmation card. **Skip** still captures anything the user already typed — e.g. entering a role then skipping Q2 records the real role and `"skipped"` for the problem; only fields left blank fall back to `"skipped"` (the API requires both fields non-empty). Submitting is fire-and-forget (a failed `POST` never blocks the UI) and posts to `POST /api/onboarding/survey`, which is session-gated, origin-checked (`lib/http/allowed-origins.ts`), rate-limited, and trims/length-caps the inputs before appending a row.
+
 ### SSM parameters
 
 | Parameter | Type | Value |

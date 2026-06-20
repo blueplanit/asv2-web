@@ -153,6 +153,10 @@ export function DashboardClient() {
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
     const [surveyStep, setSurveyStep] = useState<SurveyStep>("q1");
     const prevHasBackfillRunningRef = useRef(hasBackfillRunning);
+    // Dedicated edge tracker for modal auto-close, kept separate from the
+    // analytics ref above (which is reset every render and would consume the
+    // running→done signal before the auto-close effect could read it).
+    const prevRunningForAutoCloseRef = useRef(hasBackfillRunning);
     const hasSyncError = useMemo(
         () => syncConfigs.some((cfg) => cfg.syncStatus === "error"),
         [syncConfigs],
@@ -380,13 +384,24 @@ export function DashboardClient() {
         prevHasSyncErrorRef.current = hasSyncError;
     }, [hasSyncError, syncConfigs]);
 
-    // Keep intro modal in sync with backfill status — only auto-close on the confirmation card.
+    // Keep intro modal in sync with backfill status. Never auto-close while the
+    // user is still answering the survey (q1/q2). On the confirmation card,
+    // auto-close ONLY on a running→done transition that happens while they're on
+    // that card. If the backfill already finished before they reached the
+    // confirmation card, leave the modal open — they dismiss it manually via
+    // "Got it" or the backdrop.
     useEffect(() => {
         if (!backfillModalOpen) return;
-        if (surveyStep !== "done") return;
-        if (prevHasBackfillRunningRef.current && !hasBackfillRunning) {
+        if (surveyStep !== "done") {
+            // Track running state off the confirmation card so we can detect a
+            // genuine transition (not a steady "already done") once they arrive.
+            prevRunningForAutoCloseRef.current = hasBackfillRunning;
+            return;
+        }
+        if (prevRunningForAutoCloseRef.current && !hasBackfillRunning) {
             handleBackfillModalOpenChange(false);
         }
+        prevRunningForAutoCloseRef.current = hasBackfillRunning;
     }, [backfillModalOpen, hasBackfillRunning, surveyStep]);
 
     function handleBackfillModalOpenChange(open: boolean) {
