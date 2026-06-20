@@ -3,6 +3,7 @@ import { getServerSession, type Session } from "next-auth";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { appendSurveyResponseRow } from "@/lib/google/survey-responses-sheet";
+import { isAllowedOrigin } from "@/lib/http/allowed-origins";
 
 export const runtime = "nodejs";
 
@@ -13,16 +14,6 @@ const rateLimiter = new RateLimiterMemory({
     duration: 3600,
 });
 
-function safeOrigin(req: Request) {
-    const origin = req.headers.get("origin");
-    if (!origin) return true;
-    return (
-        origin === "https://syncstaq.com" ||
-        origin === "https://www.syncstaq.com" ||
-        origin === "http://localhost:3000"
-    );
-}
-
 function sanitizeText(value: unknown, maxLength: number): string {
     return String(value ?? "")
         .trim()
@@ -31,10 +22,9 @@ function sanitizeText(value: unknown, maxLength: number): string {
 
 export async function POST(req: Request) {
     try {
-        if (!safeOrigin(req)) {
+        if (!isAllowedOrigin(req.headers.get("origin"))) {
             return new NextResponse("Forbidden", { status: 403 });
         }
-
 
         const session = (await getServerSession(authOptions)) as Session;
         if (!session?.user?.email || !(session.user as { userId?: string }).userId) {
