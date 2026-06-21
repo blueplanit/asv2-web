@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { getSyncConfig } from "@/lib/dynamo/sync-config";
+import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
 
@@ -31,6 +33,16 @@ export async function POST(req: NextRequest) {
 
     if (!spreadsheetId) {
         return new NextResponse("Missing spreadsheetId", { status: 400 });
+    }
+
+    const syncConfig = await getSyncConfig(userId, spreadsheetId);
+    if (!syncConfig) {
+        return new NextResponse("Sync config not found", { status: 404 });
+    }
+
+    const guard = await assertConnectionsReadyForBackfill(userId, syncConfig);
+    if (!guard.ok) {
+        return new NextResponse(guard.message, { status: 409 });
     }
 
     try {

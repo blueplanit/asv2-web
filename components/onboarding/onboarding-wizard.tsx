@@ -486,9 +486,13 @@ export function OnboardingWizard() {
                 trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
                 setSubmitting(true);
                 const trialOk = await handleStartTrial();
-                const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
+                if (!trialOk) {
+                    setSubmitting(false);
+                    return;
+                }
 
-                if (!trialOk || !saveConfigOk) {
+                const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
+                if (!saveConfigOk) {
                     setSubmitting(false);
                     return;
                 }
