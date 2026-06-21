@@ -5,8 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/20/solid";
 import { ExternalLinkIcon } from "lucide-react";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
-
-type SurveyStep = "q1" | "q2" | "done";
+import { SurveyStep } from "./dashboard";
 
 type BackfillIntroModalProps = {
     open: boolean;

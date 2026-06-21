@@ -13,7 +13,8 @@ import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
-import type { SurveyStep } from "@/lib/onboarding/survey-options";
+
+export type SurveyStep = "q1" | "q2" | "done";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
