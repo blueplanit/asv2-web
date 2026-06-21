@@ -3,9 +3,9 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { CheckCircle2, Info, AlertTriangle, X } from "lucide-react";
+import { CheckCircle2, Info, AlertTriangle, X, AlertCircle } from "lucide-react";
 
-type SnackbarVariant = "success" | "info" | "warning";
+type SnackbarVariant = "success" | "info" | "warning" | "error";
 
 type SnackbarProps = {
     open: boolean;
@@ -30,6 +30,10 @@ const variantStyles: Record<SnackbarVariant, { icon: JSX.Element; bar: string }>
     warning: {
         icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
         bar: "bg-amber-500",
+    },
+    error: {
+        icon: <AlertCircle className="h-4 w-4 text-red-600" />,
+        bar: "bg-red-500",
     },
 };
 
@@ -76,9 +80,9 @@ export function Snackbar({
                 role="status"
                 aria-live="polite"
             >
-                <div className={clsx("mt-1 h-7 w-0.5 rounded-full snackbar-bar-pulse", bar)} />
+                <div className={clsx("mt-1 h-7 w-0.75 rounded-full snackbar-bar-pulse", bar)} />
                 <div className="mt-0.5 rounded-full bg-slate-100 p-1.5">{icon}</div>
-                <div className="flex-1 text-xs text-slate-700">
+                <div className="flex-1 text-md text-slate-700">
                     <p className="font-semibold text-slate-900">{title}</p>
                     {description && (
                         <p className="mt-1 text-[11px] text-slate-500">

@@ -159,15 +159,13 @@ export function OnboardingWizard() {
                 reason: stripeReason ?? null,
             });
 
-            const description =
-                stripeDesc ??
-                (stripeError === "access_denied"
+            const description = stripeError === "access_denied"
                     ? "Stripe connection was cancelled. Connect your Stripe account to continue."
-                    : "Stripe connection failed. Please try again.");
+                    : "Stripe connection failed. Please try again.";
 
             setSnackbarTitle("Stripe connection required");
             setSnackbarDescription(description);
-            setSnackbarOpen(true);
+            setSnackbarOpen(true); 
             router.replace("/onboarding?step=1", { scroll: false });
         }
 
@@ -583,7 +581,7 @@ export function OnboardingWizard() {
                                                 <h3 className="text-lg font-semibold text-slate-900">{currentStep.title}</h3>
                                                 <p className="text-sm text-slate-600">{currentStep.description}</p>
                                                 {currentStep.helper && (
-                                                    <p className="text-sm font-medium text-slate-700">
+                                                    <p className="text-sm font-medium text-slate-700 mt-4 mb-4 color-error">
                                                         {currentStep.helper}
                                                     </p>
                                                 )}
@@ -702,11 +700,11 @@ export function OnboardingWizard() {
                 <Snackbar
                     open={snackbarOpen}
                     onClose={() => setSnackbarOpen(false)}
-                    variant="warning"
+                    variant="error"
                     title={snackbarTitle}
                     description={snackbarDescription}
                     animated
-                    autoHideMs={10000}
+                    autoHideMs={0}
                 />
             </div>
         </main>
