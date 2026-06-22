@@ -585,7 +585,7 @@ export function OnboardingWizard() {
                                                 <h3 className="text-lg font-semibold text-slate-900">{currentStep.title}</h3>
                                                 <p className="text-sm text-slate-600">{currentStep.description}</p>
                                                 {currentStep.helper && (
-                                                    <p className="text-sm font-medium text-slate-700 mt-4 mb-4 color-error">
+                                                    <p className="text-sm font-medium text-slate-700 mt-4 mb-4">
                                                         {currentStep.helper}
                                                     </p>
                                                 )}
