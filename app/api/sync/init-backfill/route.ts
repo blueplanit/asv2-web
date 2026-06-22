@@ -21,9 +21,8 @@ if (!START_BACKFILL_FUNCTION_NAME) {
 
 export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
-
     if (!session?.user || !(session.user as any).userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
+        return new NextResponse("Your session expired. Sign in again to continue.", { status: 401 });
     }
 
     const userId = (session.user as any).userId as string;
@@ -32,12 +31,13 @@ export async function POST(req: NextRequest) {
     const spreadsheetId = body?.spreadsheetId as string | undefined;
 
     if (!spreadsheetId) {
-        return new NextResponse("Missing spreadsheetId", { status: 400 });
+        return new NextResponse("We couldn't find a spreadsheet to backfill. Please check your settings and try again.", { status: 400 });
     }
 
     const syncConfig = await getSyncConfig(userId, spreadsheetId);
     if (!syncConfig) {
-        return new NextResponse("Sync config not found", { status: 404 });
+        console.error("Sync config not found for user:", userId, spreadsheetId);
+        return new NextResponse("Something went wrong. Please try again.", { status: 404 });
     }
 
     const guard = await assertConnectionsReadyForBackfill(userId, syncConfig);
