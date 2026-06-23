@@ -60,7 +60,7 @@ const steps: Step[] = [
     },
     {
         id: 2,
-        title: "Grant Sheets access",
+        title: "Grant Sheets access & Create Google Sheet",
         description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive. We'll create your workspace sheet automatically after you connect.`,
         ctaLabel: "Connect Google Sheets",
     },
@@ -255,7 +255,7 @@ export function OnboardingWizard() {
             ? "Connect your Stripe account before continuing."
             : "Grant Google Sheets access before continuing.";
 
-        setSnackbarTitle("Complete the previous step");
+        setSnackbarTitle("Connect required accounts before continuing.");
         setSnackbarDescription(description);
         setSnackbarOpen(true);
         router.replace(`/onboarding?step=${allowedStep.id}`, { scroll: false });
@@ -362,7 +362,7 @@ export function OnboardingWizard() {
         }
     }
 
-    async function handleStartTrial() {
+    async function handleStartTrial(spreadsheetId?: string | null) {
         setError(null);
         try {
             const res = await fetch("/api/billing/start-trial", {
@@ -371,6 +371,7 @@ export function OnboardingWizard() {
                 body: JSON.stringify({
                     planId: "pro",
                     interval: "monthly",
+                    spreadsheetId,
                 }),
             });
 
@@ -485,7 +486,7 @@ export function OnboardingWizard() {
             try {
                 trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
                 setSubmitting(true);
-                const trialOk = await handleStartTrial();
+                const trialOk = await handleStartTrial(createdSpreadsheetId);
                 if (!trialOk) {
                     setSubmitting(false);
                     return;
@@ -529,8 +530,12 @@ export function OnboardingWizard() {
         }
     }
 
-    function handleBack() {
+    async function handleBack() {
         if (isFirstStep) return;
+        setError(null);
+        // Re-sync user state (connections + sync config) so going back reflects the
+        // latest server state, e.g. after a permissions error.
+        await refresh();
         goToStepByIndex(currentStepIndex - 1);
     }
 

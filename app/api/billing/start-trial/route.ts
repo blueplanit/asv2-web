@@ -16,12 +16,15 @@ import {
 import { ensureStripeCustomerId } from "@/lib/dynamo/ensure-stripe-customer";
 import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
 import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
+import { getSyncConfig } from "@/lib/dynamo/sync-config";
+import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
 
 type Body = {
     planId?: BillingPlanId;          // optional: default to "pro"
     interval?: BillingInterval;      // optional: default to "monthly"
+    spreadsheetId?: string;          // onboarding config to verify connections against
 };
 
 export async function POST(req: NextRequest) {
@@ -43,6 +46,20 @@ export async function POST(req: NextRequest) {
     const profile = await getUserProfile(userId);
     if (!profile) {
         return new NextResponse("User profile not found", { status: 400 });
+    }
+
+    // Verify the user has connected Stripe + Google before creating a trial, so a
+    // permissions failure doesn't leave a trial behind that blocks retries.
+    const spreadsheetId = body?.spreadsheetId;
+    if (spreadsheetId) {
+        const syncConfig = await getSyncConfig(userId, spreadsheetId);
+        if (!syncConfig) {
+            return new NextResponse("Sync config not found", { status: 404 });
+        }
+        const guard = await assertConnectionsReadyForBackfill(userId, syncConfig);
+        if (!guard.ok) {
+            return new NextResponse(guard.message, { status: 409 });
+        }
     }
 
     // Guard against duplicate trials / subscriptions
