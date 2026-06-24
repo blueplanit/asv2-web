@@ -92,14 +92,6 @@ handleStartTrial()
 
 ---
 
-## Deviations from the written plan
-
-1. **`apiErrorResponse`** uses positional arguments `(route, status, message, extras?)`, not an options object.
-2. **Flag renamed and broadened:** the plan's `trialUsedAt` (set only on trial) became `billingStartedAt`, set write-once on **any** first subscription (trial or paid). The trial guard drops `subscriptionCustomerId` and now uses `billingStartedAt || subscriptionId`.
-3. **`init-backfill`** adds sync-config and connection guards not in the original plan.
-
----
-
 ## Test plan
 
 - [ ] New user, no subscription: step 4 starts trial, backfill runs, `billingStartedAt` set on profile.
