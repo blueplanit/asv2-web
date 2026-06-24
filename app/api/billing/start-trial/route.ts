@@ -37,9 +37,13 @@ function alreadyActiveResponse(profile: UserProfile) {
     });
 }
 
-function hasUsedTrial(profile: UserProfile): boolean {
-    // Legacy fallback: check subscriptionId/customerId for users before trialUsedAt existed
-    return !!(profile.trialUsedAt || profile.subscriptionId || profile.subscriptionCustomerId);
+function hasBillingHistory(profile: UserProfile): boolean {
+    // billingStartedAt is stamped on the user's first subscription (trial or paid).
+    // subscriptionId is a legacy fallback for users created before billingStartedAt existed.
+    // Note: subscriptionCustomerId is intentionally NOT used — a Stripe customer can exist
+    // without any subscription (e.g. a trial setup that failed after customer creation),
+    // and must not block a legitimate first trial.
+    return !!(profile.billingStartedAt || profile.subscriptionId);
 }
 
 export async function POST(req: NextRequest) {
@@ -68,8 +72,8 @@ export async function POST(req: NextRequest) {
         return alreadyActiveResponse(profile);
     }
 
-    // Guard against duplicate trials (not currently entitled)
-    if (hasUsedTrial(profile)) {
+    // Guard against duplicate trials (not currently entitled but has prior billing history)
+    if (hasBillingHistory(profile)) {
         return apiErrorResponse(ROUTE, 403, TRIAL_ALREADY_USED_MESSAGE, { userId });
     }
 
@@ -124,7 +128,6 @@ export async function POST(req: NextRequest) {
                 interval,
                 currentPeriodEnd,
                 rawStatus: subscription.status, // "trialing" initially
-                recordTrialUsed: true,
             },
             previousSubscriptionId,
         );

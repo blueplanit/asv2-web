@@ -21,8 +21,6 @@ export type UpdateUserSubscriptionParams = {
     interval?: "monthly" | "yearly"; // normalized
     currentPeriodEnd?: number | null; // unix seconds from Stripe
     rawStatus?: string;             // Stripe Subscription.status
-    /** When true, stamps trialUsedAt (write-once) to enforce one trial per user. */
-    recordTrialUsed?: boolean;
 };
 
 export async function updateUserSubscriptionStatusToActive(
@@ -40,7 +38,6 @@ export async function updateUserSubscriptionStatusToActive(
         interval,
         currentPeriodEnd,
         rawStatus,
-        recordTrialUsed,
     } = params;
 
     const periodEndIso =
@@ -54,6 +51,8 @@ export async function updateUserSubscriptionStatusToActive(
         "subscriptionCustomerId = :custId",
         "ACTIVE_SUB_GSI_PK = :aspk",
         "updatedAt = :now",
+        // Write-once: records the user's first subscription (trial or paid) for trial-eligibility gating.
+        "billingStartedAt = if_not_exists(billingStartedAt, :now)",
     ];
     const values: Record<string, unknown> = {
         ":status": "active",
@@ -82,17 +81,8 @@ export async function updateUserSubscriptionStatusToActive(
         values[":raw"] = rawStatus;
     }
 
-    if (recordTrialUsed) {
-        updateParts.push("trialUsedAt = :trialUsedAt");
-        values[":trialUsedAt"] = now;
-    }
-
     // Base condition: item must exist
     let conditionExpr = "attribute_exists(pk) AND attribute_exists(sk)";
-
-    if (recordTrialUsed) {
-        conditionExpr += " AND attribute_not_exists(trialUsedAt)";
-    }
 
     // Optional concurrency guard on previous/current subscriptionId (prevent race conditions where out of order updates happen)
     if (expectedCurrentSubscriptionId !== undefined) {
