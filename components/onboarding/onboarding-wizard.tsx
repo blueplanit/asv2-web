@@ -308,14 +308,14 @@ export function OnboardingWizard() {
                 const message = await res.text();
                 setError(message || "Failed to start trial");
                 trackAmplitudeError("Start Trial Failed", message || "Failed to start trial");
-                return;
+                return false;
             }
 
             const data = await res.json();
             if (!data.ok) {
                 setError(data.error || "Failed to start trial");
                 trackAmplitudeError("Start Trial Failed", data.error || "Failed to start trial");
-                return;
+                return false;
             }
             trackAmplitudeEvent("Start Trial Succeeded", {
                 status: data.status ?? null,
@@ -397,13 +397,16 @@ export function OnboardingWizard() {
             try {
                 trackAmplitudeEvent("Onboarding Step 4 Started: Configure sync and start backfill");
                 setSubmitting(true);
-                // Start trial
+                // 1) Confirm entitlement (start trial or already active)
                 const trialOk = await handleStartTrial();
+                if (!trialOk) {
+                    setSubmitting(false);
+                    return;
+                }
 
-                // Save sync config selection
+                // 2) Save sync config selection (sets backfill_running)
                 const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
-
-                if (!trialOk || !saveConfigOk) {
+                if (!saveConfigOk) {
                     setSubmitting(false);
                     return;
                 }

@@ -16,18 +16,36 @@ import {
 import { ensureStripeCustomerId } from "@/lib/dynamo/ensure-stripe-customer";
 import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
 import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
+import { apiErrorResponse } from "@/lib/api/api-error-response";
+import type { UserProfile } from "@/lib/schemas/user-profile";
 
 export const runtime = "nodejs";
+
+const ROUTE = "POST /api/billing/start-trial";
+const TRIAL_ALREADY_USED_MESSAGE = "Trial already used. Please upgrade to a paid plan.";
 
 type Body = {
     planId?: BillingPlanId;          // optional: default to "pro"
     interval?: BillingInterval;      // optional: default to "monthly"
 };
 
+function alreadyActiveResponse(profile: UserProfile) {
+    return NextResponse.json({
+        ok: true,
+        alreadyActive: true,
+        status: profile.subscriptionRawStatus ?? "active",
+    });
+}
+
+function hasUsedTrial(profile: UserProfile): boolean {
+    // Legacy fallback: check subscriptionId/customerId for users before trialUsedAt existed
+    return !!(profile.trialUsedAt || profile.subscriptionId || profile.subscriptionCustomerId);
+}
+
 export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
+        return apiErrorResponse(ROUTE, 401, "Unauthorized");
     }
     const userId = (session.user as any).userId as string;
 
@@ -37,31 +55,27 @@ export async function POST(req: NextRequest) {
 
     const priceId = BILLING_PRICES[planId]?.[interval];
     if (!priceId) {
-        return new NextResponse("Unknown plan/interval", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "Unknown plan/interval", { userId });
     }
 
     const profile = await getUserProfile(userId);
     if (!profile) {
-        return new NextResponse("User profile not found", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "User profile not found", { userId });
     }
 
-    // Guard against duplicate trials / subscriptions
+    // Idempotent: already entitled — do not create a duplicate subscription
     if (isUserProfileEntitled(profile)) {
-        return new NextResponse("Subscription already active", { status: 409 });
+        return alreadyActiveResponse(profile);
     }
 
-    // console.log("user profile", profile);
-    // Check if they have already trialed
-    if (profile.subscriptionId || profile.subscriptionCustomerId) {
-        // If they have a customer ID, they've likely interacted with billing before.
-        // Enforces one trial per user.
-        return new NextResponse("Trial already used. Please upgrade to a paid plan.", { status: 403 });
+    // Guard against duplicate trials (not currently entitled)
+    if (hasUsedTrial(profile)) {
+        return apiErrorResponse(ROUTE, 403, TRIAL_ALREADY_USED_MESSAGE, { userId });
     }
 
     const stripeCustomerId = await ensureStripeCustomerId(userId);
-
     if (!stripeCustomerId) {
-        return new NextResponse("Failed to create/get Stripe customer", { status: 500 });
+        return apiErrorResponse(ROUTE, 500, "Failed to create/get Stripe customer", { userId });
     }
 
     const metadata = {
@@ -93,7 +107,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!subscription?.id) {
-        return new NextResponse("Failed to create subscription", { status: 500 });
+        return apiErrorResponse(ROUTE, 500, "Failed to create subscription", { userId });
     }
 
     const currentPeriodEnd = getSubscriptionPeriodEnd(subscription);
@@ -101,21 +115,39 @@ export async function POST(req: NextRequest) {
     const previousSubscriptionId = profile.subscriptionId ?? null;
 
     try {
-        await updateUserSubscriptionStatusToActive(userId, {
-            subscriptionId: subscription.id,
-            stripeCustomerId,
-            planId,
-            interval,
-            currentPeriodEnd,
-            rawStatus: subscription.status, // "trialing" initially
-        }, previousSubscriptionId);
+        await updateUserSubscriptionStatusToActive(
+            userId,
+            {
+                subscriptionId: subscription.id,
+                stripeCustomerId,
+                planId,
+                interval,
+                currentPeriodEnd,
+                rawStatus: subscription.status, // "trialing" initially
+                recordTrialUsed: true,
+            },
+            previousSubscriptionId,
+        );
     } catch (err: any) {
-        // If someone else raced and updated the profile, treat as "already trialing"
         if (err.name === "ConditionalCheckFailedException") {
-            return new NextResponse("Subscription already active", { status: 409 });
+            let latest: UserProfile | null | undefined;
+            try {
+                latest = await getUserProfile(userId);
+            } catch (profileReadError) {
+                return apiErrorResponse(
+                    ROUTE, 500,
+                    "We couldn't confirm your trial status. Please refresh and try again.",
+                    { userId, error: profileReadError },
+                );
+            }
+            if (latest && isUserProfileEntitled(latest)) {
+                return alreadyActiveResponse(latest);
+            }
+            return apiErrorResponse(ROUTE, 403, TRIAL_ALREADY_USED_MESSAGE, { userId });
         }
         throw err;
     }
+
     const trialEndsAtIso = trialEnd != null ? new Date(trialEnd * 1000).toISOString() : null;
 
     return NextResponse.json({
