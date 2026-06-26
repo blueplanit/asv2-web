@@ -101,3 +101,57 @@ handleStartTrial()
 - [ ] User whose customer was created but trial subscription creation failed (`subscriptionCustomerId` set, no `subscriptionId`/`billingStartedAt`): NOT blocked — can retry the trial.
 - [ ] Paid checkout (webhook + `confirmCheckoutSessionAndActivateUser`): `billingStartedAt` stamped once, not overwritten on later subscription updates.
 - [ ] Vercel logs show `[api-error]` entries for 4xx/5xx on onboarding routes (filter by path).
+
+---
+
+## Changes from PR Review: Preventing Multiple BackfillRuns
+
+### The vulnerability this PR introduced
+
+Fixing the Amy bug required making `start-trial` return `200` (not `409`) for already-entitled users, and reordering step 4 so trial success gates everything else. That fix was correct, but it removed an **accidental gate** that previously blocked duplicate backfills.
+
+Before the fix, already-entitled users got a `409` from `start-trial`, which caused `handleStartTrial` to return `undefined` (falsy). The old wizard then checked `if (!trialOk || ...)` and bailed out before `startInitialBackfill`. This meant step-4 resubmission (page reload, two tabs) was accidentally blocked even though the logic was wrong.
+
+After the fix, already-entitled users get `200 { alreadyActive: true }`, `handleStartTrial` returns `true`, and the wizard proceeds all the way to `startInitialBackfill`. With no other gate in place, two new bugs appeared:
+
+1. **Reload after completion** — a user who refreshes `/onboarding?step=4` after backfill already completed would re-trigger the entire step 4 sequence, including a new `startInitialBackfill` invoke.
+2. **Concurrent tabs** — two tabs open on step 4 clicking submit simultaneously would both invoke StartBackfill.
+
+Neither bug was reachable on main. Both were introduced by this PR.
+
+### Why `syncStatus: "backfill_running"` was not a reliable gate
+
+The wizard itself writes `syncStatus: "backfill_running"` before calling `startInitialBackfill`. The Lambda then checks `syncStatus === "backfill_running"` as a prerequisite. This is circular: the wizard sets the condition the Lambda checks, so any code path that reaches step 4 and calls `saveSyncConfigSelection` first will always satisfy the Lambda's guard.
+
+The real question the Lambda should ask is: "has an initial backfill already been created for this workspace?" — not "did the client flag that it is about to start one?"
+
+### Fix: two independent layers
+
+**Layer 1 — Web conditional write (CAS) on `syncStatus`**
+
+The `onboarding → backfill_running` transition in `update/sync-config` is now a DynamoDB conditional write that only succeeds if the current `syncStatus` is `"onboarding"`. DynamoDB serializes conditional writes, so:
+
+- Reload after completion: `syncStatus` is `"syncing"` → condition fails → `409` → wizard returns `"already_started"` sentinel → redirect to dashboard, no Lambda invoke.
+- Two concurrent tabs: both read `"onboarding"`, but only one write can succeed atomically; the other gets `409` → same redirect path.
+
+The optimistic write is preserved on the legitimate first run, so the dashboard's polling loop, "Backfilling" health badge, and intro modal all activate immediately as before.
+
+**Layer 2 — Deterministic backfill run ID (Lambda)**
+
+StartBackfill now uses `backfillRunId = "initial"` (a fixed string) instead of a random UUID for initial backfills. The DynamoDB key becomes `BACKFILL_RUN#<spreadsheetId>#initial`. The create condition is the existing `attribute_not_exists(pk) AND attribute_not_exists(sk)`.
+
+If any `BACKFILL_RUN#<spreadsheetId>#initial` item already exists (status `"running"`, `"success"`, or `"failed"`), the create fails with `ConditionalCheckFailedException`, which the Lambda catches and returns as an idempotent `200`. This covers all invoke paths — UI, direct CLI invoke, manual ops trigger — without relying on the web layer.
+
+This layer is independent of Layer 1 and serves as defense-in-depth for non-UI invocations.
+
+### Trade-off: failed initial backfill becomes a permanent tombstone
+
+With a deterministic ID, a run item in `status: "failed"` blocks any future initial backfill attempt the same way a `"running"` or `"success"` item does. A failed initial backfill cannot be retried from the UI (Layer 1 returns `409` because `syncStatus` is past `"onboarding"`) or from a direct Lambda invoke (Layer 2 returns `200` no-op because the run item exists).
+
+Ops remediation for a stuck user requires two manual steps in DynamoDB:
+1. Reset `SyncConfig.syncStatus` back to `"onboarding"`
+2. Delete `BACKFILL_RUN#<spreadsheetId>#initial`
+
+This is a deliberate choice. The alternative — allowing failed runs to be replaced (`allowReplaceFailed`) — introduces a window where stale SQS messages from the failed run can cross-contaminate the retry's progress counter (both share `backfillRunId: "initial"` and therefore the same `BackfillRunItem` row). The risk is small (only on partial SQS enqueue failure) but the failure mode is subtle, and the retry scenario is rare enough to handle via ops rather than automation.
+
+See `asv2-serverless/docs/adr/001-initial-backfill-idempotency.md` for the full decision record.

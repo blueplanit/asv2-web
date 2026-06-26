@@ -110,14 +110,29 @@ export async function POST(req: Request) {
     }
 
     // actually persist the config in db
-    const updated = await updateSyncConfig({
-        userId,
-        spreadsheetId: existing.spreadsheetId,
-        stripeDataSyncMap: stripeDataSyncMapToPersist,
-        historyMode,
-        historySinceDays,
-        syncStatus,
-    });
+    try {
+        const updated = await updateSyncConfig({
+            userId,
+            spreadsheetId: existing.spreadsheetId,
+            stripeDataSyncMap: stripeDataSyncMapToPersist,
+            historyMode,
+            historySinceDays,
+            syncStatus,
+            ...(syncStatus === "backfill_running"
+                ? { expectedCurrentStatus: "onboarding" as const }
+                : {}),
+        });
 
-    return NextResponse.json({ syncConfig: updated });
+        return NextResponse.json({ syncConfig: updated });
+    } catch (err: unknown) {
+        if (
+            err &&
+            typeof err === "object" &&
+            "name" in err &&
+            err.name === "ConditionalCheckFailedException"
+        ) {
+            return apiErrorResponse(ROUTE, 409, "Backfill already started", { userId });
+        }
+        throw err;
+    }
 }

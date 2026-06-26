@@ -128,6 +128,12 @@ export function OnboardingWizard() {
 
     // If there is no onboarding config but there *is* an active config,
     // the user is past onboarding → send them to dashboard.
+    // The step-index guard keeps this off the last step: step 4's own flow
+    // flips the config out of "onboarding" (via refresh()) before the backfill
+    // is kicked off, so auto-redirecting there would race the backfill kickoff
+    // and strip the post-completion redirect. A reload on step 4 after
+    // completion is handled server-side instead (the sync-config conditional write returns
+    // 409 → "already_started" → redirect).
     useEffect(() => {
         if (!onboardingConfig && hasAnyActiveConfig && currentStepIndex < steps.length - 1) {
             router.replace("/dashboard");
@@ -257,7 +263,9 @@ export function OnboardingWizard() {
         }
     }
 
-    async function saveSyncConfigSelection(spreadsheetId?: string | null) {
+    async function saveSyncConfigSelection(
+        spreadsheetId?: string | null,
+    ): Promise<true | false | "already_started"> {
         setError(null);
         try {
             const res = await fetch("/api/update/sync-config", {
@@ -272,6 +280,9 @@ export function OnboardingWizard() {
                     userState: user,
                 }),
             });
+            if (res.status === 409) {
+                return "already_started";
+            }
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to save sync settings");
@@ -284,7 +295,6 @@ export function OnboardingWizard() {
             }
 
             await refresh();
-            // initSheetTabState(spreadsheetId, selectedDataSyncEntries);
             return true;
         } catch (e) {
             setError(`Failed to save sync settings: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
@@ -405,8 +415,13 @@ export function OnboardingWizard() {
                 }
 
                 // 2) Save sync config selection (sets backfill_running)
-                const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
-                if (!saveConfigOk) {
+                const saveConfigResult = await saveSyncConfigSelection(createdSpreadsheetId);
+                if (saveConfigResult === "already_started") {
+                    setSubmitting(false);
+                    router.replace("/dashboard");
+                    return;
+                }
+                if (!saveConfigResult) {
                     setSubmitting(false);
                     return;
                 }
