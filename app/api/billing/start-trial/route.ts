@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
         },
         collection_method: "charge_automatically",
         metadata,
-    });
+    }, { idempotencyKey: `trial-${userId}` });
 
     if (!subscription?.id) {
         return apiErrorResponse(ROUTE, 500, "Failed to create subscription", { userId });

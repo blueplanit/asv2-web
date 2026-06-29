@@ -327,12 +327,16 @@ export function OnboardingWizard() {
                 trackAmplitudeError("Start Trial Failed", data.error || "Failed to start trial");
                 return false;
             }
+            if (data.alreadyActive) {
+                trackAmplitudeEvent("Onboarding Entitlement Confirmed", {
+                    status: data.status ?? null,
+                });
+                return true;
+            }
             trackAmplitudeEvent("Start Trial Succeeded", {
                 status: data.status ?? null,
                 trial_ends_at: data.trialEndsAt ?? null,
             });
-            // Optional: show trial end date from data.trialEndsAt
-            // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
             trackAmplitudeError("Start Trial Failed", e instanceof Error ? e.message : "Failed to start trial");
