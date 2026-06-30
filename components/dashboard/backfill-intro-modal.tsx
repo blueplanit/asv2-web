@@ -138,26 +138,35 @@ export function BackfillIntroModal({
                             type="text"
                             value={role}
                             onChange={(e) => setRole(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleQ1Next();
+                                }
+                            }}
                             placeholder="Founder, CEO, Finance Manager, Operations Manager ..."
                             className="w-full rounded-xl border border-indigo-200 px-4 py-3 text-base text-slate-900 placeholder:text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             maxLength={120}
                         />
                         <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-                            <button
-                                type="button"
-                                onClick={() => void finishSurvey(true)}
-                                disabled={submitting}
-                                className="inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
-                            >
-                                Skip
-                            </button>
+                            {/* Next is first in the DOM so it follows the input
+                                in tab order; order utilities keep it visually on
+                                the right with Skip on the left. */}
                             <button
                                 type="button"
                                 onClick={handleQ1Next}
                                 disabled={!role.trim()}
-                                className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="order-2 inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Next
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void finishSurvey(true)}
+                                disabled={submitting}
+                                className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
+                            >
+                                Skip
                             </button>
                         </div>
                     </div>
@@ -177,28 +186,48 @@ export function BackfillIntroModal({
                         </div>
                         <input
                             type="text"
+                            autoFocus
                             value={problem}
                             onChange={(e) => setProblem(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleQ2Submit();
+                                }
+                            }}
                             placeholder="Sync Stripe payments to Google Sheets, track payouts, avoid manual CSV exports..."
                             className="w-full rounded-xl border border-indigo-200 px-4 py-3 text-base text-slate-900 placeholder:text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             maxLength={280}
                         />
                         <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                            {/* The submit group is first in the DOM so Continue
+                                follows the input in tab order; order utilities
+                                keep Skip visually on the left. */}
+                            <div className="order-2 flex items-center gap-3 sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={handleQ2Submit}
+                                    disabled={!canSubmitSurvey() || submitting}
+                                    className="order-2 inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Continue
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => goToStep("q1")}
+                                    disabled={submitting}
+                                    className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Back
+                                </button>
+                            </div>
                             <button
                                 type="button"
                                 onClick={() => void finishSurvey(true)}
                                 disabled={submitting}
-                                className="inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
+                                className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >
                                 Skip
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleQ2Submit}
-                                disabled={!canSubmitSurvey() || submitting}
-                                className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                Continue
                             </button>
                         </div>
                     </div>
