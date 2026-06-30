@@ -17,8 +17,16 @@ type SiteHeaderProps = {
     appNavItems?: NavItem[];
 };
 
-const baseNavItems = [
+const publicNavItems = [
+    { href: "/how-it-works", label: "How it works" },
+    { href: "/sample-sheet", label: "Sample Sheet" },
+    { href: "/pricing", label: "Pricing" },
+];
+
+const appBaseNavItems = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/how-it-works", label: "How it works" },
+    { href: "/sample-sheet", label: "Sample Sheet" },
     { href: "/pricing", label: "Pricing" },
     { href: "/blog", label: "Blog" },
 ];
@@ -74,7 +82,10 @@ export function SiteHeader(props: SiteHeaderProps) {
     }, [mobileNavOpen]);
 
     const isPublic = variant === "public";
-    const navItems = baseNavItems.concat(appNavItems);
+    const basePublicNavItems = isAuthed
+        ? [{ href: "/dashboard", label: "Dashboard" }, ...publicNavItems]
+        : publicNavItems;
+    const navItems = (isPublic ? basePublicNavItems : appBaseNavItems).concat(appNavItems);
 
     const userMenu = (
         <div className="relative ml-2" ref={menuRef}>
@@ -98,6 +109,14 @@ export function SiteHeader(props: SiteHeaderProps) {
 
             {menuOpen ? (
                 <div className="absolute right-0 mt-2 flex w-40 flex-col items-start gap-1 rounded-xl border border-slate-200 bg-white py-1 text-xs text-slate-700 shadow-lg">
+                    <Link
+                        href="/dashboard"
+                        onClick={() => setMenuOpen(false)}
+                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50"
+                    >
+                        <User className="h-4 w-4" />
+                        Dashboard
+                    </Link>
                     <button
                         type="button"
                         onClick={async () => {
