@@ -96,7 +96,7 @@ export default async function BlogPostPage({
             </header>
 
             {bodyDoc && (
-                <div className="mt-8 text-sm leading-relaxed">
+                <div className="mt-8 text-base leading-8">
                     {documentToReactComponents(bodyDoc, contentfulRichTextOptions)}
                 </div>
             )}

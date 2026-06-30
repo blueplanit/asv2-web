@@ -4,6 +4,7 @@ import { APP_NAME } from "@/lib/constants";
 import { Brand } from "@/components/brand/brand";
 const productLinks = [
     // { label: "Overview", href: "#" },
+    { label: "Dashboard", href: "/dashboard" },
     { label: "Pricing", href: "/pricing" },
     // { label: "Changelog", href: "#" },
     // { label: "Status", href: "#" },
@@ -16,6 +17,8 @@ const resourcesLinks = [
     { label: "Stripe to Sheets", href: "/stripe-google-sheets-integration" },
     { label: "CSV Export Alternative", href: "/stripe-csv-export-alternative" },
     { label: "Blog", href: "/blog" },
+    { label: "Sample Sheet", href: "/sample-sheet" },
+    { label: "How it works", href: "/how-it-works" },
 ];
 
 const companyLinks = [
