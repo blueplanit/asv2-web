@@ -14,6 +14,8 @@ const resourcesLinks = [
     // { label: "Docs", href: "#" },
     // { label: "API Reference", href: "#" },
     // { label: "Guides", href: "#" },
+    { label: "Stripe to Sheets", href: "/stripe-google-sheets-integration" },
+    { label: "CSV Export Alternative", href: "/stripe-csv-export-alternative" },
     { label: "Blog", href: "/blog" },
     { label: "Sample Sheet", href: "/sample-sheet" },
     { label: "How it works", href: "/how-it-works" },
