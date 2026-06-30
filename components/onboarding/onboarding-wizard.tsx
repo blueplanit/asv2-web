@@ -60,7 +60,7 @@ const steps: Step[] = [
     },
     {
         id: 2,
-        title: "Grant Sheets access",
+        title: "Grant Sheets access and create new sheet",
         description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive. We'll create your workspace sheet automatically after you connect.`,
         ctaLabel: "Connect Google Sheets",
     },
@@ -122,6 +122,12 @@ export function OnboardingWizard() {
 
     // If there is no onboarding config but there *is* an active config,
     // the user is past onboarding → send them to dashboard.
+    // The step-index guard keeps this off the last step: step 4's own flow
+    // flips the config out of "onboarding" (via refresh()) before the backfill
+    // is kicked off, so auto-redirecting there would race the backfill kickoff
+    // and strip the post-completion redirect. A reload on step 4 after
+    // completion is handled server-side instead (the sync-config conditional write returns
+    // 409 → "already_started" → redirect).
     useEffect(() => {
         if (!onboardingConfig && hasAnyActiveConfig && currentStepIndex < steps.length - 1) {
             router.replace("/dashboard");
@@ -177,7 +183,7 @@ export function OnboardingWizard() {
     const serverSpreadsheetId = onboardingConfig?.spreadsheetId ?? null;
     const [createdSpreadsheetId, setCreatedSpreadsheetId] = useState<string | null>(serverSpreadsheetId);
 
-    // If user refreshes on step 4 and onboardingConfig now has a spreadsheetId,
+    // If user refreshes on step 3 and onboardingConfig now has a spreadsheetId,
     // hydrate local state from server.
     useEffect(() => {
         if (onboardingConfig?.spreadsheetId && !createdSpreadsheetId) {
@@ -261,7 +267,9 @@ export function OnboardingWizard() {
         }
     }
 
-    async function saveSyncConfigSelection(spreadsheetId?: string | null) {
+    async function saveSyncConfigSelection(
+        spreadsheetId?: string | null,
+    ): Promise<true | false | "already_started"> {
         setError(null);
         try {
             const res = await fetch("/api/update/sync-config", {
@@ -276,6 +284,9 @@ export function OnboardingWizard() {
                     userState: user,
                 }),
             });
+            if (res.status === 409) {
+                return "already_started";
+            }
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to save sync settings");
@@ -288,7 +299,6 @@ export function OnboardingWizard() {
             }
 
             await refresh();
-            // initSheetTabState(spreadsheetId, selectedDataSyncEntries);
             return true;
         } catch (e) {
             setError(`Failed to save sync settings: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
@@ -312,21 +322,25 @@ export function OnboardingWizard() {
                 const message = await res.text();
                 setError(message || "Failed to start trial");
                 trackAmplitudeError("Start Trial Failed", message || "Failed to start trial");
-                return;
+                return false;
             }
 
             const data = await res.json();
             if (!data.ok) {
                 setError(data.error || "Failed to start trial");
                 trackAmplitudeError("Start Trial Failed", data.error || "Failed to start trial");
-                return;
+                return false;
+            }
+            if (data.alreadyActive) {
+                trackAmplitudeEvent("Onboarding Entitlement Confirmed", {
+                    status: data.status ?? null,
+                });
+                return true;
             }
             trackAmplitudeEvent("Start Trial Succeeded", {
                 status: data.status ?? null,
                 trial_ends_at: data.trialEndsAt ?? null,
             });
-            // Optional: show trial end date from data.trialEndsAt
-            // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
             trackAmplitudeError("Start Trial Failed", e instanceof Error ? e.message : "Failed to start trial");
@@ -402,14 +416,27 @@ export function OnboardingWizard() {
             try {
                 trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
                 setSubmitting(true);
-                const trialOk = await handleStartTrial();
-                const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
 
-                if (!trialOk || !saveConfigOk) {
+                // 1) Confirm entitlement (start trial or already active)
+                const trialOk = await handleStartTrial();
+                if (!trialOk) {
                     setSubmitting(false);
                     return;
                 }
 
+                // 2) Save sync config selection (sets backfill_running)
+                const saveConfigResult = await saveSyncConfigSelection(createdSpreadsheetId);
+                if (saveConfigResult === "already_started") {
+                    setSubmitting(false);
+                    router.replace("/dashboard");
+                    return;
+                }
+                if (!saveConfigResult) {
+                    setSubmitting(false);
+                    return;
+                }
+
+                // 3) Trigger initial backfill Lambda
                 const backfillOk = await startInitialBackfill(createdSpreadsheetId);
 
                 if (!backfillOk) {
@@ -576,7 +603,7 @@ export function OnboardingWizard() {
                                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
                                                 Permissions
                                             </span>
-                                            We will not access, edit, or delete any existing files you own. We only have access to the files created within our app.
+                                            We will not access, edit, or delete any existing files you own. We only have access to the files created within SyncStaq.
                                         </div>
                                     </div>
                                 )}

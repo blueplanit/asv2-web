@@ -37,7 +37,7 @@ export async function updateUserSubscriptionStatusToActive(
         planId,
         interval,
         currentPeriodEnd,
-        rawStatus
+        rawStatus,
     } = params;
 
     const periodEndIso =
@@ -51,6 +51,8 @@ export async function updateUserSubscriptionStatusToActive(
         "subscriptionCustomerId = :custId",
         "ACTIVE_SUB_GSI_PK = :aspk",
         "updatedAt = :now",
+        // Write-once: records the user's first subscription (trial or paid) for trial-eligibility gating.
+        "billingStartedAt = if_not_exists(billingStartedAt, :now)",
     ];
     const values: Record<string, unknown> = {
         ":status": "active",
