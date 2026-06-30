@@ -48,7 +48,7 @@ export default function HowItWorksPage() {
                         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                             <Link
                                 href="/pricing"
-                                className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                                className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                             >
                                 Start 14-day free trial
                             </Link>
