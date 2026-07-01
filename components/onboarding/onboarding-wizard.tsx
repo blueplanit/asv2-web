@@ -145,7 +145,7 @@ export function OnboardingWizard() {
     // is kicked off, so auto-redirecting there would race the backfill kickoff
     // and strip the post-completion redirect. A reload on step 4 after
     // completion is handled server-side instead (the sync-config conditional write returns
-    // 409 → "already_started" → redirect).
+    // 409 with code "backfill_already_started" → "already_started" → redirect).
     useEffect(() => {
         if (!onboardingConfig && hasAnyActiveConfig && currentStepIndex < steps.length - 1) {
             router.replace("/dashboard");
@@ -350,10 +350,18 @@ export function OnboardingWizard() {
                     userState: user,
                 }),
             });
-            if (res.status === 409) {
-                return "already_started";
-            }
             if (!res.ok) {
+                // 409 is overloaded: a benign "backfill already started" (resume
+                // → dashboard) vs a connection guard failure (surface inline).
+                // Disambiguate via the machine-readable code in the body.
+                if (res.status === 409) {
+                    const data = await res.json().catch(() => null);
+                    if (data?.code === "backfill_already_started") {
+                        return "already_started";
+                    }
+                    setError(data?.message || "Failed to save sync settings");
+                    return false;
+                }
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to save sync settings");
                 return false;
@@ -478,9 +486,16 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 3) {
-            if (!hasStripe || !hasGoogle) {
+            const fresh = await refresh();
+            const freshHasStripe = fresh
+                ? fresh.stripeConnections.some((c) => c.status === "connected")
+                : hasStripe;
+            const freshHasGoogle = fresh
+                ? fresh.googleConnections.some((c) => c.status === "connected")
+                : hasGoogle;
+            if (!freshHasStripe || !freshHasGoogle) {
                 setError(
-                    !hasStripe
+                    !freshHasStripe
                         ? "Connect a Stripe account before starting sync."
                         : "Grant Google Sheets access before starting sync.",
                 );
@@ -502,7 +517,7 @@ export function OnboardingWizard() {
                 setSubmitting(true);
 
                 // 1) Confirm entitlement (start trial or already active)
-                const trialOk = await handleStartTrial();
+                const trialOk = await handleStartTrial(createdSpreadsheetId);
                 if (!trialOk) {
                     setSubmitting(false);
                     return;

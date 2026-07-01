@@ -6,7 +6,7 @@
 
 ## Summary
 
-Fixes a bug where a user could complete onboarding without ever connecting a Stripe account. Three layers of enforcement are added: client-side step gating in the onboarding wizard, server-side connection guards on the backfill and trial endpoints, and corrected OAuth callback redirects so users always land on the right step when a connection fails or is cancelled.
+Fixes a bug where a user could complete onboarding without ever connecting a Stripe account. Enforcement is layered across client and server: step gating in the onboarding wizard (including a fresh state re-check before starting backfill), server-side connection guards on trial/backfill endpoints, and disambiguated `409` conflict responses so onboarding handles "already started" vs "missing connections" correctly.
 
 ---
 
@@ -22,6 +22,7 @@ The wizard previously derived its visible step purely from the `?step=` URL para
 - Computes `maxAllowedIndex`: step 1 max until Stripe is connected, step 2 max until Google is connected, step 3 once both are connected.
 - Clamps the URL `?step=` param to `maxAllowedIndex` on every render. If the URL asks for a step beyond what connections allow, redirects to the correct step with a snackbar explanation.
 - Guards `handlePrimaryAction`: steps 1 and 2 advance via `goToStepByIndex` when the connection is already satisfied (no redundant OAuth re-run); step 3 hard-blocks with an inline error if either connection is missing.
+- On step 3, calls `await refresh()` and re-checks `freshHasStripe` / `freshHasGoogle` before trial/config/backfill calls, so stale in-memory user state doesn't incorrectly allow progression.
 - Shows green "Connected" badges on steps 1 (Stripe business name) and 2 (Google email), and changes the CTA to "Continue" when a step is already satisfied.
 - Adds `snackbarTitle` state so each snackbar scenario (Stripe error, Google error, account mismatch, step skip) shows a distinct title.
 - `handleBack` is now `async` and calls `refresh()` before navigating back, so connection and sync-config state reflect the latest server state after a permissions error.
@@ -59,7 +60,7 @@ When a Stripe reconnect (initiated from the account page) failed or was cancelle
 The client-side wizard guard can be bypassed by a direct API call or a stale browser tab. These endpoints did not verify connection state before mutating the sync config, firing the backfill Lambda, or creating a trial subscription.
 
 - Adds `assertConnectionsReadyForBackfill(userId, config)` in `lib/app-state/connection-guards.ts`. Checks: (1) a `StripeConnection` with `status === "connected"` whose `stripeAccountId` matches the config; (2) at least one `GoogleConnection` with `status === "connected"`. Returns a typed `ConnectionGuardResult`.
-- In `/api/update/sync-config`: runs the guard when `syncStatus === "backfill_running"`, returning `409` via `apiErrorResponse` on failure.
+- In `/api/update/sync-config`: runs the guard when `syncStatus === "backfill_running"`, returning a `409` JSON conflict response (`{ code: "connections_missing", message }`) on failure.
 - In `/api/sync/init-backfill`: loads the sync config (previously not loaded at all), runs the guard, returns `409` before invoking the Lambda on failure. Also returns `404` ("Something went wrong. Please try again.") when the sync config is missing, and rewords `401`/`400` responses with user-facing copy.
 - In `/api/billing/start-trial`: accepts an optional `spreadsheetId` body field, loads the sync config, and runs the guard before creating a trial — returning `404` if no config and `409` if connections aren't ready. Prevents a trial from being created (and left behind) before Stripe/Google are connected.
 
@@ -71,6 +72,20 @@ The client-side wizard guard can be bypassed by a direct API call or a stale bro
 
 - Short-circuits after `trialOk` with an early return before calling `saveSyncConfigSelection`.
 - Passes `spreadsheetId` into `handleStartTrial` so the server-side trial endpoint can verify connections before creating a subscription.
+
+### Bug: `/api/update/sync-config` 409 collisions were interpreted as "already started"
+
+`app/api/update/sync-config/route.ts`, `components/onboarding/onboarding-wizard.tsx`
+
+`/api/update/sync-config` now has two legitimate `409` cases: (1) `ConditionalCheckFailedException` for "Backfill already started", and (2) connection guard failure while transitioning to `backfill_running`. The onboarding client previously treated any `409` as `"already_started"` and redirected to dashboard, which could swallow real connection errors.
+
+- Adds `conflictResponse` in the route and returns machine-readable codes in `409` JSON bodies:
+  - `code: "backfill_already_started"`
+  - `code: "connections_missing"`
+- Updates onboarding `saveSyncConfigSelection` to parse the `409` JSON body and branch by `code`:
+  - `"backfill_already_started"` → return `"already_started"` (existing dashboard redirect behavior)
+  - `"connections_missing"` → surface `message` via inline `setError` and stop
+- Keeps non-409 failures on plain-text fallback handling.
 
 ### Snackbar: add `error` variant
 
@@ -84,11 +99,12 @@ Adds an `error` variant (red `AlertCircle` icon, red bar) to cover use cases tha
 
 | File | Change |
 |------|--------|
-| `components/onboarding/onboarding-wizard.tsx` | Client step guard, connected badges, snackbar improvements, trial ordering fix, `handleBack` refresh |
+| `components/onboarding/onboarding-wizard.tsx` | Client step guard, fresh step-3 re-check via `refresh()`, `spreadsheetId` passed into trial call, 409-code parsing for sync-config conflicts |
+| `components/user-state-provider.tsx` | `refresh()` now returns `Promise<UserState \| null>` so callers can validate against fresh server state |
 | `app/api/stripe/callback/route.ts` | Preserve signed `returnTo` on error; onboarding paths still get step 1 |
 | `app/api/google/callback/route.ts` | Split success/error redirect targets; all error paths return to step 2 |
 | `app/api/sync/init-backfill/route.ts` | Load config, run connection guard, user-facing error copy |
-| `app/api/update/sync-config/route.ts` | Run connection guard on `backfill_running` transition via `apiErrorResponse` |
+| `app/api/update/sync-config/route.ts` | Run connection guard on `backfill_running` transition and return disambiguated `409` conflict codes (`connections_missing` vs `backfill_already_started`) |
 | `app/api/billing/start-trial/route.ts` | Run connection guard before creating trial when `spreadsheetId` provided |
 | `lib/app-state/connection-guards.ts` | New — `assertConnectionsReadyForBackfill` shared helper |
 | `components/dashboard/dashboard.tsx` | Handle `stripeError` param; pass error state to `AccountPageClient` |
@@ -107,3 +123,5 @@ Adds an `error` variant (red `AlertCircle` icon, red bar) to cover use cases tha
 - [ ] Start backfill via API without connected Stripe or Google → `409` from both `/api/update/sync-config` and `/api/sync/init-backfill`
 - [ ] Start trial via `/api/billing/start-trial` with `spreadsheetId` but without connected Stripe or Google → `409` and no subscription created
 - [ ] Simulate trial failure on step 3 → config does not transition to `backfill_running`
+- [ ] Force `/api/update/sync-config` connection-guard failure (`409`, `code: "connections_missing"`) during onboarding step 3 → inline error is shown and user is not redirected to dashboard
+- [ ] Force `/api/update/sync-config` conditional-write conflict (`409`, `code: "backfill_already_started"`) during onboarding step 3 → wizard follows `"already_started"` path and redirects to `/dashboard`

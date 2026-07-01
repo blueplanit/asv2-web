@@ -22,6 +22,23 @@ export const runtime = "nodejs";
 
 const ROUTE = "POST /api/update/sync-config";
 
+/**
+ * 409 conflicts from this route have two distinct meanings; the client must be
+ * able to tell them apart (a benign "already started" redirects to the
+ * dashboard, while a connection failure must surface an inline error). Return a
+ * machine-readable `code` alongside the human-readable message.
+ */
+type SyncConfigConflictCode = "backfill_already_started" | "connections_missing";
+
+function conflictResponse(
+    code: SyncConfigConflictCode,
+    message: string,
+    userId: string,
+): NextResponse {
+    console.warn("[api-error]", { route: ROUTE, status: 409, code, message, userId });
+    return NextResponse.json({ code, message }, { status: 409 });
+}
+
 type Body = {
     selectedDataSyncEntries?: string[];
     historyMode?: "full" | "since";
@@ -86,7 +103,7 @@ export async function POST(req: Request) {
     if (syncStatus === "backfill_running") {
         const guard = await assertConnectionsReadyForBackfill(userId, existing);
         if (!guard.ok) {
-            return apiErrorResponse(ROUTE, 409, guard.message, { userId });
+            return conflictResponse("connections_missing", guard.message, userId);
         }
     }
 
@@ -139,7 +156,7 @@ export async function POST(req: Request) {
             "name" in err &&
             err.name === "ConditionalCheckFailedException"
         ) {
-            return apiErrorResponse(ROUTE, 409, "Backfill already started", { userId });
+            return conflictResponse("backfill_already_started", "Backfill already started", userId);
         }
         throw err;
     }
