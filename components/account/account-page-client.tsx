@@ -40,9 +40,16 @@ function googleStatusCopy(conn: GoogleConnection) {
 type AccountPageClientProps = {
     scopeError?: boolean;
     onDismissScopeError?: () => void;
+    stripeConnectError?: boolean;
+    onDismissStripeConnectError?: () => void;
 };
 
-export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPageClientProps) {
+export function AccountPageClient({
+    scopeError,
+    onDismissScopeError,
+    stripeConnectError,
+    onDismissStripeConnectError,
+}: AccountPageClientProps) {
     const { user } = useUserState();
     const [portalLoading, setPortalLoading] = useState(false);
 
@@ -220,6 +227,25 @@ export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPa
                         </p>
                         {primaryStripe ? (
                             <div className="mt-1 space-y-2">
+                                {stripeConnectError && (
+                                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                                        <div className="flex-1">
+                                            <p className="text-xs font-semibold text-amber-900">Stripe connection failed</p>
+                                            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700">
+                                                The Stripe connection was cancelled or could not be completed. Please try reconnecting below.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={onDismissStripeConnectError}
+                                            className="cursor-pointer mt-0.5 flex-shrink-0 rounded-full p-0.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700"
+                                            aria-label="Dismiss"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="space-y-1">
                                     <p className="text-sm font-semibold text-slate-900">
                                         {primaryStripe.businessName || "Connected Stripe account"}
@@ -239,7 +265,7 @@ export function AccountPageClient({ scopeError, onDismissScopeError }: AccountPa
                                     ) : null}
                                 </div>
 
-                                {stripeNeedsReconnect ? (
+                                {(stripeNeedsReconnect || stripeConnectError) ? (
                                     <div className="flex flex-wrap gap-2">
                                         <a
                                             href="/api/stripe/connect?returnTo=/dashboard"

@@ -16,6 +16,7 @@ import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google/google-stripe-
 import { SyncStatus } from "@/lib/types/sync-status";
 import { UserState } from "@/lib/app-state/user-state";
 import { apiErrorResponse } from "@/lib/api/api-error-response";
+import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
 
@@ -82,7 +83,14 @@ export async function POST(req: Request) {
             : undefined;
     const syncStatus = body?.syncStatus;
 
-    // Only compute & touch Sheets if we're actually changing the selection or working-sheet config.
+    if (syncStatus === "backfill_running") {
+        const guard = await assertConnectionsReadyForBackfill(userId, existing);
+        if (!guard.ok) {
+            return apiErrorResponse(ROUTE, 409, guard.message, { userId });
+        }
+    }
+
+    // Only compute & touch Sheets if we’re actually changing the selection or working-sheet config.
     let stripeDataSyncMapToPersist = undefined as typeof existing.stripeDataSyncMap | undefined;
 
     const hasStripeSelectionChange = !!selectedDataSyncEntries;
