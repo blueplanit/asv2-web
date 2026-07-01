@@ -15,9 +15,12 @@ import {
 import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google/google-stripe-data-sync-map";
 import { SyncStatus } from "@/lib/types/sync-status";
 import { UserState } from "@/lib/app-state/user-state";
+import { apiErrorResponse } from "@/lib/api/api-error-response";
 import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
+
+const ROUTE = "POST /api/update/sync-config";
 
 type Body = {
     selectedDataSyncEntries?: string[];
@@ -33,12 +36,12 @@ type Body = {
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
+        return apiErrorResponse(ROUTE, 401, "Unauthorized");
     }
     const userId = (session.user as any).userId as string;
 
     if (!userId) {
-        return new NextResponse("User ID not found", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "User ID not found", { userId });
     }
 
     const body = (await req.json().catch(() => null)) as Body;
@@ -46,17 +49,16 @@ export async function POST(req: Request) {
     const workingSheetMessage = body?.workingSheetMessage;
     const spreadsheetId = body?.spreadsheetId;
     if (!spreadsheetId) {
-        return new NextResponse("Spreadsheet ID not found", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "Spreadsheet ID not found", { userId });
     }
     const userState = body?.userState;
     if (!userState) {
-        return new NextResponse("User state not found", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "User state not found", { userId });
     }
-
 
     const existing = await getSyncConfig(userId, spreadsheetId);
     if (!existing || !existing.spreadsheetId) {
-        return new NextResponse("Sync config not found for user or spreadsheet ID not set", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "Sync config not found for user or spreadsheet ID not set", { userId });
     }
 
     // Validate against enum — no arbitrary strings
@@ -67,10 +69,10 @@ export async function POST(req: Request) {
                 DataSyncEntryIdEnum.parse(v),
             ) as DataSyncEntryId[];
         } catch {
-            return new NextResponse("Invalid stripe object selection", { status: 400 });
+            return apiErrorResponse(ROUTE, 400, "Invalid stripe object selection", { userId });
         }
         if (selectedDataSyncEntries.length === 0) {
-            return new NextResponse("At least one object must be selected", { status: 400 });
+            return apiErrorResponse(ROUTE, 400, "At least one object must be selected", { userId });
         }
     }
 
@@ -80,6 +82,13 @@ export async function POST(req: Request) {
             ? body.historySinceDays
             : undefined;
     const syncStatus = body?.syncStatus;
+
+    if (syncStatus === "backfill_running") {
+        const guard = await assertConnectionsReadyForBackfill(userId, existing);
+        if (!guard.ok) {
+            return new NextResponse(guard.message, { status: 409 });
+        }
+    }
 
     if (syncStatus === "backfill_running") {
         const guard = await assertConnectionsReadyForBackfill(userId, existing);
@@ -116,14 +125,29 @@ export async function POST(req: Request) {
     }
 
     // actually persist the config in db
-    const updated = await updateSyncConfig({
-        userId,
-        spreadsheetId: existing.spreadsheetId,
-        stripeDataSyncMap: stripeDataSyncMapToPersist,
-        historyMode,
-        historySinceDays,
-        syncStatus,
-    });
+    try {
+        const updated = await updateSyncConfig({
+            userId,
+            spreadsheetId: existing.spreadsheetId,
+            stripeDataSyncMap: stripeDataSyncMapToPersist,
+            historyMode,
+            historySinceDays,
+            syncStatus,
+            ...(syncStatus === "backfill_running"
+                ? { expectedCurrentStatus: "onboarding" as const }
+                : {}),
+        });
 
-    return NextResponse.json({ syncConfig: updated });
+        return NextResponse.json({ syncConfig: updated });
+    } catch (err: unknown) {
+        if (
+            err &&
+            typeof err === "object" &&
+            "name" in err &&
+            err.name === "ConditionalCheckFailedException"
+        ) {
+            return apiErrorResponse(ROUTE, 409, "Backfill already started", { userId });
+        }
+        throw err;
+    }
 }

@@ -16,10 +16,15 @@ import {
 import { ensureStripeCustomerId } from "@/lib/dynamo/ensure-stripe-customer";
 import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
 import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
+import { apiErrorResponse } from "@/lib/api/api-error-response";
+import type { UserProfile } from "@/lib/schemas/user-profile";
 import { getSyncConfig } from "@/lib/dynamo/sync-config";
 import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
+
+const ROUTE = "POST /api/billing/start-trial";
+const TRIAL_ALREADY_USED_MESSAGE = "Trial already used. Please upgrade to a paid plan.";
 
 type Body = {
     planId?: BillingPlanId;          // optional: default to "pro"
@@ -27,10 +32,27 @@ type Body = {
     spreadsheetId?: string;          // onboarding config to verify connections against
 };
 
+function alreadyActiveResponse(profile: UserProfile) {
+    return NextResponse.json({
+        ok: true,
+        alreadyActive: true,
+        status: profile.subscriptionRawStatus ?? "active",
+    });
+}
+
+function hasBillingHistory(profile: UserProfile): boolean {
+    // billingStartedAt is stamped on the user's first subscription (trial or paid).
+    // subscriptionId is a legacy fallback for users created before billingStartedAt existed.
+    // Note: subscriptionCustomerId is intentionally NOT used — a Stripe customer can exist
+    // without any subscription (e.g. a trial setup that failed after customer creation),
+    // and must not block a legitimate first trial.
+    return !!(profile.billingStartedAt || profile.subscriptionId);
+}
+
 export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
+        return apiErrorResponse(ROUTE, 401, "Unauthorized");
     }
     const userId = (session.user as any).userId as string;
 
@@ -40,12 +62,12 @@ export async function POST(req: NextRequest) {
 
     const priceId = BILLING_PRICES[planId]?.[interval];
     if (!priceId) {
-        return new NextResponse("Unknown plan/interval", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "Unknown plan/interval", { userId });
     }
 
     const profile = await getUserProfile(userId);
     if (!profile) {
-        return new NextResponse("User profile not found", { status: 400 });
+        return apiErrorResponse(ROUTE, 400, "User profile not found", { userId });
     }
 
     // Verify the user has connected Stripe + Google before creating a trial, so a
@@ -62,23 +84,19 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // Guard against duplicate trials / subscriptions
+    // Idempotent: already entitled — do not create a duplicate subscription
     if (isUserProfileEntitled(profile)) {
-        return new NextResponse("Subscription already active", { status: 409 });
+        return alreadyActiveResponse(profile);
     }
 
-    // console.log("user profile", profile);
-    // Check if they have already trialed
-    if (profile.subscriptionId || profile.subscriptionCustomerId) {
-        // If they have a customer ID, they've likely interacted with billing before.
-        // Enforces one trial per user.
-        return new NextResponse("Trial already used. Please upgrade to a paid plan.", { status: 403 });
+    // Guard against duplicate trials (not currently entitled but has prior billing history)
+    if (hasBillingHistory(profile)) {
+        return apiErrorResponse(ROUTE, 403, TRIAL_ALREADY_USED_MESSAGE, { userId });
     }
 
     const stripeCustomerId = await ensureStripeCustomerId(userId);
-
     if (!stripeCustomerId) {
-        return new NextResponse("Failed to create/get Stripe customer", { status: 500 });
+        return apiErrorResponse(ROUTE, 500, "Failed to create/get Stripe customer", { userId });
     }
 
     const metadata = {
@@ -107,10 +125,10 @@ export async function POST(req: NextRequest) {
         },
         collection_method: "charge_automatically",
         metadata,
-    });
+    }, { idempotencyKey: `trial-${userId}` });
 
     if (!subscription?.id) {
-        return new NextResponse("Failed to create subscription", { status: 500 });
+        return apiErrorResponse(ROUTE, 500, "Failed to create subscription", { userId });
     }
 
     const currentPeriodEnd = getSubscriptionPeriodEnd(subscription);
@@ -118,21 +136,38 @@ export async function POST(req: NextRequest) {
     const previousSubscriptionId = profile.subscriptionId ?? null;
 
     try {
-        await updateUserSubscriptionStatusToActive(userId, {
-            subscriptionId: subscription.id,
-            stripeCustomerId,
-            planId,
-            interval,
-            currentPeriodEnd,
-            rawStatus: subscription.status, // "trialing" initially
-        }, previousSubscriptionId);
+        await updateUserSubscriptionStatusToActive(
+            userId,
+            {
+                subscriptionId: subscription.id,
+                stripeCustomerId,
+                planId,
+                interval,
+                currentPeriodEnd,
+                rawStatus: subscription.status, // "trialing" initially
+            },
+            previousSubscriptionId,
+        );
     } catch (err: any) {
-        // If someone else raced and updated the profile, treat as "already trialing"
         if (err.name === "ConditionalCheckFailedException") {
-            return new NextResponse("Subscription already active", { status: 409 });
+            let latest: UserProfile | null | undefined;
+            try {
+                latest = await getUserProfile(userId);
+            } catch (profileReadError) {
+                return apiErrorResponse(
+                    ROUTE, 500,
+                    "We couldn't confirm your trial status. Please refresh and try again.",
+                    { userId, error: profileReadError },
+                );
+            }
+            if (latest && isUserProfileEntitled(latest)) {
+                return alreadyActiveResponse(latest);
+            }
+            return apiErrorResponse(ROUTE, 403, TRIAL_ALREADY_USED_MESSAGE, { userId });
         }
         throw err;
     }
+
     const trialEndsAtIso = trialEnd != null ? new Date(trialEnd * 1000).toISOString() : null;
 
     return NextResponse.json({

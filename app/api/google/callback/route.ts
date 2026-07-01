@@ -225,7 +225,10 @@ export async function GET(req: NextRequest) {
     // 5) Onboarding connect flow: auto-create workspace sheet, then land on step 3
     if (flow === "google-connect") {
         try {
-            const userState = await loadUserState(userId);
+            // Consistent read: the GoogleConnection was just written above, and
+            // an eventually-consistent read can miss it, spuriously tripping the
+            // sheet-creation fallback.
+            const userState = await loadUserState(userId, { consistentRead: true });
             const existingOnboardingSheet = userState.syncConfigs.find(
                 (cfg) => cfg.syncStatus === "onboarding" && cfg.spreadsheetId,
             );

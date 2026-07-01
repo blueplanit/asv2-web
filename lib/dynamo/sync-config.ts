@@ -292,6 +292,8 @@ export async function updateSyncConfig(params: {
     historyMode?: SyncConfig["historyMode"] | null;
     historySinceDays?: number | null;
     syncStatus?: SyncConfig["syncStatus"];
+    /** When set, the update only succeeds if syncStatus matches (or is absent). */
+    expectedCurrentStatus?: SyncConfig["syncStatus"];
 }) {
     const {
         userId,
@@ -300,12 +302,14 @@ export async function updateSyncConfig(params: {
         historyMode,
         historySinceDays,
         syncStatus,
+        expectedCurrentStatus,
     } = params;
 
     const updates: string[] = [];
     const values: Record<string, unknown> = {
         ":updatedAt": new Date().toISOString(),
     };
+    const attributeNames: Record<string, string> = {};
 
     if (stripeDataSyncMap !== undefined) {
         updates.push("stripeDataSyncMap = :sdsm");
@@ -331,15 +335,26 @@ export async function updateSyncConfig(params: {
 
     const UpdateExpression = "SET " + updates.join(", ");
 
+    let conditionExpression = "attribute_exists(pk) AND attribute_exists(sk)";
+    if (expectedCurrentStatus !== undefined) {
+        attributeNames["#syncStatus"] = "syncStatus";
+        values[":expectedStatus"] = expectedCurrentStatus;
+        conditionExpression +=
+            " AND (#syncStatus = :expectedStatus OR attribute_not_exists(#syncStatus))";
+    }
+
     const res = await ddb.send(
         new UpdateCommand({
             TableName: TABLE_NAME,
-            ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
+            ConditionExpression: conditionExpression,
             Key: {
                 pk: userPk(userId),
                 sk: syncConfigSk(spreadsheetId),
             },
             UpdateExpression,
+            ...(Object.keys(attributeNames).length > 0
+                ? { ExpressionAttributeNames: attributeNames }
+                : {}),
             ExpressionAttributeValues: values,
             ReturnValues: "ALL_NEW",
         }),

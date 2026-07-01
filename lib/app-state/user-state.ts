@@ -110,7 +110,10 @@ function computeOnboardingStage(state: {
 }
 
 // Main loader: one query, then fan-out by `sk` prefix
-export async function loadUserState(userId: string): Promise<UserState> {
+export async function loadUserState(
+    userId: string,
+    opts?: { consistentRead?: boolean },
+): Promise<UserState> {
     if (!userId) {
         throw new Error("User ID is required");
     }
@@ -124,6 +127,10 @@ export async function loadUserState(userId: string): Promise<UserState> {
             ExpressionAttributeValues: {
                 ":pk": pk,
             },
+            // Strongly consistent reads cost 2x RCU; only opt in where a caller
+            // reads immediately after a write in the same request (e.g. the
+            // Google OAuth callback creating the workspace sheet).
+            ConsistentRead: opts?.consistentRead ?? false,
         }),
     );
 

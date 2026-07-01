@@ -4,13 +4,16 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
+import { apiErrorResponse } from "@/lib/api/api-error-response";
 
 export const runtime = "nodejs";
+
+const ROUTE = "POST /api/google/create-sheet";
 
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
+        return apiErrorResponse(ROUTE, 401, "Unauthorized");
     }
     const userId = (session.user as any).userId as string;
 
@@ -36,7 +39,10 @@ export async function POST(req: Request) {
             syncConfig,
         });
     } catch (err) {
-        console.error("Error creating Google Sheet:", err);
-        return new NextResponse(`Failed to create sheet: ${err instanceof Error ? err.message : "Unknown error"}`, { status: 502 });
+        return apiErrorResponse(
+            ROUTE, 502,
+            `Failed to create sheet: ${err instanceof Error ? err.message : "Unknown error"}`,
+            { userId, error: err },
+        );
     }
 }
