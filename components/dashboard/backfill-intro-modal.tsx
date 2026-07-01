@@ -262,7 +262,7 @@ export function BackfillIntroModal({
                                             <button
                                                 type="button"
                                                 aria-label="Open spreadsheet in new tab"
-                                                className="inline-flex items-center justify-center rounded text-slate-600 hover:text-slate-800"
+                                                className="inline-flex cursor-pointer items-center justify-center rounded text-indigo-700 hover:text-indigo-500"
                                                 onClick={() => {
                                                     trackSpreadsheetLinkClick(
                                                         "backfill_intro_modal_icon",
