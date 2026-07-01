@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { HighIntentLandingPage } from "@/components/marketing/high-intent-landing-page";
 
 const sampleSheetUrl =
-    "https://docs.google.com/spreadsheets/d/1KvTHaQhWPHWYkficjgwVfzLw4ft_rPobd2GQ9MMPy6k/edit?usp=sharing";
+    "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/view?usp=sharing";
 
 export const metadata: Metadata = {
     title: "Stripe CSV Export Alternative | SyncStaq",
