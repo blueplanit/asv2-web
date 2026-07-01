@@ -66,7 +66,7 @@ const steps: Step[] = [
     },
     {
         id: 3,
-        title: "Choose Stripe data & start your 14-day trial",
+        title: "Choose Stripe data & start your 14-day FREE trial",
         description: "Pick which Stripe data objects to sync into your newly created Google Sheet. Then, start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
     },
