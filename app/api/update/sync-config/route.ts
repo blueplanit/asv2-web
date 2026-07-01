@@ -86,14 +86,7 @@ export async function POST(req: Request) {
     if (syncStatus === "backfill_running") {
         const guard = await assertConnectionsReadyForBackfill(userId, existing);
         if (!guard.ok) {
-            return new NextResponse(guard.message, { status: 409 });
-        }
-    }
-
-    if (syncStatus === "backfill_running") {
-        const guard = await assertConnectionsReadyForBackfill(userId, existing);
-        if (!guard.ok) {
-            return new NextResponse(guard.message, { status: 409 });
+            return apiErrorResponse(ROUTE, 409, guard.message, { userId });
         }
     }
 
