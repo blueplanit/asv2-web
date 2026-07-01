@@ -300,19 +300,17 @@ export function DashboardClient() {
     const stepLabel = (() => {
         switch (nextStepId) {
             case 1:
-                return "Step 1 of 4 · Connect Stripe";
+                return "Step 1 of 3 · Connect Stripe";
             case 2:
-                return "Step 2 of 4 · Connect Google Sheets";
+                return "Step 2 of 3 · Connect Google Sheets";
             case 3:
-                return "Step 3 of 4 · Create your workspace sheet";
-            case 4:
             default:
-                return "Step 4 of 4 · Choose Stripe data & start sync";
+                return "Step 3 of 3 · Choose Stripe data & start sync";
         }
     })();
 
     const bannerSubtitle = (() => {
-        if (nextStepId === 4) {
+        if (nextStepId === 3) {
             return "You’re one step away from your first automatic Stripe → Sheets sync.";
         }
         return "Finish these last steps to get Stripe data synced into your Google Sheet.";

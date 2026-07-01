@@ -1,7 +1,7 @@
 // components/dashboard/backfill-intro-modal.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/20/solid";
 import { ExternalLinkIcon } from "lucide-react";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
@@ -27,7 +27,9 @@ export function BackfillIntroModal({
     const [surveyStep, setSurveyStep] = useState<SurveyStep>("q1");
     const [role, setRole] = useState("");
     const [problem, setProblem] = useState("");
-    const [submitting, setSubmitting] = useState(false);
+    // Guards against a double-click posting the survey twice; the confirmation
+    // card advances synchronously so there is no in-flight "submitting" state.
+    const submittedRef = useRef(false);
 
     const goToStep = useCallback(
         (next: SurveyStep) => {
@@ -42,7 +44,7 @@ export function BackfillIntroModal({
         setSurveyStep("q1");
         setRole("");
         setProblem("");
-        setSubmitting(false);
+        submittedRef.current = false;
         onSurveyStepChange?.("q1");
     }, [open, onSurveyStepChange]);
 
@@ -91,16 +93,13 @@ export function BackfillIntroModal({
         }
     }
 
-    // Send answers (fire-and-forget) and advance to the confirmation card.
-    async function finishSurvey(skipped: boolean) {
-        if (submitting) return;
-        setSubmitting(true);
-        try {
-            await submitSurveyAnswers(skipped);
-        } finally {
-            goToStep("done");
-            setSubmitting(false);
-        }
+    // Send answers (fire-and-forget) and advance to the confirmation card
+    // immediately — the POST must never block the UI.
+    function finishSurvey(skipped: boolean) {
+        if (submittedRef.current) return;
+        submittedRef.current = true;
+        void submitSurveyAnswers(skipped);
+        goToStep("done");
     }
 
     function handleQ1Next() {
@@ -163,7 +162,6 @@ export function BackfillIntroModal({
                             <button
                                 type="button"
                                 onClick={() => void finishSurvey(true)}
-                                disabled={submitting}
                                 className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >
                                 Skip
@@ -207,7 +205,7 @@ export function BackfillIntroModal({
                                 <button
                                     type="button"
                                     onClick={handleQ2Submit}
-                                    disabled={!canSubmitSurvey() || submitting}
+                                    disabled={!canSubmitSurvey()}
                                     className="order-2 inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     Continue
@@ -215,8 +213,7 @@ export function BackfillIntroModal({
                                 <button
                                     type="button"
                                     onClick={() => goToStep("q1")}
-                                    disabled={submitting}
-                                    className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                                 >
                                     Back
                                 </button>
@@ -224,7 +221,6 @@ export function BackfillIntroModal({
                             <button
                                 type="button"
                                 onClick={() => void finishSurvey(true)}
-                                disabled={submitting}
                                 className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
                             >
                                 Skip
