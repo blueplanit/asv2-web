@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const SAMPLE_SHEET_URL =
-    "https://docs.google.com/spreadsheets/d/1KvTHaQhWPHWYkficjgwVfzLw4ft_rPobd2GQ9MMPy6k/edit?usp=sharing";
+    "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/view?usp=sharing";
 
 const tabs = ["Working Sheet", "Invoices_raw", "Charges_raw", "Subscriptions_raw"];
 
