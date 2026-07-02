@@ -56,7 +56,7 @@ const steps: Step[] = [
         title: "Connect Stripe",
         description: "Connect the Stripe account you want synced to Google Sheets via a secure connection using Stripe Connect OAuth.",
         ctaLabel: "Connect Stripe",
-        helper: "This is a read-only connection to your Stripe account. No two way sync is performed.",
+        helper: "This is a read-only connection to your Stripe account. SyncStaq will never modify, delete or create any Stripe objects.",
     },
     {
         id: 2,
@@ -182,7 +182,7 @@ export function OnboardingWizard() {
 
             const description =
                 googleError === "scope_denied"
-                    ? "Google Sheets access is required. Please grant permission on the next screen."
+                    ? "Google Sheets access is required. Please grant permission when connecting Google Sheets."
                     : googleError === "oauth"
                         ? "Google connection was cancelled. Grant Sheets access to continue."
                         : "Google connection failed. Please try again.";
