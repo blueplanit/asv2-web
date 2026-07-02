@@ -229,10 +229,16 @@ export async function GET(req: NextRequest) {
             // an eventually-consistent read can miss it, spuriously tripping the
             // sheet-creation fallback.
             const userState = await loadUserState(userId, { consistentRead: true });
+            const hasConnectedStripe = userState.stripeConnections.some(
+                (c) => c.status === "connected",
+            );
             const existingOnboardingSheet = userState.syncConfigs.find(
                 (cfg) => cfg.syncStatus === "onboarding" && cfg.spreadsheetId,
             );
-            if (!existingOnboardingSheet) {
+            // Onboarding requires Stripe first. If it isn't connected, skip
+            // auto-create (no orphaned sheet); the redirect below lands on
+            // successBase and the wizard's step clamp routes the user to step 1.
+            if (hasConnectedStripe && !existingOnboardingSheet) {
                 await createWorkspaceSheetAndConfig({
                     userState,
                     folderName: FOLDER_NAME,

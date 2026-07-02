@@ -45,6 +45,15 @@ export async function createWorkspaceSheetAndConfig(
         throw new Error("User ID not found");
     }
 
+    // Resolve the Stripe account BEFORE creating any Drive/Sheets resources so a
+    // user without a Stripe account never leaves an orphaned empty spreadsheet
+    // behind. Onboarding requires Stripe first; this is defense in depth.
+    const stripeAccountId =
+        baseSyncConfig?.stripeAccountId ?? (await getStripeAccountIdForUser(userId));
+    if (!stripeAccountId) {
+        throw new Error("Stripe account ID not found for user");
+    }
+
     // 1) Google auth
     const { accessToken } = await getGoogleAccessTokenForUser(userState);
     const googleUserId = userState.profile?.googleUserId;
@@ -132,13 +141,6 @@ export async function createWorkspaceSheetAndConfig(
             addParents: syncFolderId,
             fields: "id, parents",
         });
-    }
-
-    // 4) Derive Stripe account for config
-    const stripeAccountId = baseSyncConfig?.stripeAccountId ?? (await getStripeAccountIdForUser(userId));
-
-    if (!stripeAccountId) {
-        throw new Error("Stripe account ID not found for user");
     }
 
     let syncConfig: SyncConfig | undefined;
