@@ -190,7 +190,9 @@ export async function createWorkspaceSheetAndConfig(
         stripeDataSyncMap: boundStripeDataSyncMap,
         historyMode: baseSyncConfig?.historyMode ?? "since",
         historySinceDays: baseSyncConfig?.historySinceDays ?? defaultHistoryDays,
-        syncStatus: "syncing",
+        // backfill_running so the caller can seed the new sheet; the backfill
+        // fills history, creates the cursors, then flips it to syncing.
+        syncStatus: "backfill_running",
         timezone: resolvedTimezone,
         locale: resolvedLocale,
     });

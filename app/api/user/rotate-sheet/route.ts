@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getSyncConfig } from "@/lib/dynamo/sync-config";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
+import { triggerInitialBackfill } from "@/lib/sync/trigger-backfill";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,10 @@ export async function POST(req: Request) {
                 workingSheetMessage,
                 baseSyncConfig: existing,
             });
+
+        // Seed the new sheet: fill history and create its sync cursors; the
+        // backfill then flips the config from backfill_running to syncing.
+        await triggerInitialBackfill(userId, spreadsheetId);
 
         return NextResponse.json({
             newSpreadsheetId: spreadsheetId,
