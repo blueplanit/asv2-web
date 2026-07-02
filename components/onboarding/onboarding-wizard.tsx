@@ -140,10 +140,10 @@ export function OnboardingWizard() {
 
     // If there is no onboarding config but there *is* an active config,
     // the user is past onboarding → send them to dashboard.
-    // The step-index guard keeps this off the last step: step 4's own flow
+    // The step-index guard keeps this off the last step (step 3): its own flow
     // flips the config out of "onboarding" (via refresh()) before the backfill
     // is kicked off, so auto-redirecting there would race the backfill kickoff
-    // and strip the post-completion redirect. A reload on step 4 after
+    // and strip the post-completion redirect. A reload on the last step after
     // completion is handled server-side instead (the sync-config conditional write returns
     // 409 with code "backfill_already_started" → "already_started" → redirect).
     useEffect(() => {

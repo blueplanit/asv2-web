@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
+import { loadUserState } from "@/lib/app-state/user-state";
 import { apiErrorResponse } from "@/lib/api/api-error-response";
 
 export const runtime = "nodejs";
@@ -20,6 +21,20 @@ export async function POST(req: Request) {
     try {
         const body = await req.json().catch(() => ({}));
         const { folderName, workspaceSheetTitle, workingSheetTitle, workingSheetMessage, userState, timezone, locale } = body ?? {};
+
+        // If an onboarding sheet already exists, return it instead of creating
+        // a duplicate. Consistent read so we don't miss a just-created config.
+        const freshState = await loadUserState(userId, { consistentRead: true });
+        const existingOnboardingSheet = freshState.syncConfigs.find(
+            (cfg) => cfg.syncStatus === "onboarding" && cfg.spreadsheetId,
+        );
+        if (existingOnboardingSheet) {
+            return NextResponse.json({
+                spreadsheetId: existingOnboardingSheet.spreadsheetId,
+                spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${existingOnboardingSheet.spreadsheetId}`,
+                syncConfig: existingOnboardingSheet,
+            });
+        }
 
         const { spreadsheetId, spreadsheetUrl, syncConfig } =
             await createWorkspaceSheetAndConfig({

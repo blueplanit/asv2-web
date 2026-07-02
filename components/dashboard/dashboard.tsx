@@ -343,7 +343,10 @@ export function DashboardClient() {
         }
     }
 
-    // Triggered once when redirected from onboarding with ?backfill_started=1, only if the current syncStatus is "backfill_running"
+    // Opens the intro/survey modal when redirected from onboarding with
+    // ?backfill_started=1. Keyed off the flag alone (not syncStatus) so the
+    // modal shows even if the backfill has already flipped out of
+    // "backfill_running" by the time the dashboard mounts.
     useEffect(() => {
         const flag = searchParams.get("backfill_started");
         if (flag !== "1") return;
