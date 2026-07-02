@@ -9,7 +9,7 @@ import {
     type SyncConfig,
 } from "@/lib/schemas/sync-config";
 import { getStripeAccountIdForUser } from "@/lib/stripe/stripe-connection";
-import { createSyncConfig, ensureSyncConfigForSheet, defaultHistoryDays } from "@/lib/dynamo/sync-config";
+import { buildSyncConfigItem, replaceSyncConfigAtomic, ensureSyncConfigForSheet, defaultHistoryDays } from "@/lib/dynamo/sync-config";
 import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
 import { UserState } from "../app-state/user-state";
 
@@ -181,8 +181,9 @@ export async function createWorkspaceSheetAndConfig(
         workingSheetMessage,
     });
 
-    // 7) Create SyncConfig for this sheet
-    syncConfig = await createSyncConfig({
+    // 7) Persist the new config, atomically retiring the one it replaces so the
+    // swap never leaves two active configs (or zero).
+    const newConfig = buildSyncConfigItem({
         userId,
         spreadsheetId,
         stripeAccountId,
@@ -192,6 +193,11 @@ export async function createWorkspaceSheetAndConfig(
         syncStatus: "syncing",
         timezone: resolvedTimezone,
         locale: resolvedLocale,
+    });
+    syncConfig = await replaceSyncConfigAtomic({
+        userId,
+        oldSpreadsheetId: baseSyncConfig.spreadsheetId,
+        newConfig,
     });
 
     return {
