@@ -64,11 +64,9 @@ function computeOnboardingStage(state: {
     const onboardingConfigs = nonRetiredConfigs.filter(
         (cfg) => cfg.syncStatus === "onboarding",
     );
+    // "Active" = any non-retired config past onboarding (includes error/gap).
     const activeConfigs = nonRetiredConfigs.filter(
-        (cfg) =>
-            cfg.syncStatus === "syncing" ||
-            cfg.syncStatus === "backfill_running" ||
-            cfg.syncStatus === "paused",
+        (cfg) => cfg.syncStatus !== "onboarding",
     );
 
     // No configs yet

@@ -13,6 +13,7 @@ import {
 } from "@/lib/google/google-oauth-state";
 import { sanitizeReturnTo } from "@/lib/app-state/oauth-state-core";
 import { loadUserState } from "@/lib/app-state/user-state";
+import { hasAnyNonRetiredConfig } from "@/lib/app-state/onboarding-status";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
 import { APP_NAME } from "@/lib/constants";
 
@@ -232,13 +233,11 @@ export async function GET(req: NextRequest) {
             const hasConnectedStripe = userState.stripeConnections.some(
                 (c) => c.status === "connected",
             );
-            const existingOnboardingSheet = userState.syncConfigs.find(
-                (cfg) => cfg.syncStatus === "onboarding" && cfg.spreadsheetId,
-            );
             // Onboarding requires Stripe first. If it isn't connected, skip
             // auto-create (no orphaned sheet); the redirect below lands on
             // successBase and the wizard's step clamp routes the user to step 1.
-            if (hasConnectedStripe && !existingOnboardingSheet) {
+            // Skip too if any non-retired config exists (one-workspace rule).
+            if (hasConnectedStripe && !hasAnyNonRetiredConfig(userState.syncConfigs)) {
                 await createWorkspaceSheetAndConfig({
                     userState,
                     folderName: FOLDER_NAME,

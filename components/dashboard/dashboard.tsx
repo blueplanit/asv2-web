@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { WorkspaceCard, type Workspace } from "@/components/workspaces/workspace-card";
 import { useUserState } from "@/components/user-state-provider";
+import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
 import type { SyncConfig } from "@/lib/schemas/sync-config";
 import { Squares2X2Icon, UserCircleIcon } from "@heroicons/react/20/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -283,13 +284,7 @@ export function DashboardClient() {
     const activeWorkspace = workspaces.find((ws) => ws.id === activeSyncConfig?.spreadsheetId) ?? workspaces[0] ?? null;
     const archivedWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace?.id);
 
-    const isOnboardingDone =
-        activeSyncConfig &&
-        (activeSyncConfig.syncStatus === "syncing" ||
-            activeSyncConfig.syncStatus === "backfill_running" ||
-            activeSyncConfig.syncStatus === "gap_backfill_running" ||
-            activeSyncConfig.syncStatus === "paused" ||
-            activeSyncConfig.syncStatus === "error");
+    const isOnboardingDone = hasCompletedOnboarding(syncConfigs);
 
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;

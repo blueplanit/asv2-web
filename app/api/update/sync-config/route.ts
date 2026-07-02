@@ -7,7 +7,8 @@ import {
     DataSyncEntryIdEnum,
     type DataSyncEntryId,
 } from "@/lib/schemas/sync-config";
-import { getSyncConfig, updateSyncConfig } from "@/lib/dynamo/sync-config";
+import { getSyncConfig, getSyncConfigs, updateSyncConfig } from "@/lib/dynamo/sync-config";
+import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
 import {
     ensureStripeDataSyncMap,
     applyStripeSelectionToStripeDataSyncMap,
@@ -28,7 +29,10 @@ const ROUTE = "POST /api/update/sync-config";
  * dashboard, while a connection failure must surface an inline error). Return a
  * machine-readable `code` alongside the human-readable message.
  */
-type SyncConfigConflictCode = "backfill_already_started" | "connections_missing";
+type SyncConfigConflictCode =
+    | "backfill_already_started"
+    | "connections_missing"
+    | "onboarding_complete";
 
 function conflictResponse(
     code: SyncConfigConflictCode,
@@ -101,6 +105,11 @@ export async function POST(req: Request) {
     const syncStatus = body?.syncStatus;
 
     if (syncStatus === "backfill_running") {
+        // Already onboarded → don't let them re-run the onboarding backfill.
+        const allConfigs = await getSyncConfigs(userId);
+        if (hasCompletedOnboarding(allConfigs)) {
+            return conflictResponse("onboarding_complete", "You're already set up.", userId);
+        }
         const guard = await assertConnectionsReadyForBackfill(userId, existing);
         if (!guard.ok) {
             return conflictResponse("connections_missing", guard.message, userId);
