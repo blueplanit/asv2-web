@@ -36,14 +36,10 @@ function clearNonceCookie(res: NextResponse) {
     return res;
 }
 
-function redirectForSuccess(flow: "google-connect" | "google-reconnect", returnTo?: string) {
+function redirectFor(flow: "google-connect" | "google-reconnect", type: "success" | "error", returnTo?: string) {
     if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
-    return "/onboarding?step=3";
-}
-
-function redirectForError(flow: "google-connect" | "google-reconnect", returnTo?: string) {
-    if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
-    return "/onboarding?step=2";
+    const step = type === "success" ? "3" : "2";
+    return `/onboarding?step=${step}`;
 }
 
 function onboardingUrlWithSheetError(base: string) {
@@ -87,8 +83,8 @@ export async function GET(req: NextRequest) {
 
     const { payload } = verified;
     const flow = payload.flow;
-    const successBase = redirectForSuccess(flow, payload.returnTo);
-    const errorBase = redirectForError(flow, payload.returnTo);
+    const successBase = redirectFor(flow, "success", payload.returnTo);
+    const errorBase = redirectFor(flow, "error", payload.returnTo);
 
     if (error || !code) {
         const errorUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
@@ -188,7 +184,7 @@ export async function GET(req: NextRequest) {
         mismatchUrl.searchParams.set("googleMismatch", "1");
         mismatchUrl.searchParams.set("expectedEmail", sessionEmail);
         mismatchUrl.searchParams.set("actualEmail", email);
-    
+
         return clearNonceCookie(NextResponse.redirect(mismatchUrl));
     }
 
