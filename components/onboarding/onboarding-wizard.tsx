@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
 import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
+import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
 import { useEffect } from "react";
 import { DataSyncEntryId } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
@@ -98,6 +99,7 @@ export function OnboardingWizard() {
 
     const hasStripe = user.stripeConnections.some((c) => c.status === "connected");
     const hasGoogle = user.googleConnections.some((c) => c.status === "connected");
+    const isEntitled = isUserProfileEntitled(user.profile);
     const connectedStripeConnection = user.stripeConnections.find(
         (c) => c.status === "connected",
     );
@@ -269,6 +271,10 @@ export function OnboardingWizard() {
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
     const needsSheetCreation = !createdSpreadsheetId && currentStep.id === 3;
+    const stepTitle =
+        currentStep.id === 3 && isEntitled
+            ? "Choose Stripe data & start sync"
+            : currentStep.title;
     const primaryCtaLabel = needsSheetCreation
         ? "Create sheet"
         : currentStep.id === 1 && hasStripe
@@ -288,7 +294,9 @@ export function OnboardingWizard() {
                     : "Redirecting to Google…"
                 : needsSheetCreation
                     ? "Creating sheet…"
-                    : "Starting trial & backfill...";
+                    : isEntitled
+                        ? "Starting backfill..."
+                        : "Starting trial & backfill...";
 
     async function createSheet() {
         try {
@@ -628,7 +636,7 @@ export function OnboardingWizard() {
                                                         Step {currentStep.id}
                                                     </p>
                                                 </div>
-                                                <h3 className="text-lg font-semibold text-slate-900">{currentStep.title}</h3>
+                                                <h3 className="text-lg font-semibold text-slate-900">{stepTitle}</h3>
                                                 <p className="text-sm text-slate-600">{currentStep.description}</p>
                                                 {currentStep.helper && (
                                                     <p className="text-sm font-medium text-slate-700 mt-4 mb-4">
@@ -696,7 +704,10 @@ export function OnboardingWizard() {
                                         {currentStep.id === 3 && !needsSheetCreation && (
                                             <p className="text-[11px] text-slate-500 text-right sm:text-left max-w-xs">
                                                 <span className="inline-flex items-center gap-2  text-[11px] font-medium text-emerald-700 ">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Your 14-day free trial starts after this. No card required!
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />{" "}
+                                                    {isEntitled
+                                                        ? "Your subscription is active — syncing starts right after this."
+                                                        : "Your 14-day free trial starts after this. No card required!"}
                                                 </span>
                                             </p>
                                         )}
