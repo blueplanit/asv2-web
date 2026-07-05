@@ -26,16 +26,15 @@ export async function POST(req: NextRequest) {
     if (!spreadsheetId) {
         return apiErrorResponse(ROUTE, 400, "We couldn't find a spreadsheet to backfill. Please check your settings and try again.");
     }
-   
+
     const syncConfig = await getSyncConfig(userId, spreadsheetId);
     if (!syncConfig) {
-        console.error("Sync config not found for user:", userId, spreadsheetId);
-        return new NextResponse("Something went wrong. Please try again.", { status: 404 });
+        return apiErrorResponse(ROUTE, 404, "We couldn't find your syncing settings. Please check your settings and try again.", { userId });
     }
 
     const guard = await assertConnectionsReadyForBackfill(userId, syncConfig);
     if (!guard.ok) {
-        return new NextResponse(guard.message, { status: 409 });
+        return apiErrorResponse(ROUTE, 409, guard.message, { userId });
     }
 
     try {

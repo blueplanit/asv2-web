@@ -50,7 +50,8 @@ export async function POST(req: Request) {
         const problem = sanitizeText(body.problem, SURVEY_MAX_TEXT_LENGTH);
 
         if (!role || !problem) {
-            return new NextResponse("role and problem are required", { status: 400 });
+            console.error("[onboarding/survey] Role and problem are required", { role, problem, userId });
+            return new NextResponse("Role and problem are required", { status: 400 });
         }
 
         await appendSurveyResponseRow({

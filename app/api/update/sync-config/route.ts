@@ -39,8 +39,7 @@ function conflictResponse(
     message: string,
     userId: string,
 ): NextResponse {
-    console.warn("[api-error]", { route: ROUTE, status: 409, code, message, userId });
-    return NextResponse.json({ code, message }, { status: 409 });
+    return apiErrorResponse(ROUTE, 409, message, { userId, code });
 }
 
 type Body = {
