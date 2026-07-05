@@ -270,33 +270,36 @@ export function OnboardingWizard() {
     const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
-    const needsSheetCreation = !createdSpreadsheetId && currentStep.id === 3;
-    const stepTitle =
-        currentStep.id === 3 && isEntitled
-            ? "Choose Stripe data & start sync"
-            : currentStep.title;
+    const isStep1 = currentStep.id === 1;
+    const isStep2 = currentStep.id === 2;
+    const isStep3 = currentStep.id === 3;
+    const needsSheetCreation = isStep3 && !createdSpreadsheetId;
+
+    const stepTitle = isStep3 && isEntitled
+        ? "Choose Stripe data & start sync"
+        : currentStep.title;
+
+    const canContinueWithoutReconnect =
+        (isStep1 && hasStripe) || (isStep2 && hasGoogle);
+
     const primaryCtaLabel = needsSheetCreation
         ? "Create sheet"
-        : currentStep.id === 1 && hasStripe
+        : canContinueWithoutReconnect
             ? "Continue"
-            : currentStep.id === 2 && hasGoogle
-                ? "Continue"
-                : currentStep.ctaLabel;
+            : currentStep.ctaLabel;
 
-    const primaryLoadingLabel =
-        currentStep.id === 1
-            ? hasStripe
-                ? "Continuing…"
-                : "Redirecting to Stripe…"
-            : currentStep.id === 2
-                ? hasGoogle
-                    ? "Continuing…"
-                    : "Redirecting to Google…"
-                : needsSheetCreation
-                    ? "Creating sheet…"
-                    : isEntitled
-                        ? "Starting backfill..."
-                        : "Starting trial & backfill...";
+    const primaryLoadingLabel = (() => {
+        if (isStep1) {
+            return hasStripe ? "Continuing…" : "Redirecting to Stripe…";
+        }
+        if (isStep2) {
+            return hasGoogle ? "Continuing…" : "Redirecting to Google…";
+        }
+        if (needsSheetCreation) {
+            return "Creating sheet…";
+        }
+        return isEntitled ? "Starting backfill..." : "Starting trial & backfill...";
+    })();
 
     async function createSheet() {
         try {
