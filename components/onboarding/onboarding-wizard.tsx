@@ -6,6 +6,7 @@ import * as React from "react";
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
+import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
 import { useEffect } from "react";
 import { DataSyncEntryId } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
@@ -56,7 +57,7 @@ const steps: Step[] = [
         title: "Connect Stripe",
         description: "Connect the Stripe account you want synced to Google Sheets via a secure connection using Stripe Connect OAuth.",
         ctaLabel: "Connect Stripe",
-        helper: "This is a read-only connection to your Stripe account. No two way sync is performed.",
+        helper: "This is a read-only connection to your Stripe account. SyncStaq will never modify, delete or create any Stripe objects.",
     },
     {
         id: 2,
@@ -95,17 +96,6 @@ export function OnboardingWizard() {
         [user.syncConfigs],
     );
 
-    // "Any active config" = user has at least one workspace that is not onboarding/retired.
-    const hasAnyActiveConfig = React.useMemo(
-        () =>
-            user.syncConfigs.some(
-                (cfg) =>
-                    cfg.syncStatus !== "onboarding" &&
-                    cfg.syncStatus !== "retired",
-            ),
-        [user.syncConfigs],
-    );
-
     const hasStripe = user.stripeConnections.some((c) => c.status === "connected");
     const hasGoogle = user.googleConnections.some((c) => c.status === "connected");
     const connectedStripeConnection = user.stripeConnections.find(
@@ -138,19 +128,20 @@ export function OnboardingWizard() {
     const [snackbarTitle, setSnackbarTitle] = useState("Action required");
     const [snackbarDescription, setSnackbarDescription] = useState<string>();
 
-    // If there is no onboarding config but there *is* an active config,
-    // the user is past onboarding → send them to dashboard.
-    // The step-index guard keeps this off the last step: step 4's own flow
-    // flips the config out of "onboarding" (via refresh()) before the backfill
-    // is kicked off, so auto-redirecting there would race the backfill kickoff
-    // and strip the post-completion redirect. A reload on step 4 after
-    // completion is handled server-side instead (the sync-config conditional write returns
-    // 409 with code "backfill_already_started" → "already_started" → redirect).
+    // True only while step 3's own completion flow is running. It flips the
+    // config to backfill_running (which reads as "completed") before it does the
+    // final /dashboard?backfill_started=1 redirect, so we must not let the guard
+    // below race it and strip that redirect.
+    const completingRef = React.useRef(false);
+
+    // Completed users don't belong in the wizard, on any step. This is the
+    // client fallback; the server page guard is the real gate.
     useEffect(() => {
-        if (!onboardingConfig && hasAnyActiveConfig && currentStepIndex < steps.length - 1) {
+        if (completingRef.current) return;
+        if (hasCompletedOnboarding(user.syncConfigs)) {
             router.replace("/dashboard");
         }
-    }, [onboardingConfig, hasAnyActiveConfig, router, currentStepIndex]);
+    }, [user.syncConfigs, router]);
 
     useEffect(() => {
         const mismatch = searchParams.get("googleMismatch");
@@ -182,7 +173,7 @@ export function OnboardingWizard() {
 
             const description =
                 googleError === "scope_denied"
-                    ? "Google Sheets access is required. Please grant permission on the next screen."
+                    ? "Google Sheets access is required. Please grant permission when connecting Google Sheets."
                     : googleError === "oauth"
                         ? "Google connection was cancelled. Grant Sheets access to continue."
                         : "Google connection failed. Please try again.";
@@ -314,6 +305,11 @@ export function OnboardingWizard() {
                 }),
             });
             if (!res.ok) {
+                // Already onboarded (a live workspace exists) → go to dashboard.
+                if (res.status === 409) {
+                    router.replace("/dashboard");
+                    return;
+                }
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to create sheet");
                 trackAmplitudeError("Create Sheet Failed", text || "Failed to create sheet");
@@ -356,7 +352,11 @@ export function OnboardingWizard() {
                 // Disambiguate via the machine-readable code in the body.
                 if (res.status === 409) {
                     const data = await res.json().catch(() => null);
-                    if (data?.code === "backfill_already_started") {
+                    // Both codes mean "you're already done" → go to the dashboard.
+                    if (
+                        data?.code === "backfill_already_started" ||
+                        data?.code === "onboarding_complete"
+                    ) {
                         return "already_started";
                     }
                     setError(data?.message || "Failed to save sync settings");
@@ -515,6 +515,8 @@ export function OnboardingWizard() {
             try {
                 trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
                 setSubmitting(true);
+                // We own the redirect from here on; suppress the guard's redirect.
+                completingRef.current = true;
 
                 // 1) Confirm entitlement (start trial or already active)
                 const trialOk = await handleStartTrial(createdSpreadsheetId);
@@ -553,6 +555,7 @@ export function OnboardingWizard() {
                 trackAmplitudeEvent("Onboarding Completed", eventProperties);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
+                completingRef.current = false;
                 setSubmitting(false);
                 return;
             }
