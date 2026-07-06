@@ -9,7 +9,7 @@ import {
     type SyncConfig,
 } from "@/lib/schemas/sync-config";
 import { getStripeAccountIdForUser } from "@/lib/stripe/stripe-connection";
-import { createSyncConfig, ensureSyncConfigForSheet, defaultHistoryDays } from "@/lib/dynamo/sync-config";
+import { buildSyncConfigItem, replaceSyncConfigAtomic, ensureSyncConfigForSheet, defaultHistoryDays } from "@/lib/dynamo/sync-config";
 import { getGoogleClientConfigForShard, GOOGLE_DEFAULT_PROJECT_SHARD } from "./google-oauth-sharding";
 import { UserState } from "../app-state/user-state";
 
@@ -43,6 +43,15 @@ export async function createWorkspaceSheetAndConfig(
 
     if (!userId) {
         throw new Error("User ID not found");
+    }
+
+    // Resolve the Stripe account BEFORE creating any Drive/Sheets resources so a
+    // user without a Stripe account never leaves an orphaned empty spreadsheet
+    // behind. Onboarding requires Stripe first; this is defense in depth.
+    const stripeAccountId =
+        baseSyncConfig?.stripeAccountId ?? (await getStripeAccountIdForUser(userId));
+    if (!stripeAccountId) {
+        throw new Error("Stripe account ID not found for user");
     }
 
     // 1) Google auth
@@ -134,13 +143,6 @@ export async function createWorkspaceSheetAndConfig(
         });
     }
 
-    // 4) Derive Stripe account for config
-    const stripeAccountId = baseSyncConfig?.stripeAccountId ?? (await getStripeAccountIdForUser(userId));
-
-    if (!stripeAccountId) {
-        throw new Error("Stripe account ID not found for user");
-    }
-
     let syncConfig: SyncConfig | undefined;
 
     if (!baseSyncConfig) { // first-time onboarding and new sheet
@@ -179,17 +181,25 @@ export async function createWorkspaceSheetAndConfig(
         workingSheetMessage,
     });
 
-    // 7) Create SyncConfig for this sheet
-    syncConfig = await createSyncConfig({
+    // 7) Persist the new config, atomically retiring the one it replaces so the
+    // swap never leaves two active configs (or zero).
+    const newConfig = buildSyncConfigItem({
         userId,
         spreadsheetId,
         stripeAccountId,
         stripeDataSyncMap: boundStripeDataSyncMap,
         historyMode: baseSyncConfig?.historyMode ?? "since",
         historySinceDays: baseSyncConfig?.historySinceDays ?? defaultHistoryDays,
-        syncStatus: "syncing",
+        // backfill_running so the caller can seed the new sheet; the backfill
+        // fills history, creates the cursors, then flips it to syncing.
+        syncStatus: "backfill_running",
         timezone: resolvedTimezone,
         locale: resolvedLocale,
+    });
+    syncConfig = await replaceSyncConfigAtomic({
+        userId,
+        oldSpreadsheetId: baseSyncConfig.spreadsheetId,
+        newConfig,
     });
 
     return {

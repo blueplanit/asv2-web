@@ -1,9 +1,11 @@
 // components/dashboard/backfill-intro-modal.tsx
 "use client";
 
+import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/20/solid";
 import { ExternalLinkIcon } from "lucide-react";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+import { SurveyStep } from "./dashboard";
 
 type BackfillIntroModalProps = {
     open: boolean;
@@ -11,6 +13,7 @@ type BackfillIntroModalProps = {
     sheetUrl: string;
     workspaceName: string;
     nameLoading: boolean;
+    onSurveyStepChange?: (step: SurveyStep) => void;
 };
 
 export function BackfillIntroModal({
@@ -19,8 +22,35 @@ export function BackfillIntroModal({
     sheetUrl,
     workspaceName,
     nameLoading,
+    onSurveyStepChange,
 }: BackfillIntroModalProps) {
+    const [surveyStep, setSurveyStep] = useState<SurveyStep>("q1");
+    const [role, setRole] = useState("");
+    const [problem, setProblem] = useState("");
+    // Guards against a double-click posting the survey twice; the confirmation
+    // card advances synchronously so there is no in-flight "submitting" state.
+    const submittedRef = useRef(false);
+
+    const goToStep = useCallback(
+        (next: SurveyStep) => {
+            setSurveyStep(next);
+            onSurveyStepChange?.(next);
+        },
+        [onSurveyStepChange],
+    );
+
+    useEffect(() => {
+        if (!open) return;
+        setSurveyStep("q1");
+        setRole("");
+        setProblem("");
+        submittedRef.current = false;
+        onSurveyStepChange?.("q1");
+    }, [open, onSurveyStepChange]);
+
     if (!open) return null;
+
+    const isSurveyPhase = surveyStep === "q1" || surveyStep === "q2";
 
     function handleClose() {
         onOpenChange(false);
@@ -34,53 +64,254 @@ export function BackfillIntroModal({
         });
     }
 
+    function canSubmitSurvey() {
+        return problem.trim().length > 0;
+    }
+
+    async function submitSurveyAnswers(skipped: boolean) {
+        const trimmedRole = role.trim();
+        const trimmedProblem = problem.trim();
+        // On skip, still capture anything the user already typed; only fall back
+        // to "skipped" for fields left blank (the API requires both non-empty).
+        const body = skipped
+            ? {
+                  role: trimmedRole || "skipped",
+                  problem: trimmedProblem || "skipped",
+              }
+            : { role: trimmedRole, problem: trimmedProblem };
+        try {
+            const response = await fetch("/api/onboarding/survey", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                console.error("Failed to submit survey answers");
+            }
+        } catch {
+            console.error("Failed to submit survey answers");
+        }
+    }
+
+    // Send answers (fire-and-forget) and advance to the confirmation card
+    // immediately — the POST must never block the UI.
+    function finishSurvey(skipped: boolean) {
+        if (submittedRef.current) return;
+        submittedRef.current = true;
+        void submitSurveyAnswers(skipped);
+        goToStep("done");
+    }
+
+    function handleQ1Next() {
+        if (!role.trim()) return;
+        goToStep("q2");
+    }
+
+    function handleQ2Submit() {
+        if (!canSubmitSurvey()) return;
+        void finishSurvey(false);
+    }
+
     return (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4">
-            <div
-                className="absolute inset-0"
-                aria-hidden="true"
-                onClick={handleClose}
-            />
-            <div className="relative z-50 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
-                <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
-                        Onboarding complete!
-                    </p>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                        Nice! We’re loading your Stripe data into{" "}
-                        <span className="text-indigo-700">{nameLoading ? <div className="mt-1 h-6 w-64 animate-pulse rounded bg-slate-200" /> : 
-                        <span className="flex items-center gap-1"><a href={sheetUrl} target="_blank" rel="noreferrer" className="hover:underline" onClick={() => trackSpreadsheetLinkClick("backfill_intro_modal_title")}>{workspaceName}</a>
-                        <ExternalLinkIcon className="h-4 w-4 cursor-pointer" aria-hidden="true" onClick={() => {
-                            trackSpreadsheetLinkClick("backfill_intro_modal_icon");
-                            window.open(sheetUrl, "_blank");
-                        }}/></span>}</span>
-                    </h2>
-                    <p className="text-sm text-slate-700">
-                        This may take a few minutes depending on volume. You can safely leave this page.
-                    </p>
-                </div>
+            {!isSurveyPhase && (
+                <div
+                    className="absolute inset-0"
+                    aria-hidden="true"
+                    onClick={handleClose}
+                />
+            )}
+            <div className="relative z-50 flex w-full max-w-2xl min-h-[300px] flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white p-10 shadow-xl">
+                {surveyStep === "q1" && (
+                    <div className="w-full space-y-6">
+                        <div className="space-y-3 text-center">
+                            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
+                                Question 1 of 2
+                            </p>
+                            <hr className="mx-auto w-12 border-indigo-100" />
+                            <h2 className="text-xl font-semibold text-slate-900">
+                                What best describes your role?
+                            </h2>
+                        </div>
+                        <input
+                            type="text"
+                            value={role}
+                            onChange={(e) => setRole(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleQ1Next();
+                                }
+                            }}
+                            placeholder="Founder, CEO, Finance Manager, Operations Manager ..."
+                            className="w-full rounded-xl border border-indigo-200 px-4 py-3 text-base text-slate-900 placeholder:text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            maxLength={120}
+                        />
+                        <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                            {/* Next is first in the DOM so it follows the input
+                                in tab order; order utilities keep it visually on
+                                the right with Skip on the left. */}
+                            <button
+                                type="button"
+                                onClick={handleQ1Next}
+                                disabled={!role.trim()}
+                                className="order-2 inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void finishSurvey(true)}
+                                className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
+                            >
+                                Skip
+                            </button>
+                        </div>
+                    </div>
+                )}
 
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <a
-                        href={sheetUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={() => trackSpreadsheetLinkClick("backfill_intro_modal_button")}
-                        className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                        <span className="flex items-center gap-2">
-                        <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                        Open Google Sheet
-                        </span>
-                    </a>
-                    <button
-                        type="button"
-                        onClick={handleClose}
-                        className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                    >
-                        Got it
-                    </button>
-                </div>
+                {surveyStep === "q2" && (
+                    <div className="w-full space-y-6">
+                        <div className="space-y-3 text-center">
+                            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
+                                Question 2 of 2
+                            </p>
+                            <hr className="mx-auto w-12 border-indigo-100" />
+                            <h2 className="text-xl font-semibold text-slate-900">
+                                What problem are you trying to solve with
+                                SyncStaq?
+                            </h2>
+                        </div>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={problem}
+                            onChange={(e) => setProblem(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleQ2Submit();
+                                }
+                            }}
+                            placeholder="Sync Stripe payments to Google Sheets, track payouts, avoid manual CSV exports..."
+                            className="w-full rounded-xl border border-indigo-200 px-4 py-3 text-base text-slate-900 placeholder:text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            maxLength={280}
+                        />
+                        <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                            {/* The submit group is first in the DOM so Continue
+                                follows the input in tab order; order utilities
+                                keep Skip visually on the left. */}
+                            <div className="order-2 flex items-center gap-3 sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={handleQ2Submit}
+                                    disabled={!canSubmitSurvey()}
+                                    className="order-2 inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Continue
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => goToStep("q1")}
+                                    className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Back
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void finishSurvey(true)}
+                                className="order-1 inline-flex cursor-pointer items-center justify-center rounded-full pl-0 pr-3 py-2 text-xs font-normal text-slate-300 hover:text-slate-400"
+                            >
+                                Skip
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {surveyStep === "done" && (
+                    <>
+                        <div className="w-full space-y-4">
+                            <p className="text-lg font-bold uppercase tracking-tight text-indigo-600">
+                                Onboarding complete!
+                            </p>
+                            <h2 className="text-lg font-semibold text-slate-900">
+                                Nice! We&apos;re loading your Stripe data into{" "}
+                                <span className="text-indigo-700">
+                                    {nameLoading ? (
+                                        <span className="mt-1 inline-block h-6 w-64 animate-pulse rounded bg-slate-200" />
+                                    ) : (
+                                        <span className="flex items-center gap-1">
+                                            <a
+                                                href={sheetUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="hover:underline"
+                                                onClick={() =>
+                                                    trackSpreadsheetLinkClick(
+                                                        "backfill_intro_modal_title",
+                                                    )
+                                                }
+                                            >
+                                                {workspaceName}
+                                            </a>
+                                            <button
+                                                type="button"
+                                                aria-label="Open spreadsheet in new tab"
+                                                className="inline-flex cursor-pointer items-center justify-center rounded text-indigo-700 hover:text-indigo-500"
+                                                onClick={() => {
+                                                    trackSpreadsheetLinkClick(
+                                                        "backfill_intro_modal_icon",
+                                                    );
+                                                    window.open(
+                                                        sheetUrl,
+                                                        "_blank",
+                                                        "noopener,noreferrer",
+                                                    );
+                                                }}
+                                            >
+                                                <ExternalLinkIcon
+                                                    className="h-4 w-4"
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                        </span>
+                                    )}
+                                </span>
+                            </h2>
+                            <p className="text-sm text-slate-700">
+                                This may take a few minutes depending on volume.
+                                You can safely leave this page.
+                            </p>
+                        </div>
+
+                        <div className="w-full mt-5 flex flex-col gap-2 sm:flex-row sm:justify-between">
+                            <a
+                                href={sheetUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={() =>
+                                    trackSpreadsheetLinkClick(
+                                        "backfill_intro_modal_button",
+                                    )
+                                }
+                                className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                                    Open Google Sheet
+                                </span>
+                            </a>
+                            <button
+                                type="button"
+                                onClick={handleClose}
+                                className="inline-flex cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

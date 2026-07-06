@@ -7,7 +7,7 @@ import type { UserState } from "@/lib/app-state/user-state";
 type UserStateContextValue = {
     user: UserState;
     setUser: React.Dispatch<React.SetStateAction<UserState>>;
-    refresh: () => Promise<void>;
+    refresh: () => Promise<UserState | null>;
 };
 
 const UserStateContext = createContext<UserStateContextValue | null>(null);
@@ -21,11 +21,12 @@ export function UserStateProvider({
 }) {
     const [user, setUser] = useState<UserState>(initialState);
 
-    async function refresh() {
+    async function refresh(): Promise<UserState | null> {
         const res = await fetch("/api/user/state", { cache: "no-store" });
-        if (!res.ok) return; // optionally toast an error
+        if (!res.ok) return null;
         const next: UserState = await res.json();
         setUser(next);
+        return next;
     }
 
     return (

@@ -3,8 +3,9 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getSyncConfig, updateSyncConfig } from "@/lib/dynamo/sync-config";
+import { getSyncConfig } from "@/lib/dynamo/sync-config";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
+import { triggerInitialBackfill } from "@/lib/sync/trigger-backfill";
 
 export const runtime = "nodejs";
 
@@ -32,7 +33,8 @@ export async function POST(req: Request) {
             return new NextResponse("No active sync config to rotate", { status: 400 });
         }
 
-        // 1) Create new sheet + tabs + new config based on existing settings
+        // Create the new sheet + config and retire the old config atomically
+        // (the retire runs inside createWorkspaceSheetAndConfig's rotation path).
         const newWorkspaceSheetTitle = `${workspaceSheetTitle} (New)`
         const { spreadsheetId, spreadsheetUrl, syncConfig: newConfig } =
             await createWorkspaceSheetAndConfig({
@@ -46,12 +48,9 @@ export async function POST(req: Request) {
                 baseSyncConfig: existing,
             });
 
-        // 2) Mark old config as paused (or archived)
-        await updateSyncConfig({
-            userId,
-            spreadsheetId: existingSpreadsheetId,
-            syncStatus: "retired",
-        });
+        // Seed the new sheet: fill history and create its sync cursors; the
+        // backfill then flips the config from backfill_running to syncing.
+        await triggerInitialBackfill(userId, spreadsheetId);
 
         return NextResponse.json({
             newSpreadsheetId: spreadsheetId,

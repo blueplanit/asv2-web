@@ -8,7 +8,7 @@ export function apiErrorResponse(
     route: string,
     status: number,
     message: string,
-    extras?: { userId?: string; error?: unknown },
+    extras?: Record<string, any> & { userId?: string; error?: unknown },
 ): NextResponse {
     const { userId, error } = extras ?? {};
     const logPayload: Record<string, unknown> = { route, status, message };

@@ -7,7 +7,8 @@ import {
     DataSyncEntryIdEnum,
     type DataSyncEntryId,
 } from "@/lib/schemas/sync-config";
-import { getSyncConfig, updateSyncConfig } from "@/lib/dynamo/sync-config";
+import { getSyncConfig, getSyncConfigs, updateSyncConfig } from "@/lib/dynamo/sync-config";
+import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
 import {
     ensureStripeDataSyncMap,
     applyStripeSelectionToStripeDataSyncMap,
@@ -16,10 +17,30 @@ import { ensureSheetTabsForStripeDataSyncMap } from "@/lib/google/google-stripe-
 import { SyncStatus } from "@/lib/types/sync-status";
 import { UserState } from "@/lib/app-state/user-state";
 import { apiErrorResponse } from "@/lib/api/api-error-response";
+import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
 
 const ROUTE = "POST /api/update/sync-config";
+
+/**
+ * 409 conflicts from this route have two distinct meanings; the client must be
+ * able to tell them apart (a benign "already started" redirects to the
+ * dashboard, while a connection failure must surface an inline error). Return a
+ * machine-readable `code` alongside the human-readable message.
+ */
+type SyncConfigConflictCode =
+    | "backfill_already_started"
+    | "connections_missing"
+    | "onboarding_complete";
+
+function conflictResponse(
+    code: SyncConfigConflictCode,
+    message: string,
+    userId: string,
+): NextResponse {
+    return apiErrorResponse(ROUTE, 409, message, { userId, code });
+}
 
 type Body = {
     selectedDataSyncEntries?: string[];
@@ -82,7 +103,19 @@ export async function POST(req: Request) {
             : undefined;
     const syncStatus = body?.syncStatus;
 
-    // Only compute & touch Sheets if we're actually changing the selection or working-sheet config.
+    if (syncStatus === "backfill_running") {
+        // Already onboarded → don't let them re-run the onboarding backfill.
+        const allConfigs = await getSyncConfigs(userId);
+        if (hasCompletedOnboarding(allConfigs)) {
+            return conflictResponse("onboarding_complete", "You're already set up.", userId);
+        }
+        const guard = await assertConnectionsReadyForBackfill(userId, existing);
+        if (!guard.ok) {
+            return conflictResponse("connections_missing", guard.message, userId);
+        }
+    }
+
+    // Only compute & touch Sheets if we’re actually changing the selection or working-sheet config.
     let stripeDataSyncMapToPersist = undefined as typeof existing.stripeDataSyncMap | undefined;
 
     const hasStripeSelectionChange = !!selectedDataSyncEntries;
@@ -131,7 +164,7 @@ export async function POST(req: Request) {
             "name" in err &&
             err.name === "ConditionalCheckFailedException"
         ) {
-            return apiErrorResponse(ROUTE, 409, "Backfill already started", { userId });
+            return conflictResponse("backfill_already_started", "Backfill already started", userId);
         }
         throw err;
     }

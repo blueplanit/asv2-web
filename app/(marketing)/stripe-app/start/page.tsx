@@ -36,9 +36,8 @@ function nextPathForStage(stage: OnboardingStage) {
         case "stripe_connected":
             return "/onboarding?step=2";
         case "connections_linked":
-            return "/onboarding?step=3";
         case "sheet_created":
-            return "/onboarding?step=4";
+            return "/onboarding?step=3";
         case "ready":
             return "/dashboard";
         default:

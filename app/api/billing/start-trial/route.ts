@@ -18,6 +18,8 @@ import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
 import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
 import { apiErrorResponse } from "@/lib/api/api-error-response";
 import type { UserProfile } from "@/lib/schemas/user-profile";
+import { getSyncConfig } from "@/lib/dynamo/sync-config";
+import { assertConnectionsReadyForBackfill } from "@/lib/app-state/connection-guards";
 
 export const runtime = "nodejs";
 
@@ -27,6 +29,7 @@ const TRIAL_ALREADY_USED_MESSAGE = "Trial already used. Please upgrade to a paid
 type Body = {
     planId?: BillingPlanId;          // optional: default to "pro"
     interval?: BillingInterval;      // optional: default to "monthly"
+    spreadsheetId?: string;          // onboarding config to verify connections against
 };
 
 function alreadyActiveResponse(profile: UserProfile) {
@@ -65,6 +68,20 @@ export async function POST(req: NextRequest) {
     const profile = await getUserProfile(userId);
     if (!profile) {
         return apiErrorResponse(ROUTE, 400, "User profile not found", { userId });
+    }
+
+    // Verify the user has connected Stripe + Google before creating a trial, so a
+    // permissions failure doesn't leave a trial behind that blocks retries.
+    const spreadsheetId = body?.spreadsheetId;
+    if (spreadsheetId) {
+        const syncConfig = await getSyncConfig(userId, spreadsheetId);
+        if (!syncConfig) {
+            return new NextResponse("Sync config not found", { status: 404 });
+        }
+        const guard = await assertConnectionsReadyForBackfill(userId, syncConfig);
+        if (!guard.ok) {
+            return new NextResponse(guard.message, { status: 409 });
+        }
     }
 
     // Idempotent: already entitled — do not create a duplicate subscription
