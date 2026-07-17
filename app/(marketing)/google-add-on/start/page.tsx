@@ -8,12 +8,12 @@ import { appendSearchParams, nextPathForStage } from "@/lib/app-state/onboarding
 type SearchParamValue = string | string[] | undefined;
 type SearchParams = Promise<Record<string, SearchParamValue>>;
 
-export default async function StripeAppStartPage(props: {
+export default async function GoogleAddOnStartPage(props: {
     searchParams: SearchParams;
 }) {
     const session = await getServerSession(authOptions);
     const searchParams = await props.searchParams;
-    const callbackUrl = appendSearchParams("/stripe-app/start", searchParams);
+    const callbackUrl = appendSearchParams("/google-add-on/start", searchParams);
 
     if (!session?.user || !(session.user as any).userId) {
         return (
@@ -21,7 +21,7 @@ export default async function StripeAppStartPage(props: {
                 callbackUrl={callbackUrl}
                 title="Welcome to SyncStaq"
                 description="You’re in the right place to finish setting up SyncStaq. Continue with Google to connect Stripe and Google Drive, create your sheet, and start syncing Stripe data to Google Sheets."
-                footerNote="You’ll finish setup on SyncStaq.com, and you can always reopen SyncStaq from Stripe when you need it."
+                footerNote="You’ll finish setup on SyncStaq.com, and you can always reopen SyncStaq from the Google Sheets add-on when you need it."
             />
         );
     }
