@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { MailerLiteCommissionForm } from "@/components/marketing/mailerlite-commission-form";
 
 const metaTitle = "Calculate Stripe Commissions & Revenue Share in Google Sheets | SyncStaq";
 const metaDescription =
@@ -190,6 +191,8 @@ export default function StripeCommissionRevenueSharePage() {
 
                 <CommissionSheetPreview />
             </section>
+
+            <MailerLiteCommissionForm />
 
             <section className="border-y border-slate-200 bg-white/70">
                 <div className="mx-auto max-w-6xl px-6 py-16">
