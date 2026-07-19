@@ -4,9 +4,18 @@ import { OAuth2Client } from "google-auth-library";
 import { getUserProfileByGoogleUserId } from "@/lib/dynamo/user-profile";
 import { getSyncConfigs } from "@/lib/dynamo/sync-config";
 import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
-import { toSafeSyncConfig } from "@/lib/sync/safe-sync-config";
+import {
+    toSafeSyncConfig,
+    type SafeSyncConfig,
+} from "@/lib/sync/safe-sync-config";
 
 export const runtime = "nodejs";
+
+// Add-on-only extension of SafeSyncConfig. spreadsheetUrl stays out of the
+// shared helper so the Stripe-app endpoint remains ID-free.
+type AddOnSafeSyncConfig = SafeSyncConfig & {
+    spreadsheetUrl: string;
+};
 
 // Called server-to-server from the Apps Script add-on (UrlFetchApp), so no CORS
 // is needed. Identity comes from a verified Google ID token, not a raw email.
@@ -78,7 +87,10 @@ export async function GET(req: NextRequest) {
         }
 
         const syncConfigs = await getSyncConfigs(profile.userId);
-        const safeConfigs = syncConfigs.map(toSafeSyncConfig);
+        const safeConfigs: AddOnSafeSyncConfig[] = syncConfigs.map((c) => ({
+            ...toSafeSyncConfig(c),
+            spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${c.spreadsheetId}`,
+        }));
 
         return NextResponse.json(
             {
