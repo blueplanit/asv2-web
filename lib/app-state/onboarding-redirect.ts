@@ -1,9 +1,27 @@
 // Shared redirect helpers for companion "start" entry pages (Stripe app,
 // Google Sheets add-on). Both send an authenticated user to the right point in
-// onboarding (or the dashboard) based on their stage, preserving inbound query.
+// onboarding (or the dashboard) based on their stage.
 import type { OnboardingStage } from "@/lib/app-state/user-state";
 
 type SearchParamValue = string | string[] | undefined;
+
+// Only these inbound keys survive onto callbackUrl / post-login redirects.
+// Add keys intentionally (e.g. spreadsheetId) — never forward arbitrary query.
+export const COMPANION_START_ALLOWED_PARAMS: readonly string[] = [];
+
+export function pickAllowedSearchParams(
+    searchParams: Record<string, SearchParamValue>,
+    allowedKeys: readonly string[],
+): Record<string, SearchParamValue> {
+    const allowed = new Set(allowedKeys);
+    const picked: Record<string, SearchParamValue> = {};
+    for (const key of allowed) {
+        if (key in searchParams) {
+            picked[key] = searchParams[key];
+        }
+    }
+    return picked;
+}
 
 export function appendSearchParams(
     path: string,
@@ -44,4 +62,16 @@ export function nextPathForStage(stage: OnboardingStage) {
         default:
             return "/onboarding?step=1";
     }
+}
+
+// Relative paths only — blocks open redirects into NextAuth callbackUrl.
+export function sanitizeCallbackUrl(
+    value: string | undefined,
+    fallback = "/dashboard",
+) {
+    if (!value) return fallback;
+    if (!value.startsWith("/")) return fallback;
+    if (value.startsWith("//")) return fallback;
+    if (value.includes("://")) return fallback;
+    return value;
 }

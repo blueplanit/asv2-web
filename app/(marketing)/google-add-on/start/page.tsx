@@ -3,7 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { LoginForm } from "@/components/login-form";
 import { loadUserState } from "@/lib/app-state/user-state";
-import { appendSearchParams, nextPathForStage } from "@/lib/app-state/onboarding-redirect";
+import {
+    appendSearchParams,
+    COMPANION_START_ALLOWED_PARAMS,
+    nextPathForStage,
+    pickAllowedSearchParams,
+} from "@/lib/app-state/onboarding-redirect";
 
 type SearchParamValue = string | string[] | undefined;
 type SearchParams = Promise<Record<string, SearchParamValue>>;
@@ -13,7 +18,11 @@ export default async function GoogleAddOnStartPage(props: {
 }) {
     const session = await getServerSession(authOptions);
     const searchParams = await props.searchParams;
-    const callbackUrl = appendSearchParams("/google-add-on/start", searchParams);
+    const safeParams = pickAllowedSearchParams(
+        searchParams,
+        COMPANION_START_ALLOWED_PARAMS,
+    );
+    const callbackUrl = appendSearchParams("/google-add-on/start", safeParams);
 
     if (!session?.user || !(session.user as any).userId) {
         return (
@@ -29,5 +38,5 @@ export default async function GoogleAddOnStartPage(props: {
     const userId = (session.user as any).userId as string;
     const userState = await loadUserState(userId);
 
-    redirect(appendSearchParams(nextPathForStage(userState.onboardingStage), searchParams));
+    redirect(appendSearchParams(nextPathForStage(userState.onboardingStage), safeParams));
 }

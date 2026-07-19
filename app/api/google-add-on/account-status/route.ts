@@ -87,7 +87,10 @@ export async function GET(req: NextRequest) {
         }
 
         const syncConfigs = await getSyncConfigs(profile.userId);
-        const safeConfigs: AddOnSafeSyncConfig[] = syncConfigs.map((c) => ({
+        // Retired workspaces keep spreadsheet IDs in Dynamo; don't expose them
+        // (or stale Open-spreadsheet links) on this companion surface.
+        const activeConfigs = syncConfigs.filter((c) => c.syncStatus !== "retired");
+        const safeConfigs: AddOnSafeSyncConfig[] = activeConfigs.map((c) => ({
             ...toSafeSyncConfig(c),
             spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${c.spreadsheetId}`,
         }));
@@ -104,11 +107,7 @@ export async function GET(req: NextRequest) {
     } catch (error) {
         console.error("[google-add-on/account-status] lookup failed", { error });
         return NextResponse.json(
-            {
-                error: "Lookup failed",
-                message:
-                    error instanceof Error ? error.message : "Unexpected lookup error",
-            },
+            { error: "Lookup failed" },
             { status: 500, headers: noStore },
         );
     }
