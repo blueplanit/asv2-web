@@ -1,203 +1,141 @@
-import Script from "next/script";
+"use client";
 
-const mailerLiteStyles = `
-  @import url("https://assets.mlcdn.com/fonts.css?version=1783937");
+import { useRef, useState, type FormEvent } from "react";
+import ReCAPTCHA from "react-google-recaptcha";
 
-  #mlb2-43150803.ml-form-embedContainer {
-    box-sizing: border-box;
-    display: table;
-    margin: 0 auto;
-    position: static;
-    width: 100%;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedWrapper {
-    background: #E2E8F0;
-    border-radius: 4px;
-    box-sizing: border-box;
-    display: inline-block;
-    margin: 0;
-    max-width: 400px;
-    padding: 0;
-    position: relative;
-    width: 100%;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-align-center {
-    text-align: center;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedBody {
-    padding: 20px 20px 0;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedContent {
-    margin: 0 0 20px;
-    text-align: left;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedContent h4,
-  #mlb2-43150803.ml-form-embedContainer .ml-form-successContent h4 {
-    color: #0F172A;
-    font-family: 'Open Sans', Arial, sans-serif;
-    font-size: 26px;
-    font-weight: 400;
-    line-height: 1.2;
-    margin: 0 0 10px;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedContent p,
-  #mlb2-43150803.ml-form-embedContainer .ml-form-successContent p {
-    color: #475569;
-    font-family: 'Open Sans', Arial, sans-serif;
-    font-size: 16px;
-    font-weight: 400;
-    line-height: 22px;
-    margin: 0;
-    text-align: left;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedBody form {
-    margin: 0;
-    width: 100%;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-fieldRow {
-    margin: 0 0 10px;
-    width: 100%;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-fieldRow input {
-    background: #FFFFFF !important;
-    border: 1px solid #CCCCCC !important;
-    border-radius: 4px !important;
-    box-sizing: border-box !important;
-    color: #333333 !important;
-    font-family: 'Open Sans', Arial, sans-serif;
-    font-size: 14px !important;
-    line-height: 21px !important;
-    padding: 10px !important;
-    width: 100% !important;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedSubmit {
-    margin: 0 0 20px;
-    width: 100%;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedSubmit button {
-    background: #4F46E5 !important;
-    border: 0 !important;
-    border-radius: 4px !important;
-    box-sizing: border-box !important;
-    color: #FFFFFF !important;
-    cursor: pointer;
-    font-family: 'Open Sans', Arial, sans-serif !important;
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    line-height: 21px !important;
-    padding: 10px !important;
-    width: 100% !important;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedSubmit button:hover {
-    background: #333333 !important;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-embedSubmit button.loading {
-    display: none;
-  }
-  #mlb2-43150803.ml-form-embedContainer .sr-only {
-    border: 0;
-    clip: rect(0, 0, 0, 0);
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    padding: 0;
-    position: absolute;
-    width: 1px;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-error input {
-    border-color: red !important;
-  }
-  #mlb2-43150803.ml-form-embedContainer .ml-form-successBody {
-    padding: 20px;
-  }
-  @media only screen and (max-width: 400px) {
-    #mlb2-43150803.ml-form-embedContainer .ml-form-embedWrapper {
-      width: 100%;
-    }
-  }
-`;
+const COMMISSION_TEMPLATE_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1Cb4xUlqlWGOmVqTnU_19gykJs6Zy-GYlfe4Z63Xxl5I/view?usp=sharing";
+
+// Public site key, taken from the original MailerLite embed. MailerLite holds
+// the matching secret and verifies the token server-side, so this exact key
+// must be reused — a different key would fail their check. It's a v2 checkbox
+// key, hence the "I'm not a robot" widget below.
+const RECAPTCHA_SITE_KEY = "6Lf1KHQUAAAAAFNKEX1hdSWCS3mRMv4FlFaNslaD";
+
+type Status = "idle" | "submitting" | "success" | "error";
 
 export function MailerLiteCommissionForm() {
-    return (
-        <section className="border-y border-slate-200 bg-slate-50/80">
-            <div className="mx-auto max-w-6xl px-6 py-12 sm:py-14">
-                <div id="mlb2-43150803" className="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-43150803">
-                    <style dangerouslySetInnerHTML={{ __html: mailerLiteStyles }} />
-                    <div className="ml-form-align-center">
-                        <div className="ml-form-embedWrapper embedForm">
-                            <div className="ml-form-embedBody ml-form-embedBodyDefault row-form">
-                                <div className="ml-form-embedContent">
-                                    <h4>Free Stripe Commission Tracker</h4>
-                                    <p>
-                                        A Google Sheet that calculates rep commissions and partner revenue share from Stripe — net of fees and refunds. Enter your email and it&apos;s yours.
-                                    </p>
-                                </div>
-                                <form
-                                    className="ml-block-form"
-                                    action="https://assets.mailerlite.com/jsonp/2476794/forms/191558050637677901/subscribe"
-                                    data-code=""
-                                    method="post"
-                                    target="_blank"
-                                >
-                                    <div className="ml-form-formContent">
-                                        <div className="ml-form-fieldRow ml-last-item">
-                                            <div className="ml-field-group ml-field-email ml-validate-email ml-validate-required">
-                                                <label className="sr-only" htmlFor="mailerLiteCommissionEmail">
-                                                    Email
-                                                </label>
-                                                <input
-                                                    id="mailerLiteCommissionEmail"
-                                                    aria-label="email"
-                                                    aria-required="true"
-                                                    type="email"
-                                                    className="form-control"
-                                                    data-inputmask=""
-                                                    name="fields[email]"
-                                                    placeholder="Email"
-                                                    autoComplete="email"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <input type="hidden" name="ml-submit" value="1" />
-                                    <div className="ml-form-embedSubmit">
-                                        <button type="submit" className="primary">
-                                            Send me the template
-                                        </button>
-                                        <button disabled style={{ display: "none" }} type="button" className="loading">
-                                            <span className="ml-form-embedSubmitLoad sr-only">Loading...</span>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" name="anticsrf" value="true" />
-                                </form>
-                            </div>
-                            <div className="ml-form-successBody row-success" style={{ display: "none" }}>
-                                <div className="ml-form-successContent">
-                                    <h4>Thank you!</h4>
-                                    <p>You have successfully joined our subscriber list.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <Script id="mailerlite-success-43150803" strategy="afterInteractive">
-                {`function ml_webform_success_43150803() {
-  try {
-    window.top.location.href = "https://docs.google.com/spreadsheets/d/1Cb4xUlqlWGOmVqTnU_19gykJs6Zy-GYlfe4Z63Xxl5I/view?usp=sharing";
-  } catch (e) {
-    window.location.href = "https://docs.google.com/spreadsheets/d/1Cb4xUlqlWGOmVqTnU_19gykJs6Zy-GYlfe4Z63Xxl5I/view?usp=sharing";
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<Status>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+
+  function resetRecaptcha() {
+    recaptchaRef.current?.reset();
+    setRecaptchaToken(null);
   }
-}`}
-            </Script>
-            <Script
-                src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519"
-                strategy="afterInteractive"
-            />
-            <Script id="mailerlite-takel-43150803" strategy="afterInteractive">
-                {`fetch("https://assets.mailerlite.com/jsonp/2476794/forms/191558050637677901/takel")`}
-            </Script>
-        </section>
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!recaptchaToken) {
+      setStatus("error");
+      setError("Please confirm you're not a robot.");
+      return;
+    }
+
+    setStatus("submitting");
+    setError(null);
+
+    try {
+      const res = await fetch("/api/newsletter/commission-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, recaptchaToken }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "Something went wrong. Please try again.");
+      }
+
+      setStatus("success");
+    } catch (err) {
+      setStatus("error");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
+      // reCAPTCHA v2 tokens are single-use; force a fresh challenge before retry.
+      resetRecaptcha();
+    }
+  }
+
+  if (status === "success") {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">You&apos;re all set</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Your commission tracker template is ready. Open it and make your own
+          copy to get started.
+        </p>
+        <a
+          href={COMMISSION_TEMPLATE_SHEET_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          Open your template
+        </a>
+      </div>
     );
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+    >
+      <label
+        htmlFor="commission-email"
+        className="block text-sm font-medium text-slate-900"
+      >
+        Email address
+      </label>
+      <input
+        id="commission-email"
+        name="email"
+        type="email"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        disabled={status === "submitting"}
+        placeholder="you@company.com"
+        className="mt-2 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60"
+      />
+
+      <div className="mt-4">
+        <ReCAPTCHA
+          ref={recaptchaRef}
+          sitekey={RECAPTCHA_SITE_KEY}
+          onChange={(token) => setRecaptchaToken(token)}
+          onExpired={() => setRecaptchaToken(null)}
+          onErrored={() => setRecaptchaToken(null)}
+        />
+      </div>
+
+      {status === "error" && error ? (
+        <p className="mt-2 text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        type="submit"
+        disabled={status === "submitting" || !recaptchaToken}
+        className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {status === "submitting" ? "Sending…" : "Get the template"}
+      </button>
+
+      <p className="mt-3 text-xs text-slate-500">
+        We&apos;ll email you the commission tracker template. No spam.
+      </p>
+    </form>
+  );
 }
