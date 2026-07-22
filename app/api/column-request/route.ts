@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { getServerSession, Session } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { IS_DEV } from "@/lib/constants";
+import { isAllowedOrigin } from "@/lib/http/allowed-origins";
 import {
     COLUMN_REQUEST_MAX_SCREENSHOTS,
     COLUMN_REQUEST_MAX_PER_FILE_BYTES,
@@ -29,19 +30,9 @@ const rateLimiter = new RateLimiterMemory({
     duration: 3600,
 });
 
-function safeOrigin(req: Request) {
-    const origin = req.headers.get("origin");
-    if (!origin) return true;
-    return (
-        origin === "https://syncstaq.com" ||
-        origin === "https://www.syncstaq.com" ||
-        origin === "http://localhost:3000"
-    );
-}
-
 export async function POST(req: Request) {
     try {
-        if (!safeOrigin(req))
+        if (!isAllowedOrigin(req.headers.get("origin")))
             return new NextResponse("Forbidden", { status: 403 });
 
         const session = (await getServerSession(authOptions)) as Session;

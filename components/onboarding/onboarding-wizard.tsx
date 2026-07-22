@@ -6,6 +6,8 @@ import * as React from "react";
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserState } from "../user-state-provider";
+import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
+import { isUserProfileEntitled } from "@/lib/app-state/subscription-entitlement";
 import { useEffect } from "react";
 import { DataSyncEntryId } from "@/lib/schemas/sync-config";
 import { StripeObjectsStep } from "./stripe-objects-config";
@@ -56,23 +58,17 @@ const steps: Step[] = [
         title: "Connect Stripe",
         description: "Connect the Stripe account you want synced to Google Sheets via a secure connection using Stripe Connect OAuth.",
         ctaLabel: "Connect Stripe",
-        helper: "This is a read-only connection to your Stripe account. No two way sync is performed.",
+        helper: "This is a read-only connection to your Stripe account. SyncStaq will never modify, delete or create any Stripe objects.",
     },
     {
         id: 2,
-        title: "Grant Sheets access",
-        description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive.`,
+        title: "Grant Sheets access & Create Google Sheet",
+        description: `Allow ${APP_NAME} to create and update Google Sheets files in your Drive. We'll create your workspace sheet automatically after you connect.`,
         ctaLabel: "Connect Google Sheets",
     },
     {
         id: 3,
-        title: "Create your workspace sheet",
-        description: `We’ll create a new Google Sheets file named “${WORKSPACE_SHEET_TITLE}” in the “${FOLDER_NAME}” folder in your Drive to hold your Stripe data.`,
-        ctaLabel: "Create sheet",
-    },
-    {
-        id: 4,
-        title: "Choose Stripe data & start your 14-day trial",
+        title: "Choose Stripe data & start your 14-day FREE trial",
         description: "Pick which Stripe data objects to sync into your newly created Google Sheet. Then, start your initial backfill and ongoing sync.",
         ctaLabel: "Start backfill & sync",
     },
@@ -101,38 +97,53 @@ export function OnboardingWizard() {
         [user.syncConfigs],
     );
 
-    // "Any active config" = user has at least one workspace that is not onboarding/retired.
-    const hasAnyActiveConfig = React.useMemo(
-        () =>
-            user.syncConfigs.some(
-                (cfg) =>
-                    cfg.syncStatus !== "onboarding" &&
-                    cfg.syncStatus !== "retired",
-            ),
-        [user.syncConfigs],
+    const hasStripe = user.stripeConnections.some((c) => c.status === "connected");
+    const hasGoogle = user.googleConnections.some((c) => c.status === "connected");
+    const isEntitled = isUserProfileEntitled(user.profile);
+    const connectedStripeConnection = user.stripeConnections.find(
+        (c) => c.status === "connected",
+    );
+    const connectedGoogleConnection = user.googleConnections.find(
+        (c) => c.status === "connected",
     );
 
-    // Derive initial step from ?step= query, default to 1
-    const initialIndex = React.useMemo(() => {
+    const maxAllowedIndex = React.useMemo(() => {
+        if (!hasStripe) return 0;
+        if (!hasGoogle) return 1;
+        return 2;
+    }, [hasStripe, hasGoogle]);
+
+    // Derive requested step from ?step= query, default to 1
+    const requestedStepIndex = React.useMemo(() => {
         const stepParam = searchParams.get("step");
         const stepNumber = stepParam ? parseInt(stepParam, 10) : 1;
         if (!Number.isFinite(stepNumber)) return 0;
         return Math.min(Math.max(stepNumber - 1, 0), steps.length - 1);
     }, [searchParams]);
 
-    const [currentStepIndex, setCurrentStepIndex] = React.useState(initialIndex);
+    const clampedStepIndex = Math.min(requestedStepIndex, maxAllowedIndex);
+
+    const [currentStepIndex, setCurrentStepIndex] = React.useState(clampedStepIndex);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [snackbarOpen, setSnackbarOpen] = useState(false);                     // NEW
-    const [snackbarDescription, setSnackbarDescription] = useState<string>()
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarTitle, setSnackbarTitle] = useState("Action required");
+    const [snackbarDescription, setSnackbarDescription] = useState<string>();
 
-    // If there is no onboarding config but there *is* an active config,
-    // the user is past onboarding → send them to dashboard.
+    // True only while step 3's own completion flow is running. It flips the
+    // config to backfill_running (which reads as "completed") before it does the
+    // final /dashboard?backfill_started=1 redirect, so we must not let the guard
+    // below race it and strip that redirect.
+    const completingRef = React.useRef(false);
+
+    // Completed users don't belong in the wizard, on any step. This is the
+    // client fallback; the server page guard is the real gate.
     useEffect(() => {
-        if (!onboardingConfig && hasAnyActiveConfig && currentStepIndex < steps.length - 1) {
+        if (completingRef.current) return;
+        if (hasCompletedOnboarding(user.syncConfigs)) {
             router.replace("/dashboard");
         }
-    }, [onboardingConfig, hasAnyActiveConfig, router, currentStepIndex]);
+    }, [user.syncConfigs, router]);
 
     useEffect(() => {
         const mismatch = searchParams.get("googleMismatch");
@@ -146,12 +157,33 @@ export function OnboardingWizard() {
                 error_code: stripeError,
                 reason: stripeReason ?? null,
             });
+
+            const description = stripeError === "access_denied"
+                    ? "Stripe connection was cancelled. Connect your Stripe account to continue."
+                    : "Stripe connection failed. Please try again.";
+
+            setSnackbarTitle("Stripe connection required");
+            setSnackbarDescription(description);
+            setSnackbarOpen(true); 
+            router.replace("/onboarding?step=1", { scroll: false });
         }
 
         if (googleError) {
             trackAmplitudeError("Google Connect Failed", googleError, {
                 error_code: googleError,
             });
+
+            const description =
+                googleError === "scope_denied"
+                    ? "Google Sheets access is required. Please grant permission when connecting Google Sheets."
+                    : googleError === "oauth"
+                        ? "Google connection was cancelled. Grant Sheets access to continue."
+                        : "Google connection failed. Please try again.";
+
+            setSnackbarTitle("Google Sheets access required");
+            setSnackbarDescription(description);
+            setSnackbarOpen(true);
+            router.replace("/onboarding?step=2", { scroll: false });
         }
 
         if (mismatch === "1") {
@@ -163,11 +195,20 @@ export function OnboardingWizard() {
                     ? `You're signed in as ${expectedEmail} but tried to connect ${actualEmail}. Please choose the same Google account you signed up with on the next screen.`
                     : "Please choose the same Google account you signed up with on the Google consent screen.";
 
+            setSnackbarTitle("Please connect the same Google account");
             setSnackbarDescription(description);
             setSnackbarOpen(true);
 
             // Strip the mismatch params so refreshes don't retrigger the snackbar
             router.replace("/onboarding?step=2", { scroll: false });
+        }
+
+        const sheetError = searchParams.get("sheetError");
+        if (sheetError === "1") {
+            setError(
+                "We couldn't create your workspace sheet automatically. Click \"Create sheet\" below to try again.",
+            );
+            router.replace("/onboarding?step=3", { scroll: false });
         }
     }, [searchParams, router]);
 
@@ -175,7 +216,7 @@ export function OnboardingWizard() {
     const serverSpreadsheetId = onboardingConfig?.spreadsheetId ?? null;
     const [createdSpreadsheetId, setCreatedSpreadsheetId] = useState<string | null>(serverSpreadsheetId);
 
-    // If user refreshes on step 4 and onboardingConfig now has a spreadsheetId,
+    // If user refreshes on step 3 and onboardingConfig now has a spreadsheetId,
     // hydrate local state from server.
     useEffect(() => {
         if (onboardingConfig?.spreadsheetId && !createdSpreadsheetId) {
@@ -203,25 +244,62 @@ export function OnboardingWizard() {
 
     const [selectedDataSyncEntries, setSelectedDataSyncEntries] = useState<DataSyncEntryId[]>(initialStripeDataSyncEntries);
 
+    // Redirect when URL step exceeds what connections allow (manual edits, stale tabs, bad callbacks)
+    useEffect(() => {
+        if (searchParams.get("stripeError") || searchParams.get("googleError")) return;
+        if (requestedStepIndex <= maxAllowedIndex) return;
+
+        const allowedStep = steps[maxAllowedIndex];
+        const description = !hasStripe
+            ? "Connect your Stripe account before continuing."
+            : "Grant Google Sheets access before continuing.";
+
+        setSnackbarTitle("Connect required accounts before continuing.");
+        setSnackbarDescription(description);
+        setSnackbarOpen(true);
+        router.replace(`/onboarding?step=${allowedStep.id}`, { scroll: false });
+    }, [requestedStepIndex, maxAllowedIndex, hasStripe, router, searchParams]);
+
     // If the query param changes (e.g. another redirect), sync the step
     useEffect(() => {
-        setCurrentStepIndex(initialIndex);
-    }, [initialIndex]);
+        setCurrentStepIndex(clampedStepIndex);
+    }, [clampedStepIndex]);
 
     const totalSteps = steps.length;
     const currentStep = steps[currentStepIndex];
     const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
     const isFirstStep = currentStepIndex === 0;
     const isLastStep = currentStepIndex === totalSteps - 1;
+    const isStep1 = currentStep.id === 1;
+    const isStep2 = currentStep.id === 2;
+    const isStep3 = currentStep.id === 3;
+    const needsSheetCreation = isStep3 && !createdSpreadsheetId;
 
-    const primaryLoadingLabel =
-        currentStep.id === 1
-            ? "Redirecting to Stripe…"
-            : currentStep.id === 2
-                ? "Redirecting to Google…"
-                : currentStep.id === 3
-                    ? "Creating sheet…"
-                    : "Starting trial & backfill...";
+    const stepTitle = isStep3 && isEntitled
+        ? "Choose Stripe data & start sync"
+        : currentStep.title;
+
+    const canContinueWithoutReconnect =
+        (isStep1 && hasStripe) || (isStep2 && hasGoogle);
+
+    const primaryCtaLabel = needsSheetCreation
+        ? "Create sheet"
+        : canContinueWithoutReconnect
+            ? "Continue"
+            : currentStep.ctaLabel;
+
+    const primaryLoadingLabel = (() => {
+        if (isStep1) {
+            return hasStripe ? "Continuing…" : "Redirecting to Stripe…";
+        }
+        if (isStep2) {
+            return hasGoogle ? "Continuing…" : "Redirecting to Google…";
+        }
+        if (needsSheetCreation) {
+            return "Creating sheet…";
+        }
+        return isEntitled ? "Starting backfill..." : "Starting trial & backfill...";
+    })();
 
     async function createSheet() {
         try {
@@ -238,6 +316,11 @@ export function OnboardingWizard() {
                 }),
             });
             if (!res.ok) {
+                // Already onboarded (a live workspace exists) → go to dashboard.
+                if (res.status === 409) {
+                    router.replace("/dashboard");
+                    return;
+                }
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to create sheet");
                 trackAmplitudeError("Create Sheet Failed", text || "Failed to create sheet");
@@ -257,7 +340,9 @@ export function OnboardingWizard() {
         }
     }
 
-    async function saveSyncConfigSelection(spreadsheetId?: string | null) {
+    async function saveSyncConfigSelection(
+        spreadsheetId?: string | null,
+    ): Promise<true | false | "already_started"> {
         setError(null);
         try {
             const res = await fetch("/api/update/sync-config", {
@@ -273,6 +358,21 @@ export function OnboardingWizard() {
                 }),
             });
             if (!res.ok) {
+                // 409 is overloaded: a benign "backfill already started" (resume
+                // → dashboard) vs a connection guard failure (surface inline).
+                // Disambiguate via the machine-readable code in the body.
+                if (res.status === 409) {
+                    const data = await res.json().catch(() => null);
+                    // Both codes mean "you're already done" → go to the dashboard.
+                    if (
+                        data?.code === "backfill_already_started" ||
+                        data?.code === "onboarding_complete"
+                    ) {
+                        return "already_started";
+                    }
+                    setError(data?.message || "Failed to save sync settings");
+                    return false;
+                }
                 const text = await res.text().catch(() => "");
                 setError(text || "Failed to save sync settings");
                 return false;
@@ -284,7 +384,6 @@ export function OnboardingWizard() {
             }
 
             await refresh();
-            // initSheetTabState(spreadsheetId, selectedDataSyncEntries);
             return true;
         } catch (e) {
             setError(`Failed to save sync settings: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
@@ -292,7 +391,7 @@ export function OnboardingWizard() {
         }
     }
 
-    async function handleStartTrial() {
+    async function handleStartTrial(spreadsheetId?: string | null) {
         setError(null);
         try {
             const res = await fetch("/api/billing/start-trial", {
@@ -301,6 +400,7 @@ export function OnboardingWizard() {
                 body: JSON.stringify({
                     planId: "pro",
                     interval: "monthly",
+                    spreadsheetId,
                 }),
             });
 
@@ -308,21 +408,25 @@ export function OnboardingWizard() {
                 const message = await res.text();
                 setError(message || "Failed to start trial");
                 trackAmplitudeError("Start Trial Failed", message || "Failed to start trial");
-                return;
+                return false;
             }
 
             const data = await res.json();
             if (!data.ok) {
                 setError(data.error || "Failed to start trial");
                 trackAmplitudeError("Start Trial Failed", data.error || "Failed to start trial");
-                return;
+                return false;
+            }
+            if (data.alreadyActive) {
+                trackAmplitudeEvent("Onboarding Entitlement Confirmed", {
+                    status: data.status ?? null,
+                });
+                return true;
             }
             trackAmplitudeEvent("Start Trial Succeeded", {
                 status: data.status ?? null,
                 trial_ends_at: data.trialEndsAt ?? null,
             });
-            // Optional: show trial end date from data.trialEndsAt
-            // console.log("start trial resp data", data);
         } catch (e) {
             setError("Failed to start trial");
             trackAmplitudeError("Start Trial Failed", e instanceof Error ? e.message : "Failed to start trial");
@@ -371,6 +475,10 @@ export function OnboardingWizard() {
     async function handlePrimaryAction() {
         setError(null);
         if (currentStep.id === 1) {
+            if (hasStripe) {
+                goToStepByIndex(1);
+                return;
+            }
             trackAmplitudeEvent("Onboarding Step 1 Started: Connect Stripe");
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
@@ -378,6 +486,10 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 2) {
+            if (hasGoogle) {
+                goToStepByIndex(2);
+                return;
+            }
             trackAmplitudeEvent("Onboarding Step 2 Started: Grant Sheets access");
             setSubmitting(true);
             // Sheets access → Google OAuth
@@ -385,25 +497,53 @@ export function OnboardingWizard() {
             return;
         }
         else if (currentStep.id === 3) {
-            trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet");
-            setSubmitting(true);
-            // Create sheet
-            const createSheetResponse = await createSheet();
-            setSubmitting(false);
-            if (!createSheetResponse || !createSheetResponse.spreadsheetId) return;
-            setCreatedSpreadsheetId(createSheetResponse.spreadsheetId);
-        }
-        else if (currentStep.id === 4) {
-            try {
-                trackAmplitudeEvent("Onboarding Step 4 Started: Configure sync and start backfill");
+            const fresh = await refresh();
+            const freshHasStripe = fresh
+                ? fresh.stripeConnections.some((c) => c.status === "connected")
+                : hasStripe;
+            const freshHasGoogle = fresh
+                ? fresh.googleConnections.some((c) => c.status === "connected")
+                : hasGoogle;
+            if (!freshHasStripe || !freshHasGoogle) {
+                setError(
+                    !freshHasStripe
+                        ? "Connect a Stripe account before starting sync."
+                        : "Grant Google Sheets access before starting sync.",
+                );
+                return;
+            }
+
+            if (needsSheetCreation) {
+                trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet (fallback)");
                 setSubmitting(true);
-                // Start trial
-                const trialOk = await handleStartTrial();
+                const createSheetResponse = await createSheet();
+                setSubmitting(false);
+                if (!createSheetResponse || !createSheetResponse.spreadsheetId) return;
+                setCreatedSpreadsheetId(createSheetResponse.spreadsheetId);
+                return;
+            }
 
-                // Save sync config selection
-                const saveConfigOk = await saveSyncConfigSelection(createdSpreadsheetId);
+            try {
+                trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
+                setSubmitting(true);
+                // We own the redirect from here on; suppress the guard's redirect.
+                completingRef.current = true;
 
-                if (!trialOk || !saveConfigOk) {
+                // 1) Confirm entitlement (start trial or already active)
+                const trialOk = await handleStartTrial(createdSpreadsheetId);
+                if (!trialOk) {
+                    setSubmitting(false);
+                    return;
+                }
+
+                // 2) Save sync config selection (sets backfill_running)
+                const saveConfigResult = await saveSyncConfigSelection(createdSpreadsheetId);
+                if (saveConfigResult === "already_started") {
+                    setSubmitting(false);
+                    router.replace("/dashboard");
+                    return;
+                }
+                if (!saveConfigResult) {
                     setSubmitting(false);
                     return;
                 }
@@ -422,10 +562,11 @@ export function OnboardingWizard() {
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 };
 
-                trackAmplitudeEvent("Onboarding Step 4 Completed", eventProperties);
+                trackAmplitudeEvent("Onboarding Step 3 Completed", eventProperties);
                 trackAmplitudeEvent("Onboarding Completed", eventProperties);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
+                completingRef.current = false;
                 setSubmitting(false);
                 return;
             }
@@ -441,8 +582,12 @@ export function OnboardingWizard() {
         }
     }
 
-    function handleBack() {
+    async function handleBack() {
         if (isFirstStep) return;
+        setError(null);
+        // Re-sync user state (connections + sync config) so going back reflects the
+        // latest server state, e.g. after a permissions error.
+        await refresh();
         goToStepByIndex(currentStepIndex - 1);
     }
 
@@ -494,23 +639,40 @@ export function OnboardingWizard() {
                                                         Step {currentStep.id}
                                                     </p>
                                                 </div>
-                                                <h3 className="text-lg font-semibold text-slate-900">{currentStep.title}</h3>
+                                                <h3 className="text-lg font-semibold text-slate-900">{stepTitle}</h3>
                                                 <p className="text-sm text-slate-600">{currentStep.description}</p>
                                                 {currentStep.helper && (
-                                                    <p className="text-sm font-medium text-slate-700">
+                                                    <p className="text-sm font-medium text-slate-700 mt-4 mb-4">
                                                         {currentStep.helper}
                                                     </p>
+                                                )}
+                                                {currentStep.id === 1 && hasStripe && connectedStripeConnection && (
+                                                    <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-100">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                        <span className="truncate">
+                                                            Connected:{" "}
+                                                            <span className="font-semibold">
+                                                                {connectedStripeConnection.businessName ||
+                                                                    connectedStripeConnection.stripeAccountId}
+                                                            </span>
+                                                        </span>
+                                                    </div>
                                                 )}
                                             </div>
 
                                         </div>
                                     </div>
-                                    {currentStep.id === 4 && (
+                                    {currentStep.id === 3 && !needsSheetCreation && (
                                         <StripeObjectsStep
                                             value={selectedDataSyncEntries}
                                             onChange={setSelectedDataSyncEntries}
                                             disabled={submitting}
                                         />
+                                    )}
+                                    {currentStep.id === 3 && needsSheetCreation && (
+                                        <p className="text-sm text-slate-600">
+                                            We&apos;ll create a new Google Sheets file named &ldquo;{WORKSPACE_SHEET_TITLE}&rdquo; in the &ldquo;{FOLDER_NAME}&rdquo; folder in your Drive.
+                                        </p>
                                     )}
                                     <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                                         <div className="flex gap-2">
@@ -529,7 +691,7 @@ export function OnboardingWizard() {
                                                 type="button"
                                                 onClick={handlePrimaryAction}
                                                 disabled={submitting}
-                                                aria-label={currentStep.ctaLabel}
+                                                aria-label={primaryCtaLabel}
                                             >
                                                 {submitting ? (
                                                     <>
@@ -537,15 +699,18 @@ export function OnboardingWizard() {
                                                         {primaryLoadingLabel}
                                                     </>
                                                 ) : (
-                                                    currentStep.ctaLabel
+                                                    primaryCtaLabel
                                                 )}
                                             </button>
                                         </div>
 
-                                        {currentStep.id === 4 && (
+                                        {currentStep.id === 3 && !needsSheetCreation && (
                                             <p className="text-[11px] text-slate-500 text-right sm:text-left max-w-xs">
                                                 <span className="inline-flex items-center gap-2  text-[11px] font-medium text-emerald-700 ">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Your 14-day free trial starts after this. No card required!
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />{" "}
+                                                    {isEntitled
+                                                        ? "Your subscription is active — syncing starts right after this."
+                                                        : "Your 14-day free trial starts after this. No card required!"}
                                                 </span>
                                             </p>
                                         )}
@@ -554,7 +719,18 @@ export function OnboardingWizard() {
 
                                 {currentStep.id === 2 && (
                                     <div className="space-y-3">
-                                        {user.profile?.email && (
+                                        {hasGoogle && connectedGoogleConnection && (
+                                            <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-100">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                <span className="truncate">
+                                                    Connected:{" "}
+                                                    <span className="font-semibold">
+                                                        {connectedGoogleConnection.email}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        )}
+                                        {user.profile?.email && !hasGoogle && (
                                             <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                                 <span className="truncate">
@@ -570,7 +746,7 @@ export function OnboardingWizard() {
                                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 ring-1 ring-inset ring-indigo-100">
                                                 Permissions
                                             </span>
-                                            We will not access, edit, or delete any existing files you own. We only have access to the files created within our app.
+                                            We will not access, edit, or delete any existing files you own. We only have access to the files created within SyncStaq.
                                         </div>
                                     </div>
                                 )}
@@ -588,11 +764,11 @@ export function OnboardingWizard() {
                 <Snackbar
                     open={snackbarOpen}
                     onClose={() => setSnackbarOpen(false)}
-                    variant="warning"
-                    title="Please connect the same Google account"
+                    variant="error"
+                    title={snackbarTitle}
                     description={snackbarDescription}
                     animated
-                    autoHideMs={10000}
+                    autoHideMs={0}
                 />
             </div>
         </main>

@@ -56,3 +56,42 @@ import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
 
 trackAmplitudeEvent("Button Clicked", { source: "pricing_page" });
 ```
+
+## Onboarding survey responses (Google Sheet via SSM)
+
+Survey answers from the post-activation modal are appended to an internal Google Sheet. Credentials are read from **AWS Systems Manager Parameter Store** (dev and prod).
+
+### How it works
+
+After onboarding, the backfill intro modal (`components/dashboard/backfill-intro-modal.tsx`) shows a two-question, free-text survey before the confirmation card:
+
+1. **Q1** — "What best describes your role?" (free text, optional)
+2. **Q2** — "What problem are you trying to solve with SyncStaq?" (free text, required to submit)
+3. **Confirmation** — "We're loading your Stripe data…" with Open Sheet / Got it
+
+Both questions are skippable and jump to the confirmation card. **Skip** still captures anything the user already typed — e.g. entering a role then skipping Q2 records the real role and `"skipped"` for the problem; only fields left blank fall back to `"skipped"` (the API requires both fields non-empty). Submitting is fire-and-forget (a failed `POST` never blocks the UI) and posts to `POST /api/onboarding/survey`, which is session-gated, origin-checked (`lib/http/allowed-origins.ts`), rate-limited, and trims/length-caps the inputs before appending a row.
+
+### SSM parameters
+
+| Parameter | Type | Value |
+|-----------|------|--------|
+| `/${project}/${stage}/google-service-account/reporting-sheet-writer` | SecureString | Existing reporting service-account JSON (reused) |
+| `/${project}/${stage}/survey/responses-sheet-id` | String | Google Spreadsheet ID for survey responses |
+
+### Web app env vars (parameter names only)
+
+```bash
+SURVEY_SERVICE_ACCOUNT_PARAM_NAME=/${project}/${stage}/google-service-account/reporting-sheet-writer
+SURVEY_RESPONSES_SHEET_ID_PARAM_NAME=/${project}/${stage}/survey/responses-sheet-id
+```
+
+The web app IAM user needs `ssm:GetParameter` on both parameters (granted in `asv2-serverless` `app-stack.ts`).
+
+### One-time setup (dev + prod)
+
+1. Create a Google Sheet with header row: `timestamp`, `userId`, `email`, `role`, `problem`.
+2. Share the sheet with the **reporting service-account** email (`client_email` from the SSM JSON) as Editor.
+3. Create the `survey/responses-sheet-id` SSM String parameter with the spreadsheet ID.
+4. Set `SURVEY_*_PARAM_NAME` env vars on the web app host.
+
+Survey answers are written with `valueInputOption: "RAW"` and formula-trigger characters are neutralized to prevent spreadsheet formula injection.

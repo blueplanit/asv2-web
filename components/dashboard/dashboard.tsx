@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { WorkspaceCard, type Workspace } from "@/components/workspaces/workspace-card";
 import { useUserState } from "@/components/user-state-provider";
+import { hasCompletedOnboarding } from "@/lib/app-state/onboarding-status";
 import type { SyncConfig } from "@/lib/schemas/sync-config";
 import { Squares2X2Icon, UserCircleIcon } from "@heroicons/react/20/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +14,8 @@ import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+
+export type SurveyStep = "q1" | "q2" | "done";
 
 // display labels for stripe object ids
 const STRIPE_OBJECT_LABELS: Record<string, string> = {
@@ -103,12 +106,11 @@ function getNextOnboardingStep(onboardingStage: string): number {
         case "stripe_connected":
             return 2; // connect Google
         case "connections_linked":
-            return 3; // create sheet
         case "sheet_created":
-            return 4; // choose objects
+            return 3; // choose objects (sheet auto-created after Google connect)
         case "ready":
         default:
-            return 4;
+            return 3;
     }
 }
 
@@ -144,6 +146,7 @@ export function DashboardClient() {
 
     const [activeView, setActiveView] = useState<"workspaces" | "account">("workspaces");
     const [googleScopeError, setGoogleScopeError] = useState(false);
+    const [stripeConnectError, setStripeConnectError] = useState(false);
     const [sheetTitles, setSheetTitles] = useState<Record<string, string>>({});
     const [titlesRequested, setTitlesRequested] = useState(false);
 
@@ -151,7 +154,12 @@ export function DashboardClient() {
     const router = useRouter();
 
     const [backfillModalOpen, setBackfillModalOpen] = useState(false);
+    const [surveyStep, setSurveyStep] = useState<SurveyStep>("q1");
     const prevHasBackfillRunningRef = useRef(hasBackfillRunning);
+    // Dedicated edge tracker for modal auto-close, kept separate from the
+    // analytics ref above (which is reset every render and would consume the
+    // running→done signal before the auto-close effect could read it).
+    const prevRunningForAutoCloseRef = useRef(hasBackfillRunning);
     const hasSyncError = useMemo(
         () => syncConfigs.some((cfg) => cfg.syncStatus === "error"),
         [syncConfigs],
@@ -276,13 +284,7 @@ export function DashboardClient() {
     const activeWorkspace = workspaces.find((ws) => ws.id === activeSyncConfig?.spreadsheetId) ?? workspaces[0] ?? null;
     const archivedWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace?.id);
 
-    const isOnboardingDone =
-        activeSyncConfig &&
-        (activeSyncConfig.syncStatus === "syncing" ||
-            activeSyncConfig.syncStatus === "backfill_running" ||
-            activeSyncConfig.syncStatus === "gap_backfill_running" ||
-            activeSyncConfig.syncStatus === "paused" ||
-            activeSyncConfig.syncStatus === "error");
+    const isOnboardingDone = hasCompletedOnboarding(syncConfigs);
 
     const nextStepId = getNextOnboardingStep(onboardingStage);
     const onboardingHref = `/onboarding?step=${nextStepId}`;
@@ -294,19 +296,17 @@ export function DashboardClient() {
     const stepLabel = (() => {
         switch (nextStepId) {
             case 1:
-                return "Step 1 of 4 · Connect Stripe";
+                return "Step 1 of 3 · Connect Stripe";
             case 2:
-                return "Step 2 of 4 · Connect Google Sheets";
+                return "Step 2 of 3 · Connect Google Sheets";
             case 3:
-                return "Step 3 of 4 · Create your workspace sheet";
-            case 4:
             default:
-                return "Step 4 of 4 · Choose Stripe data & start sync";
+                return "Step 3 of 3 · Choose Stripe data & start sync";
         }
     })();
 
     const bannerSubtitle = (() => {
-        if (nextStepId === 4) {
+        if (nextStepId === 3) {
             return "You’re one step away from your first automatic Stripe → Sheets sync.";
         }
         return "Finish these last steps to get Stripe data synced into your Google Sheet.";
@@ -338,7 +338,10 @@ export function DashboardClient() {
         }
     }
 
-    // Triggered once when redirected from onboarding with ?backfill_started=1, only if the current syncStatus is "backfill_running"
+    // Opens the intro/survey modal when redirected from onboarding with
+    // ?backfill_started=1. Keyed off the flag alone (not syncStatus) so the
+    // modal shows even if the backfill has already flipped out of
+    // "backfill_running" by the time the dashboard mounts.
     useEffect(() => {
         const flag = searchParams.get("backfill_started");
         if (flag !== "1") return;
@@ -354,6 +357,14 @@ export function DashboardClient() {
         if (searchParams.get("googleError") !== "scope_denied") return;
         setActiveView("account");
         setGoogleScopeError(true);
+        router.replace("/dashboard", { scroll: false });
+    }, [searchParams, router]);
+
+    // Redirect to account view and surface an inline error when Stripe connect/reconnect failed
+    useEffect(() => {
+        if (!searchParams.get("stripeError")) return;
+        setActiveView("account");
+        setStripeConnectError(true);
         router.replace("/dashboard", { scroll: false });
     }, [searchParams, router]);
 
@@ -379,14 +390,25 @@ export function DashboardClient() {
         prevHasSyncErrorRef.current = hasSyncError;
     }, [hasSyncError, syncConfigs]);
 
-    // Keep intro modal in sync with backfill status.
+    // Keep intro modal in sync with backfill status. Never auto-close while the
+    // user is still answering the survey (q1/q2). On the confirmation card,
+    // auto-close ONLY on a running→done transition that happens while they're on
+    // that card. If the backfill already finished before they reached the
+    // confirmation card, leave the modal open — they dismiss it manually via
+    // "Got it" or the backdrop.
     useEffect(() => {
         if (!backfillModalOpen) return;
-        if (!hasBackfillRunning) {
-            // use the same handler so localStorage "dismissed" logic still applies
+        if (surveyStep !== "done") {
+            // Track running state off the confirmation card so we can detect a
+            // genuine transition (not a steady "already done") once they arrive.
+            prevRunningForAutoCloseRef.current = hasBackfillRunning;
+            return;
+        }
+        if (prevRunningForAutoCloseRef.current && !hasBackfillRunning) {
             handleBackfillModalOpenChange(false);
         }
-    }, [backfillModalOpen, hasBackfillRunning]);
+        prevRunningForAutoCloseRef.current = hasBackfillRunning;
+    }, [backfillModalOpen, hasBackfillRunning, surveyStep]);
 
     function handleBackfillModalOpenChange(open: boolean) {
         if (!open && activeWorkspace && user.profile?.userId) {
@@ -621,6 +643,8 @@ export function DashboardClient() {
                         <AccountPageClient
                             scopeError={googleScopeError}
                             onDismissScopeError={() => setGoogleScopeError(false)}
+                            stripeConnectError={stripeConnectError}
+                            onDismissStripeConnectError={() => setStripeConnectError(false)}
                         />
                     )}
                 </div>
@@ -633,6 +657,7 @@ export function DashboardClient() {
                         sheetUrl={activeWorkspace.sheetUrl}
                         workspaceName={activeWorkspace.name}
                         nameLoading={activeWorkspace.nameLoading ?? false}
+                        onSurveyStepChange={setSurveyStep}
                     />
                 )}
 

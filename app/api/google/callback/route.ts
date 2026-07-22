@@ -12,6 +12,13 @@ import {
     GOOGLE_OAUTH_NONCE_COOKIE,
 } from "@/lib/google/google-oauth-state";
 import { sanitizeReturnTo } from "@/lib/app-state/oauth-state-core";
+import { loadUserState } from "@/lib/app-state/user-state";
+import { hasAnyNonRetiredConfig } from "@/lib/app-state/onboarding-status";
+import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
+import { APP_NAME } from "@/lib/constants";
+
+const WORKSPACE_SHEET_TITLE = `My ${APP_NAME} Workspace`;
+const FOLDER_NAME = APP_NAME;
 
 // add (module-level cipher)
 const TOKEN_CIPHER_KEYRING_JSON = process.env.ASV2_TOKEN_CIPHER_KEYRING_JSON!;
@@ -29,9 +36,16 @@ function clearNonceCookie(res: NextResponse) {
     return res;
 }
 
-function redirectFor(flow: "google-connect" | "google-reconnect", returnTo?: string) {
+function redirectFor(flow: "google-connect" | "google-reconnect", type: "success" | "error", returnTo?: string) {
     if (flow === "google-reconnect") return sanitizeReturnTo(returnTo) ?? "/dashboard";
-    return "/onboarding?step=3";
+    const step = type === "success" ? "3" : "2";
+    return `/onboarding?step=${step}`;
+}
+
+function onboardingUrlWithSheetError(base: string) {
+    const url = new URL(base, process.env.NEXTAUTH_URL);
+    url.searchParams.set("sheetError", "1");
+    return url.pathname + url.search;
 }
 
 export async function GET(req: NextRequest) {
@@ -69,10 +83,11 @@ export async function GET(req: NextRequest) {
 
     const { payload } = verified;
     const flow = payload.flow;
-    const base = redirectFor(flow, payload.returnTo);
+    const successBase = redirectFor(flow, "success", payload.returnTo);
+    const errorBase = redirectFor(flow, "error", payload.returnTo);
 
     if (error || !code) {
-        const errorUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errorUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errorUrl.searchParams.set("googleError", "oauth");
         return clearNonceCookie(NextResponse.redirect(errorUrl));
     }
@@ -98,7 +113,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
         console.error("Google token exchange failed:", tokenRes.status, await tokenRes.text());
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "token_exchange");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -117,7 +132,7 @@ export async function GET(req: NextRequest) {
 
     if (!accessToken || !refreshToken) {
         console.error("Missing access/refresh token from Google:", tokenJson);
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "missing_tokens");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -126,7 +141,7 @@ export async function GET(req: NextRequest) {
     const grantedScopes = tokenJson.scope ? tokenJson.scope.split(" ") : [];
     if (!grantedScopes.includes("https://www.googleapis.com/auth/drive.file")) {
         console.error("Google OAuth scope denied: drive.file not in granted scopes", { grantedScopes, userId, flow });
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "scope_denied");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -141,7 +156,7 @@ export async function GET(req: NextRequest) {
 
     if (!userinfoRes.ok) {
         console.error("Google userinfo failed:", userinfoRes.status, await userinfoRes.text());
-        const errUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const errUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         errUrl.searchParams.set("googleError", "userinfo");
         return clearNonceCookie(NextResponse.redirect(errUrl));
     }
@@ -165,11 +180,11 @@ export async function GET(req: NextRequest) {
             actualEmail: email,
         });
 
-        const mismatchUrl = new URL(base, process.env.NEXTAUTH_URL);
+        const mismatchUrl = new URL(errorBase, process.env.NEXTAUTH_URL);
         mismatchUrl.searchParams.set("googleMismatch", "1");
         mismatchUrl.searchParams.set("expectedEmail", sessionEmail);
         mismatchUrl.searchParams.set("actualEmail", email);
-    
+
         return clearNonceCookie(NextResponse.redirect(mismatchUrl));
     }
 
@@ -204,7 +219,37 @@ export async function GET(req: NextRequest) {
         googleProjectShard: payload.shard,
     });
 
-    // 5) Back to onboarding, step 3 (Create sheet)
-    const onboardingUrl = new URL(base, process.env.NEXTAUTH_URL);
+    // 5) Onboarding connect flow: auto-create workspace sheet, then land on step 3
+    if (flow === "google-connect") {
+        try {
+            // Consistent read: the GoogleConnection was just written above, and
+            // an eventually-consistent read can miss it, spuriously tripping the
+            // sheet-creation fallback.
+            const userState = await loadUserState(userId, { consistentRead: true });
+            const hasConnectedStripe = userState.stripeConnections.some(
+                (c) => c.status === "connected",
+            );
+            // Onboarding requires Stripe first. If it isn't connected, skip
+            // auto-create (no orphaned sheet); the redirect below lands on
+            // successBase and the wizard's step clamp routes the user to step 1.
+            // Skip too if any non-retired config exists (one-workspace rule).
+            if (hasConnectedStripe && !hasAnyNonRetiredConfig(userState.syncConfigs)) {
+                await createWorkspaceSheetAndConfig({
+                    userState,
+                    folderName: FOLDER_NAME,
+                    workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
+                });
+            }
+        } catch (err) {
+            console.error("Auto-create workspace sheet failed after Google connect:", err);
+            const errUrl = new URL(
+                onboardingUrlWithSheetError(successBase),
+                process.env.NEXTAUTH_URL,
+            );
+            return clearNonceCookie(NextResponse.redirect(errUrl));
+        }
+    }
+
+    const onboardingUrl = new URL(successBase, process.env.NEXTAUTH_URL);
     return clearNonceCookie(NextResponse.redirect(onboardingUrl));
 }

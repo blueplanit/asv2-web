@@ -1,0 +1,71 @@
+import { NextResponse } from "next/server";
+import { getServerSession, type Session } from "next-auth";
+import { RateLimiterMemory } from "rate-limiter-flexible";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { appendSurveyResponseRow } from "@/lib/google/survey-responses-sheet";
+import { isAllowedOrigin } from "@/lib/http/allowed-origins";
+
+export const runtime = "nodejs";
+
+const SURVEY_MAX_TEXT_LENGTH = 280;
+
+const rateLimiter = new RateLimiterMemory({
+    points: 5,
+    duration: 3600,
+});
+
+function sanitizeText(value: unknown, maxLength: number): string {
+    return String(value ?? "")
+        .trim()
+        .slice(0, maxLength);
+}
+
+export async function POST(req: Request) {
+    try {
+        if (!isAllowedOrigin(req.headers.get("origin"))) {
+            return new NextResponse("Forbidden", { status: 403 });
+        }
+
+        const session = (await getServerSession(authOptions)) as Session;
+        if (!session?.user?.email || !(session.user as { userId?: string }).userId) {
+            return new NextResponse(
+                "Unable to process request, please sign in again.",
+                { status: 401 },
+            );
+        }
+
+        const userId = (session.user as { userId: string }).userId;
+        const email = session.user.email;
+
+        try {
+            await rateLimiter.consume(userId);
+        } catch {
+            return new NextResponse("Too many requests. Please try again later.", {
+                status: 429,
+            });
+        }
+
+        const body = await req.json().catch(() => ({}));
+        const role = sanitizeText(body.role, SURVEY_MAX_TEXT_LENGTH);
+        const problem = sanitizeText(body.problem, SURVEY_MAX_TEXT_LENGTH);
+
+        if (!role || !problem) {
+            console.error("[onboarding/survey] Role and problem are required", { role, problem, userId });
+            return new NextResponse("Role and problem are required", { status: 400 });
+        }
+
+        await appendSurveyResponseRow({
+            userId,
+            email,
+            role,
+            problem,
+        });
+
+        return NextResponse.json({ ok: true });
+    } catch (e) {
+        console.error("[onboarding/survey]", e);
+        return new NextResponse("Something went wrong. Please try again.", {
+            status: 500,
+        });
+    }
+}

@@ -1,6 +1,6 @@
 // lib/dynamo/sync-config.ts
 import { ddb } from ".";
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import {
     SyncConfigSchema,
     type SyncConfig,
@@ -111,7 +111,7 @@ export async function ensureSyncConfigForSheet(params: {
 }
 
 // Create initial config when spreadsheet is created
-export async function createSyncConfig(params: {
+type CreateSyncConfigParams = {
     userId: string;
     spreadsheetId: string;
     stripeAccountId: string;
@@ -121,7 +121,11 @@ export async function createSyncConfig(params: {
     syncStatus?: SyncConfig["syncStatus"];
     timezone?: string | null;
     locale?: string | null;
-}) {
+};
+
+// Build a SyncConfig item without writing it, so it can be used on its own or
+// inside a transaction (e.g. rotation).
+export function buildSyncConfigItem(params: CreateSyncConfigParams): SyncConfig {
     const {
         userId,
         spreadsheetId,
@@ -173,15 +177,48 @@ export async function createSyncConfig(params: {
         (item as any).locale = locale.trim();
     }
 
+    return item;
+}
+
+// Create the new config and retire the one it replaces in one transaction,
+// so the swap never leaves two active configs (or zero). Used by sheet rotation.
+export async function replaceSyncConfigAtomic(params: {
+    userId: string;
+    oldSpreadsheetId: string;
+    newConfig: SyncConfig;
+}): Promise<SyncConfig> {
+    const { userId, oldSpreadsheetId, newConfig } = params;
+
     await ddb.send(
-        new PutCommand({
-            TableName: TABLE_NAME,
-            Item: item,
-            ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
+        new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Put: {
+                        TableName: TABLE_NAME,
+                        Item: newConfig,
+                        ConditionExpression:
+                            "attribute_not_exists(pk) AND attribute_not_exists(sk)",
+                    },
+                },
+                {
+                    Update: {
+                        TableName: TABLE_NAME,
+                        Key: { pk: userPk(userId), sk: syncConfigSk(oldSpreadsheetId) },
+                        UpdateExpression: "SET #s = :retired, updatedAt = :now",
+                        ConditionExpression:
+                            "attribute_exists(pk) AND attribute_exists(sk)",
+                        ExpressionAttributeNames: { "#s": "syncStatus" },
+                        ExpressionAttributeValues: {
+                            ":retired": "retired",
+                            ":now": new Date().toISOString(),
+                        },
+                    },
+                },
+            ],
         }),
     );
 
-    return item;
+    return newConfig;
 }
 
 export async function getSyncConfig(userId: string, spreadsheetId: string) {
@@ -292,6 +329,8 @@ export async function updateSyncConfig(params: {
     historyMode?: SyncConfig["historyMode"] | null;
     historySinceDays?: number | null;
     syncStatus?: SyncConfig["syncStatus"];
+    /** When set, the update only succeeds if syncStatus matches (or is absent). */
+    expectedCurrentStatus?: SyncConfig["syncStatus"];
 }) {
     const {
         userId,
@@ -300,12 +339,14 @@ export async function updateSyncConfig(params: {
         historyMode,
         historySinceDays,
         syncStatus,
+        expectedCurrentStatus,
     } = params;
 
     const updates: string[] = [];
     const values: Record<string, unknown> = {
         ":updatedAt": new Date().toISOString(),
     };
+    const attributeNames: Record<string, string> = {};
 
     if (stripeDataSyncMap !== undefined) {
         updates.push("stripeDataSyncMap = :sdsm");
@@ -331,15 +372,26 @@ export async function updateSyncConfig(params: {
 
     const UpdateExpression = "SET " + updates.join(", ");
 
+    let conditionExpression = "attribute_exists(pk) AND attribute_exists(sk)";
+    if (expectedCurrentStatus !== undefined) {
+        attributeNames["#syncStatus"] = "syncStatus";
+        values[":expectedStatus"] = expectedCurrentStatus;
+        conditionExpression +=
+            " AND (#syncStatus = :expectedStatus OR attribute_not_exists(#syncStatus))";
+    }
+
     const res = await ddb.send(
         new UpdateCommand({
             TableName: TABLE_NAME,
-            ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
+            ConditionExpression: conditionExpression,
             Key: {
                 pk: userPk(userId),
                 sk: syncConfigSk(spreadsheetId),
             },
             UpdateExpression,
+            ...(Object.keys(attributeNames).length > 0
+                ? { ExpressionAttributeNames: attributeNames }
+                : {}),
             ExpressionAttributeValues: values,
             ReturnValues: "ALL_NEW",
         }),
