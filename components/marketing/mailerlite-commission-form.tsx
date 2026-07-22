@@ -67,8 +67,8 @@ export function MailerLiteCommissionForm() {
 
   if (status === "success") {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">You&apos;re all set</h3>
+      <div className="rounded-2xl mx-auto mb-20 w-2/5 border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">You're all set</h3>
         <p className="mt-2 text-sm text-slate-600">
           Your commission tracker template is ready. Open it and make your own
           copy to get started.
@@ -88,7 +88,7 @@ export function MailerLiteCommissionForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      className="rounded-2xl w-2/5 mx-auto mb-20 border border-slate-200 bg-white p-6 shadow-sm"
     >
       <label
         htmlFor="commission-email"
@@ -105,15 +105,15 @@ export function MailerLiteCommissionForm() {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         disabled={status === "submitting"}
-        placeholder="you@company.com"
+        placeholder="hello@company.com"
         className="mt-2 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60"
       />
 
-      <div className="mt-4">
+      <div className="mt-4 flex justify-center">
         <ReCAPTCHA
           ref={recaptchaRef}
           sitekey={RECAPTCHA_SITE_KEY}
-          onChange={(token) => setRecaptchaToken(token)}
+          onChange={(token: string | null) => setRecaptchaToken(token)}
           onExpired={() => setRecaptchaToken(null)}
           onErrored={() => setRecaptchaToken(null)}
         />
@@ -134,7 +134,7 @@ export function MailerLiteCommissionForm() {
       </button>
 
       <p className="mt-3 text-xs text-slate-500">
-        We&apos;ll email you the commission tracker template. No spam.
+        We'll email you the commission tracker template. No spam.
       </p>
     </form>
   );
