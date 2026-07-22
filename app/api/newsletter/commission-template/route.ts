@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { RateLimiterMemory } from "rate-limiter-flexible";
+import { isAllowedOrigin } from "@/lib/http/allowed-origins";
 
 export const runtime = "nodejs";
 
@@ -10,26 +11,15 @@ const MAILERLITE_ACCOUNT_ID = "2476794";
 const MAILERLITE_FORM_ID = "191558050637677901";
 const MAILERLITE_SUBSCRIBE_URL = `https://assets.mailerlite.com/jsonp/${MAILERLITE_ACCOUNT_ID}/forms/${MAILERLITE_FORM_ID}/subscribe`;
 
-const ALLOWED_ORIGINS = new Set([
-  "https://syncstaq.com",
-  "https://www.syncstaq.com",
-  "http://localhost:3000",
-]);
-
 const rateLimiter = new RateLimiterMemory({ points: 5, duration: 60 });
 
 const bodySchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   recaptchaToken: z.string().optional(),
 });
 
-function safeOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get("origin");
-  return origin !== null && ALLOWED_ORIGINS.has(origin);
-}
-
 export async function POST(req: NextRequest) {
-  if (!safeOrigin(req)) {
+  if (!isAllowedOrigin(req.headers.get("origin"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
