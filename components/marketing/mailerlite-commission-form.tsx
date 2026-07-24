@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import ReCAPTCHA from "react-google-recaptcha";
 
 const COMMISSION_TEMPLATE_SHEET_URL =
@@ -88,11 +89,22 @@ export function MailerLiteCommissionForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl w-2/5 mx-auto mb-20 border border-slate-200 bg-white p-6 shadow-sm"
+      className="mx-auto mb-20 max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
     >
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-600">
+        Free resource
+      </p>
+      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+        Free Stripe Commission Tracker
+      </h2>
+      <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
+        A Google Sheet that calculates rep commissions and partner revenue share from Stripe -
+        net of fees and refunds.
+      </p>
+
       <label
         htmlFor="commission-email"
-        className="block text-sm font-medium text-slate-900"
+        className="mt-7 block text-sm font-medium text-slate-900"
       >
         Email address
       </label>
@@ -130,11 +142,15 @@ export function MailerLiteCommissionForm() {
         disabled={status === "submitting" || !recaptchaToken}
         className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "submitting" ? "Sending…" : "Get the template"}
+        {status === "submitting" ? "Sending…" : "Send me the template"}
       </button>
 
       <p className="mt-3 text-xs text-slate-500">
-        We'll email you the commission tracker template. No spam.
+        You can unsubscribe anytime. For more details, review our{" "}
+        <Link href="/pages/privacy-policy" className="underline underline-offset-2">
+          Privacy Policy
+        </Link>
+        .
       </p>
     </form>
   );
