@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { LoginForm } from "@/components/login-form";
+import { sanitizeCallbackUrl } from "@/lib/app-state/onboarding-redirect";
 
 type SearchParams = Promise<{
     callbackUrl?: string | string[];
@@ -10,14 +11,6 @@ type SearchParams = Promise<{
 
 function firstValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] : value;
-}
-
-function sanitizeCallbackUrl(value: string | undefined) {
-    if (!value) return "/dashboard";
-    if (!value.startsWith("/")) return "/dashboard";
-    if (value.startsWith("//")) return "/dashboard";
-    if (value.includes("://")) return "/dashboard";
-    return value;
 }
 
 export default async function LoginPage(props: {

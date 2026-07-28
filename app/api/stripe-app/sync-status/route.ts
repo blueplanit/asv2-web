@@ -1,6 +1,7 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getSyncConfigsByStripeAccountId } from "@/lib/dynamo/sync-config";
+import { toSafeSyncConfig } from "@/lib/sync/safe-sync-config";
 
 export const runtime = "nodejs";
 
@@ -49,12 +50,7 @@ export async function GET(req: NextRequest) {
         const syncConfigs = await getSyncConfigsByStripeAccountId(stripeAccountId);
 
         // Only return status fields — no spreadsheet IDs, user IDs, or error details
-        const safeConfigs = syncConfigs.map((config) => ({
-            syncStatus: config.syncStatus,
-            lastSyncAt: config.lastSyncAt,
-            writerBlocked: config.writerBlocked,
-            writerBlockedReason: config.writerBlockedReason,
-        }));
+        const safeConfigs = syncConfigs.map(toSafeSyncConfig);
 
         console.log("[stripe-app/sync-status] lookup result", {
             stripeAccountId,

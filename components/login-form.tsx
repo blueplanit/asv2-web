@@ -2,6 +2,7 @@
 "use client";
 
 import { APP_NAME } from "@/lib/constants";
+import { sanitizeCallbackUrl } from "@/lib/app-state/onboarding-redirect";
 import { signIn } from "next-auth/react";
 
 type LoginFormProps = {
@@ -19,6 +20,8 @@ export function LoginForm({
     description = `Use your Google account to access your ${APP_NAME} workspace.`,
     footerNote = "We only use your email and basic profile to create your account.",
 }: LoginFormProps) {
+    const safeCallbackUrl = sanitizeCallbackUrl(callbackUrl);
+
     return (
         <div className="min-h-[75vh] bg-gradient-to-b from-slate-50 via-white to-slate-50 flex items-center justify-center px-4">
             <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm space-y-6">
@@ -36,7 +39,7 @@ export function LoginForm({
 
                 <button
                     type="button"
-                    onClick={() => signIn("google", { callbackUrl })}
+                    onClick={() => signIn("google", { callbackUrl: safeCallbackUrl })}
                     className="cursor-pointer flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
                 >
                     <span className="inline-flex size-5 items-center justify-center rounded bg-white/10">
