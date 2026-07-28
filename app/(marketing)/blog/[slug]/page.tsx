@@ -13,6 +13,7 @@ import {
     contentfulRichTextOptions,
 } from "@/lib/contentful/contentful-rich-text";
 import { APP_NAME } from "@/lib/constants";
+import type { BlogPostFields } from "@/lib/contentful/contentful";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
 export const revalidate = 60;
@@ -22,7 +23,7 @@ export async function generateStaticParams() {
     return slugs.map((slug) => ({ slug }));
 }
 
-function getCoverImageUrl(post: any): string | undefined {
+function getCoverImageUrl(post: BlogPostFields): string | undefined {
     const file = post.coverImage?.fields?.file;
     const rawUrl = typeof file?.url === "string" ? file.url : file?.["en-US"]?.url;
 

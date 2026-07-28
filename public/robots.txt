@@ -8,8 +8,4 @@ Disallow: /login
 Disallow: /dashboard
 Disallow: /api/
 
-# Block URL parameter noise that can create duplicate URLs.
-Disallow: /*?utm_
-Disallow: /*?ref=
-
 Sitemap: https://www.syncstaq.com/sitemap.xml
