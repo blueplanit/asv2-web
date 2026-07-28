@@ -17,6 +17,9 @@ const metaDescription =
 export const metadata: Metadata = {
     title: metaTitle,
     description: metaDescription,
+    alternates: {
+        canonical: "/use-cases/stripe-commission-revenue-share",
+    },
     keywords: [
         "stripe commission calculation",
         "stripe revenue share",

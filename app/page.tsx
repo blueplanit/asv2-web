@@ -1,11 +1,18 @@
 // app/page.tsx
 
+import type { Metadata } from "next";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Hero } from "@/components/marketing/hero";
 import { HowItWorksSection } from "@/components/marketing/how-it-works-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { getMarketingCopy } from "@/lib/marketing/marketing-config";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+    alternates: {
+        canonical: "/",
+    },
+};
 
 export const revalidate = 60;
 

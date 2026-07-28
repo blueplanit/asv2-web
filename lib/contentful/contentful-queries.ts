@@ -27,6 +27,19 @@ export async function getAllBlogPostSlugs(): Promise<string[]> {
         .map((post) => post.slug);
 }
 
+// All CMS page slugs (used by the sitemap so /pages/* stays in sync with Contentful)
+export async function getAllPageSlugs(): Promise<string[]> {
+    const res = await contentfulClient.getEntries({
+        content_type: "pageASv2",
+        select: ["fields.slug"],
+    });
+
+    return res.items
+        .map((item) => item.fields as PageFields)
+        .map((page) => page.slug)
+        .filter(Boolean);
+}
+
 // Single blog post by slug
 export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | null> {
     if (!slug) return null;

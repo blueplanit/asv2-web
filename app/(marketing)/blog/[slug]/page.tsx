@@ -13,12 +13,22 @@ import {
     contentfulRichTextOptions,
 } from "@/lib/contentful/contentful-rich-text";
 import { APP_NAME } from "@/lib/constants";
+import type { BlogPostFields } from "@/lib/contentful/contentful";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
 export const revalidate = 60;
 
 export async function generateStaticParams() {
     const slugs = await getAllBlogPostSlugs();
     return slugs.map((slug) => ({ slug }));
+}
+
+function getCoverImageUrl(post: BlogPostFields): string | undefined {
+    const file = post.coverImage?.fields?.file;
+    const rawUrl = typeof file?.url === "string" ? file.url : file?.["en-US"]?.url;
+
+    if (!rawUrl) return undefined;
+    return rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
 }
 
 // SEO metadata: use excerpt as meta description
@@ -39,21 +49,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             post.excerpt ||
             "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.";
 
-        return {
+        return createMarketingMetadata({
             title,
             description,
-            openGraph: {
-                title,
-                description,
-                type: "article",
-                url: `/blog/${slug}`,
-            },
-            twitter: {
-                card: "summary",
-                title,
-                description,
-            },
-        };
+            path: `/blog/${slug}`,
+            type: "article",
+            image: getCoverImageUrl(post),
+            imageAlt: post.title,
+        });
     } catch (err) {
         console.error("generateMetadata error for blog post", { slug, err });
         return {
