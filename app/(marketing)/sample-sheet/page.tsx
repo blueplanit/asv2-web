@@ -1,4 +1,12 @@
 import Link from "next/link";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
+
+export const metadata = createMarketingMetadata({
+    title: "Sample Sheet: Stripe Data in Google Sheets | SyncStaq",
+    description:
+        "Explore a public sample Google Sheet showing how SyncStaq structures Stripe invoices, charges, subscriptions, and disputes into raw tabs you can build on.",
+    path: "/sample-sheet",
+});
 
 const SAMPLE_SHEET_URL =
     "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/view?usp=sharing";

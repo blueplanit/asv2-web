@@ -3,6 +3,14 @@ import Link from "next/link";
 import { getAllBlogPosts } from "@/lib/contentful/contentful-queries";
 import { APP_NAME } from "@/lib/constants";
 import { BlogPageViewTracker } from "@/components/analytics/blog-page-view-tracker";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
+
+export const metadata = createMarketingMetadata({
+    title: "Stripe Reporting Guides & Google Sheets Tips | SyncStaq",
+    description:
+        "Practical guides on Stripe reporting in Google Sheets: revenue by product and customer, commissions, payout reconciliation, refunds, fees, and MRR.",
+    path: "/blog",
+});
 
 export const revalidate = 60;
 

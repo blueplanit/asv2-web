@@ -1,4 +1,12 @@
 import Link from "next/link";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
+
+export const metadata = createMarketingMetadata({
+    title: "How It Works: Stripe to Google Sheets Sync | SyncStaq",
+    description:
+        "Connect Stripe and Google in minutes, then let SyncStaq mirror invoices, charges, and subscriptions into structured Sheets tabs on an hourly schedule.",
+    path: "/how-it-works",
+});
 
 const stripeObjects = [
     "Invoices",

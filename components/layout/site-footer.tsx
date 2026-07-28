@@ -19,6 +19,7 @@ const resourcesLinks = [
     { label: "Blog", href: "/blog" },
     { label: "Sample Sheet", href: "/sample-sheet" },
     { label: "How it works", href: "/how-it-works" },
+    { label: "Commission revenue share", href: "/use-cases/stripe-commission-revenue-share" },
 ];
 
 const companyLinks = [

@@ -5,7 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { APP_NAME, APP_URL } from "@/lib/constants";
+import { APP_NAME, SITE_URL } from "@/lib/constants";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -20,7 +20,10 @@ const geistMono = Geist_Mono({
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
-    metadataBase: new URL(APP_URL),
+    metadataBase: new URL(SITE_URL),
+    alternates: {
+        canonical: "/",
+    },
     title: `${APP_NAME} | Stripe billing data in Google Sheets`,
     description:
         "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
@@ -28,7 +31,7 @@ export const metadata: Metadata = {
         title: `${APP_NAME} | Stripe billing data in Google Sheets`,
         description:
             "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",
-        url: APP_URL,
+        url: SITE_URL,
         siteName: APP_NAME,
         type: "website",
         images: [
