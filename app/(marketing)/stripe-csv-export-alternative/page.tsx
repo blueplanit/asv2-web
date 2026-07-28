@@ -1,14 +1,15 @@
-import type { Metadata } from "next";
 import { HighIntentLandingPage } from "@/components/marketing/high-intent-landing-page";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
 const sampleSheetUrl =
     "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/view?usp=sharing";
 
-export const metadata: Metadata = {
+export const metadata = createMarketingMetadata({
     title: "Stripe CSV Export Alternative | SyncStaq",
     description:
         "Use SyncStaq as a Stripe CSV export alternative for recurring Google Sheets reporting. Keep Stripe billing data synced instead of rebuilding exports.",
-};
+    path: "/stripe-csv-export-alternative",
+});
 
 export default function StripeCsvExportAlternativePage() {
     return (

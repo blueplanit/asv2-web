@@ -21,9 +21,6 @@ const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
     metadataBase: new URL(SITE_URL),
-    alternates: {
-        canonical: "/",
-    },
     title: `${APP_NAME} | Stripe billing data in Google Sheets`,
     description:
         "Keep Stripe billing data synced into Google Sheets for reporting, reconciliation, and analysis without repeated CSV exports.",

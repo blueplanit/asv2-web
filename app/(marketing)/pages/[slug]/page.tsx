@@ -9,6 +9,7 @@ import {
     contentfulRichTextOptions,
     type ContentfulRichTextDocument,
 } from "@/lib/contentful/contentful-rich-text";
+import { APP_NAME } from "@/lib/constants";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
 const pageSeo: Record<string, { title: string; description: string }> = {
@@ -22,6 +23,16 @@ const pageSeo: Record<string, { title: string; description: string }> = {
         description:
             "Get in touch with the SyncStaq team about Stripe to Google Sheets sync, billing questions, technical support, or anything else you need help with.",
     },
+    "privacy-policy": {
+        title: "Privacy Policy | SyncStaq",
+        description:
+            "How SyncStaq collects, uses, and protects your data when syncing Stripe billing information into Google Sheets. Read the full privacy policy.",
+    },
+    terms: {
+        title: "Terms of Service | SyncStaq",
+        description:
+            "The terms governing your use of SyncStaq, the Stripe to Google Sheets sync service operated by Blue Planit LLC. Review before creating an account.",
+    },
 };
 
 export async function generateMetadata({
@@ -32,10 +43,19 @@ export async function generateMetadata({
     const { slug } = await params;
     const seo = pageSeo[slug];
 
-    if (!seo) return {};
+    if (seo) {
+        return createMarketingMetadata({
+            ...seo,
+            path: `/pages/${slug}`,
+        });
+    }
+
+    const page = await getPageBySlug(slug);
+    if (!page) return {};
 
     return createMarketingMetadata({
-        ...seo,
+        title: `${page.title} | ${APP_NAME}`,
+        description: page.title,
         path: `/pages/${slug}`,
     });
 }
