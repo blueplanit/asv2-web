@@ -1,14 +1,15 @@
-import type { Metadata } from "next";
 import { HighIntentLandingPage } from "@/components/marketing/high-intent-landing-page";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
 const sampleSheetUrl =
     "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/view?usp=sharing";
 
-export const metadata: Metadata = {
+export const metadata = createMarketingMetadata({
     title: "Stripe Google Sheets Integration | SyncStaq",
     description:
         "Connect Stripe to Google Sheets with SyncStaq. Backfill recent Stripe billing history and keep structured raw tabs updated hourly for reporting.",
-};
+    path: "/stripe-google-sheets-integration",
+});
 
 export default function StripeGoogleSheetsIntegrationPage() {
     return (

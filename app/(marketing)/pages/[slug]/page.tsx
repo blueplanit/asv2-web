@@ -1,5 +1,6 @@
 // app/(marketing)/pages/[slug]/page.tsx
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getPageBySlug } from "@/lib/contentful/contentful-queries";
 import {
     documentToReactComponents,
@@ -8,6 +9,56 @@ import {
     contentfulRichTextOptions,
     type ContentfulRichTextDocument,
 } from "@/lib/contentful/contentful-rich-text";
+import { APP_NAME } from "@/lib/constants";
+import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
+
+const pageSeo: Record<string, { title: string; description: string }> = {
+    about: {
+        title: "About SyncStaq — Stripe to Google Sheets Sync",
+        description:
+            "SyncStaq began as an internal tool for our own Stripe reporting headaches. Learn who we are and why we built automated Stripe to Google Sheets sync.",
+    },
+    contact: {
+        title: "Contact SyncStaq — Support and Sales Questions",
+        description:
+            "Get in touch with the SyncStaq team about Stripe to Google Sheets sync, billing questions, technical support, or anything else you need help with.",
+    },
+    "privacy-policy": {
+        title: "Privacy Policy | SyncStaq",
+        description:
+            "How SyncStaq collects, uses, and protects your data when syncing Stripe billing information into Google Sheets. Read the full privacy policy.",
+    },
+    terms: {
+        title: "Terms of Service | SyncStaq",
+        description:
+            "The terms governing your use of SyncStaq, the Stripe to Google Sheets sync service operated by Blue Planit LLC. Review before creating an account.",
+    },
+};
+
+export async function generateMetadata({
+    params,
+}: {
+    params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+    const { slug } = await params;
+    const seo = pageSeo[slug];
+
+    if (seo) {
+        return createMarketingMetadata({
+            ...seo,
+            path: `/pages/${slug}`,
+        });
+    }
+
+    const page = await getPageBySlug(slug);
+    if (!page) return {};
+
+    return createMarketingMetadata({
+        title: `${page.title} | ${APP_NAME}`,
+        description: page.title,
+        path: `/pages/${slug}`,
+    });
+}
 
 export const revalidate = 60;
 

@@ -1,0 +1,11 @@
+# robots.txt for https://www.syncstaq.com
+# Auth-gated / app routes have no SEO value.
+
+User-agent: *
+Allow: /
+
+Disallow: /login
+Disallow: /dashboard
+Disallow: /api/
+
+Sitemap: https://www.syncstaq.com/sitemap.xml
