@@ -16,6 +16,8 @@ import { loadUserState } from "@/lib/app-state/user-state";
 import { hasAnyNonRetiredConfig } from "@/lib/app-state/onboarding-status";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
 import { APP_NAME } from "@/lib/constants";
+import { trackServerEvents, type ServerEventParams } from "@/lib/analytics/server-events";
+import { EVENT_NAMES, workspaceSpreadsheetCreatedInsertId } from "@/lib/analytics/event-names";
 
 const WORKSPACE_SHEET_TITLE = `My ${APP_NAME} Workspace`;
 const FOLDER_NAME = APP_NAME;
@@ -219,7 +221,15 @@ export async function GET(req: NextRequest) {
         googleProjectShard: payload.shard,
     });
 
+    // Timestamped here, but sent later. Funnel order comes from these captured
+    // times, not from when the events are emitted, so nothing has to be sent
+    // ahead of sheet creation to keep the two steps in order.
+    const googleConnectedAt = Date.now();
+
     // 5) Onboarding connect flow: auto-create workspace sheet, then land on step 3
+    let autoCreatedSpreadsheetId: string | null = null;
+    let spreadsheetCreatedAt: number | null = null;
+    let sheetCreationFailed = false;
     if (flow === "google-connect") {
         try {
             // Consistent read: the GoogleConnection was just written above, and
@@ -234,20 +244,57 @@ export async function GET(req: NextRequest) {
             // successBase and the wizard's step clamp routes the user to step 1.
             // Skip too if any non-retired config exists (one-workspace rule).
             if (hasConnectedStripe && !hasAnyNonRetiredConfig(userState.syncConfigs)) {
-                await createWorkspaceSheetAndConfig({
+                const created = await createWorkspaceSheetAndConfig({
                     userState,
                     folderName: FOLDER_NAME,
                     workspaceSheetTitle: WORKSPACE_SHEET_TITLE,
                 });
+                autoCreatedSpreadsheetId = created.spreadsheetId;
+                spreadsheetCreatedAt = Date.now();
             }
         } catch (err) {
             console.error("Auto-create workspace sheet failed after Google connect:", err);
-            const errUrl = new URL(
-                onboardingUrlWithSheetError(successBase),
-                process.env.NEXTAUTH_URL,
-            );
-            return clearNonceCookie(NextResponse.redirect(errUrl));
+            // Flagged rather than returned, so the single emit below still runs
+            // and a sheet failure cannot drop the connection step.
+            sheetCreationFailed = true;
         }
+    }
+
+    // Single emit point, after all real work and before any redirect, so no
+    // early return can skip it and nothing downstream waits on Amplitude.
+    // Order is carried by the captured timestamps, not by call order.
+    if (flow === "google-connect") {
+        const events: ServerEventParams[] = [
+            {
+                userId,
+                eventName: EVENT_NAMES.GOOGLE_CONNECTED,
+                insertId: `${userId}:google-connected`,
+                time: googleConnectedAt,
+            },
+        ];
+
+        if (autoCreatedSpreadsheetId && spreadsheetCreatedAt) {
+            events.push({
+                userId,
+                eventName: EVENT_NAMES.WORKSPACE_SPREADSHEET_CREATED,
+                insertId: workspaceSpreadsheetCreatedInsertId(userId, autoCreatedSpreadsheetId),
+                time: spreadsheetCreatedAt,
+                eventProperties: {
+                    spreadsheet_id: autoCreatedSpreadsheetId,
+                    created_via: "auto",
+                },
+            });
+        }
+
+        await trackServerEvents(events);
+    }
+
+    if (sheetCreationFailed) {
+        const errUrl = new URL(
+            onboardingUrlWithSheetError(successBase),
+            process.env.NEXTAUTH_URL,
+        );
+        return clearNonceCookie(NextResponse.redirect(errUrl));
     }
 
     const onboardingUrl = new URL(successBase, process.env.NEXTAUTH_URL);

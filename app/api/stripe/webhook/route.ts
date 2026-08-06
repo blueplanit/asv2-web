@@ -13,6 +13,8 @@ import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
 import { getUserProfile } from "@/lib/dynamo/user-profile";
 import { isStripeSubscriptionEntitled, isStripeSubscriptionNonEntitledTerminal } from "@/lib/app-state/subscription-entitlement";
 import { isDevEnvironment } from "@/lib/utils";
+import { trackServerEvent } from "@/lib/analytics/server-events";
+import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
 export const runtime = "nodejs";
 
@@ -57,6 +59,61 @@ function buildUpdateParamsFromSubscription(
     };
 
     return { userId, params };
+}
+
+/**
+ * Emits the funnel's conversion event: the first time Stripe actually collects
+ * money for this subscription.
+ *
+ * No durable "already paid" guard is needed. Stripe's own state machine makes
+ * each of these transitions happen at most once per subscription: `trialing`
+ * can never be re-entered, `canceled` is terminal so a win-back always mints a
+ * new subscription, and renewals leave the status on `active` untouched.
+ * `past_due -> active` is dunning recovery, not a conversion, so it is excluded.
+ * See docs/adr/0002-amplitude-funnel-instrumentation.md.
+ */
+async function emitSubscriptionPaidIfConverted(args: {
+    subscription: Stripe.Subscription;
+    isCreatedEvent: boolean;
+    previousStatus: Stripe.Subscription.Status | undefined;
+}) {
+    const { subscription, isCreatedEvent, previousStatus } = args;
+
+    if (subscription.status !== "active") return;
+
+    const userId = (subscription.metadata as any)?.userId as string | undefined;
+    if (!userId) return;
+
+    // Created already active = paid checkout with no authentication step.
+    // trialing -> active = the trial converted. incomplete -> active = 3DS cleared.
+    const convertedFromTrial = previousStatus === "trialing";
+    const isConversion =
+        isCreatedEvent || convertedFromTrial || previousStatus === "incomplete";
+
+    if (!isConversion) return;
+
+    const priceItem = subscription.items.data[0]?.price;
+    const planInfo = mapStripePriceToPlan(priceItem?.id);
+    const unitAmount = priceItem?.unit_amount;
+
+    await trackServerEvent({
+        userId,
+        eventName: EVENT_NAMES.SUBSCRIPTION_PAID,
+        insertId: `${subscription.id}:paid`,
+        ...(unitAmount != null
+            ? { price: unitAmount / 100, quantity: 1 }
+            : {}),
+        ...(planInfo
+            ? { productId: `${planInfo.planId}_${planInfo.interval}` }
+            : {}),
+        eventProperties: {
+            plan_id: planInfo?.planId ?? null,
+            interval: planInfo?.interval ?? null,
+            currency: priceItem?.currency ?? null,
+            from_trial: convertedFromTrial,
+            subscription_id: subscription.id,
+        },
+    });
 }
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
@@ -140,6 +197,24 @@ export async function POST(req: NextRequest) {
                 const subscription = event.data.object as Stripe.Subscription;
                 console.log(`Stripe webhook: subscription created/updated: subId: ${subscription.id}, userId: ${subscription.metadata?.userId}`);
                 await handleSubscriptionChange(subscription);
+
+                // previous_attributes only carries the fields that changed, so
+                // an absent status means the status was not what changed.
+                const previousStatus = (event.data.previous_attributes as
+                    | Partial<Stripe.Subscription>
+                    | undefined)?.status;
+                // Isolated from the outer catch: the subscription is already
+                // updated in Dynamo by this point, so a tracking failure must
+                // not return 500 and make Stripe redeliver the whole event.
+                try {
+                    await emitSubscriptionPaidIfConverted({
+                        subscription,
+                        isCreatedEvent: event.type === "customer.subscription.created",
+                        previousStatus,
+                    });
+                } catch (err) {
+                    console.error(`Stripe webhook: failed to emit Subscription Paid: subId: ${subscription.id}, error: ${err}`);
+                }
                 break;
             }
             case "customer.subscription.deleted": {

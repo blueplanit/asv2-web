@@ -5,6 +5,8 @@ import { ensureAppUserForGoogleLogin } from "@/lib/dynamo/user-profile";
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { getGoogleClientConfigForShard } from "@/lib/google/google-oauth-sharding";
+import { trackServerEvent } from "@/lib/analytics/server-events";
+import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
 
 // Keep login on one shard unless truly need to shard login too.
@@ -60,12 +62,28 @@ export const authOptions: NextAuthOptions = {
 
             // First time (on sign-in) we have account + profile
             if (shouldEnsure && googleUserId && email) {
-                const { userId } = await ensureAppUserForGoogleLogin({
+                const { userId, isNewUser } = await ensureAppUserForGoogleLogin({
                     googleUserId,
                     email,
                 });
                 (token as any).userId = userId;
                 (token as any).userEnsuredAt = now;
+
+                // Emitted server-side because it is the one moment we can tell a
+                // brand-new account from a returning login. Guarded so a
+                // tracking failure can never block the token and break sign-in.
+                if (isNewUser) {
+                    try {
+                        await trackServerEvent({
+                            userId,
+                            eventName: EVENT_NAMES.SIGNED_UP,
+                            insertId: `${userId}:signed-up`,
+                            userProperties: { email },
+                        });
+                    } catch (err) {
+                        console.error("Failed to emit Signed Up event:", err);
+                    }
+                }
                 return token;
             }
             return token;

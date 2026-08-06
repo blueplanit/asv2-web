@@ -14,6 +14,7 @@ import { isDevEnvironment } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackfillIntroModal } from "./backfill-intro-modal";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
+import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
 export type SurveyStep = "q1" | "q2" | "done";
 
@@ -371,7 +372,7 @@ export function DashboardClient() {
     // When initial backfill completes (no configs are "backfill_running"), close the intro modal
     useEffect(() => {
         if (prevHasBackfillRunningRef.current && !hasBackfillRunning) {
-            trackAmplitudeEvent("Backfill Completed", {
+            trackAmplitudeEvent(EVENT_NAMES.BACKFILL_COMPLETED, {
                 spreadsheet_id: activeWorkspace?.id ?? null,
                 workspace_name: activeWorkspace?.name ?? null,
             });

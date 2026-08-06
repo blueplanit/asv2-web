@@ -258,15 +258,17 @@ async function createUserProfileForGoogleLogin(params: {
 }
 
 // Main entry point from auth callback
+// isNewUser lets the caller emit the funnel's "Signed Up" event exactly once,
+// on the create branch only.
 export async function ensureAppUserForGoogleLogin(params: {
     googleUserId: string;
     email: string;
-}): Promise<{ userId: string }> {
+}): Promise<{ userId: string; isNewUser: boolean }> {
     const existing = await getUserProfileByGoogleUserId(params.googleUserId);
     if (existing) {
-        return { userId: existing.userId };
+        return { userId: existing.userId, isNewUser: false };
     }
 
     const created = await createUserProfileForGoogleLogin(params);
-    return { userId: created.userId };
+    return { userId: created.userId, isNewUser: true };
 }
