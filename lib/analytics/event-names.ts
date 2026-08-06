@@ -4,8 +4,9 @@
 //
 // Deliberately no "use client" or "server-only" — both sides import this.
 //
-// What belongs here: the funnel spine in docs/adr/0002, plus the onboarding
-// milestones measured alongside it. One-off product events (Column Request,
+// What belongs here: the acquisition and monetization events listed in
+// "What is emitted, and where from" in docs/adr/0002 — the ones a conversion
+// or onboarding chart is built from. One-off product events (Column Request,
 // Recovery, Spreadsheet Link Clicked) stay inline — each has a single emitter,
 // so there is nothing for them to drift against.
 export const EVENT_NAMES = {

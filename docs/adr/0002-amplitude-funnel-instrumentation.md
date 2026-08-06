@@ -119,8 +119,11 @@ this list must not be pasted into a chart as an ordered sequence.
 | `Stripe Connected` | onboarding wizard, via callback marker |
 | `Google Connect Started` | onboarding wizard |
 | `Google Connected` | **server** — google callback |
+| `Workspace Spreadsheet Creation Started` | onboarding wizard, manual fallback only |
 | `Workspace Spreadsheet Created` | **server** — google callback (auto), client (manual fallback) |
+| `Sync Config Setup Started` | onboarding wizard |
 | `Trial Started` | onboarding wizard |
+| `Onboarding Completed` | onboarding wizard |
 | `Backfill Completed` | dashboard poller — client-biased, see decision 3 |
 | `Checkout Started` | pricing client |
 | `Subscription Paid` | **server** — Stripe webhook |
