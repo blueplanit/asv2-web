@@ -62,16 +62,43 @@ function buildUpdateParamsFromSubscription(
 }
 
 /**
- * Emits the funnel's conversion event: the first time Stripe actually collects
+ * Whether this webhook delivery represents the first time Stripe collected
  * money for this subscription.
  *
- * No durable "already paid" guard is needed. Stripe's own state machine makes
- * each of these transitions happen at most once per subscription: `trialing`
- * can never be re-entered, `canceled` is terminal so a win-back always mints a
- * new subscription, and renewals leave the status on `active` untouched.
- * `past_due -> active` is dunning recovery, not a conversion, so it is excluded.
- * See docs/adr/0002-amplitude-funnel-instrumentation.md.
+ * The three firing cases:
+ *  - created already active: a paid checkout that needed no authentication.
+ *    Both routes to revenue land here, including trial conversions — buying
+ *    during a trial mints a *new* subscription and cancels the trial one.
+ *  - incomplete -> active: the same checkout after 3DS cleared.
+ *  - trialing -> active: only when a card is added mid-trial via the billing
+ *    portal, which leaves the original subscription in place. Rare, because
+ *    trials are created with missing_payment_method: "cancel".
+ *
+ * `past_due -> active` is dunning recovery, not a conversion, so it is
+ * excluded, and renewals leave the status on `active` untouched.
+ *
+ * No durable "already paid" guard is needed: Stripe's state machine makes each
+ * of these happen at most once per subscription, since `trialing` can never be
+ * re-entered and `canceled` is terminal, so a win-back mints a new
+ * subscription. See docs/adr/0002-amplitude-funnel-instrumentation.md.
  */
+function isSubscriptionPaidConversion(args: {
+    subscription: Stripe.Subscription;
+    isCreatedEvent: boolean;
+    previousStatus: Stripe.Subscription.Status | undefined;
+}) {
+    const { subscription, isCreatedEvent, previousStatus } = args;
+
+    if (subscription.status !== "active") return false;
+    if (!(subscription.metadata as any)?.userId) return false;
+
+    return (
+        isCreatedEvent ||
+        previousStatus === "trialing" ||
+        previousStatus === "incomplete"
+    );
+}
+
 async function emitSubscriptionPaidIfConverted(args: {
     subscription: Stripe.Subscription;
     isCreatedEvent: boolean;
@@ -82,19 +109,11 @@ async function emitSubscriptionPaidIfConverted(args: {
 }) {
     const { subscription, isCreatedEvent, previousStatus, hadPriorSubscription } = args;
 
-    if (subscription.status !== "active") return;
+    if (!isSubscriptionPaidConversion({ subscription, isCreatedEvent, previousStatus })) {
+        return;
+    }
 
-    const userId = (subscription.metadata as any)?.userId as string | undefined;
-    if (!userId) return;
-
-    // Created already active = paid checkout with no authentication step.
-    // trialing -> active = the trial converted. incomplete -> active = 3DS cleared.
-    const convertedFromTrial = previousStatus === "trialing";
-    const isConversion =
-        isCreatedEvent || convertedFromTrial || previousStatus === "incomplete";
-
-    if (!isConversion) return;
-
+    const userId = (subscription.metadata as any).userId as string;
     const priceItem = subscription.items.data[0]?.price;
     const planInfo = mapStripePriceToPlan(priceItem?.id);
     const unitAmount = priceItem?.unit_amount;
@@ -113,7 +132,6 @@ async function emitSubscriptionPaidIfConverted(args: {
             plan_id: planInfo?.planId ?? null,
             interval: planInfo?.interval ?? null,
             currency: priceItem?.currency ?? null,
-            from_trial: convertedFromTrial,
             subscription_id: subscription.id,
             // Users can buy straight from the pricing page, skipping onboarding
             // entirely, so the two routes to revenue must be separable in the
@@ -209,28 +227,33 @@ export async function POST(req: NextRequest) {
                 const subscription = event.data.object as Stripe.Subscription;
                 console.log(`Stripe webhook: subscription created/updated: subId: ${subscription.id}, userId: ${subscription.metadata?.userId}`);
 
-                // Read before handleSubscriptionChange overwrites it. A user who
-                // already had a subscription trialed before paying; one who did
-                // not bought straight from the pricing page, skipping onboarding.
-                const webhookUserId = (subscription.metadata as any)?.userId as string | undefined;
-                const profileBeforeChange = webhookUserId
-                    ? await getUserProfile(webhookUserId).catch(() => null)
-                    : null;
-
-                await handleSubscriptionChange(subscription);
-
                 // previous_attributes only carries the fields that changed, so
                 // an absent status means the status was not what changed.
                 const previousStatus = (event.data.previous_attributes as
                     | Partial<Stripe.Subscription>
                     | undefined)?.status;
+                const isCreatedEvent = event.type === "customer.subscription.created";
+
+                // Read before handleSubscriptionChange overwrites it: a user who
+                // already had a subscription trialed before paying, one who did
+                // not bought straight from the pricing page. Gated on the same
+                // predicate the emit uses, so renewals, dunning and ordinary
+                // status churn don't pay for a read that is never used.
+                const webhookUserId = (subscription.metadata as any)?.userId as string | undefined;
+                const profileBeforeChange =
+                    webhookUserId &&
+                    isSubscriptionPaidConversion({ subscription, isCreatedEvent, previousStatus })
+                        ? await getUserProfile(webhookUserId).catch(() => null)
+                        : null;
+
+                await handleSubscriptionChange(subscription);
                 // Isolated from the outer catch: the subscription is already
                 // updated in Dynamo by this point, so a tracking failure must
                 // not return 500 and make Stripe redeliver the whole event.
                 try {
                     await emitSubscriptionPaidIfConverted({
                         subscription,
-                        isCreatedEvent: event.type === "customer.subscription.created",
+                        isCreatedEvent,
                         previousStatus,
                         hadPriorSubscription: profileBeforeChange
                             ? !!profileBeforeChange.subscriptionId
