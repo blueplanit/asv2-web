@@ -1,7 +1,7 @@
 // app/api/google/callback/route.ts
 export const runtime = "nodejs";
 import "server-only";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { putGoogleConnection } from "@/lib/google/google-connection";
@@ -16,7 +16,7 @@ import { loadUserState } from "@/lib/app-state/user-state";
 import { hasAnyNonRetiredConfig } from "@/lib/app-state/onboarding-status";
 import { createWorkspaceSheetAndConfig } from "@/lib/google/workspace-sheet";
 import { APP_NAME } from "@/lib/constants";
-import { trackServerEvents, type ServerEventParams } from "@/lib/analytics/server-events";
+import { trackServerEvent } from "@/lib/analytics/server-events";
 import { EVENT_NAMES, workspaceSpreadsheetCreatedInsertId } from "@/lib/analytics/event-names";
 
 const WORKSPACE_SHEET_TITLE = `My ${APP_NAME} Workspace`;
@@ -260,33 +260,36 @@ export async function GET(req: NextRequest) {
         }
     }
 
-    // Single emit point, after all real work and before any redirect, so no
-    // early return can skip it and nothing downstream waits on Amplitude.
-    // Order is carried by the captured timestamps, not by call order.
+    // Registered before the redirects so no early return can skip it, but run by
+    // after() once the response is already sent — the user never waits on
+    // Amplitude, and a stall here cannot cost them the redirect. Order comes
+    // from the captured timestamps, not from when these run.
     if (flow === "google-connect") {
-        const events: ServerEventParams[] = [
-            {
+        const connectedAt = googleConnectedAt;
+        const createdSpreadsheetId = autoCreatedSpreadsheetId;
+        const createdAt = spreadsheetCreatedAt;
+
+        after(async () => {
+            await trackServerEvent({
                 userId,
                 eventName: EVENT_NAMES.GOOGLE_CONNECTED,
                 insertId: `${userId}:google-connected`,
-                time: googleConnectedAt,
-            },
-        ];
-
-        if (autoCreatedSpreadsheetId && spreadsheetCreatedAt) {
-            events.push({
-                userId,
-                eventName: EVENT_NAMES.WORKSPACE_SPREADSHEET_CREATED,
-                insertId: workspaceSpreadsheetCreatedInsertId(userId, autoCreatedSpreadsheetId),
-                time: spreadsheetCreatedAt,
-                eventProperties: {
-                    spreadsheet_id: autoCreatedSpreadsheetId,
-                    created_via: "auto",
-                },
+                time: connectedAt,
             });
-        }
 
-        await trackServerEvents(events);
+            if (createdSpreadsheetId && createdAt !== null) {
+                await trackServerEvent({
+                    userId,
+                    eventName: EVENT_NAMES.WORKSPACE_SPREADSHEET_CREATED,
+                    insertId: workspaceSpreadsheetCreatedInsertId(userId, createdSpreadsheetId),
+                    time: createdAt,
+                    eventProperties: {
+                        spreadsheet_id: createdSpreadsheetId,
+                        created_via: "auto",
+                    },
+                });
+            }
+        });
     }
 
     if (sheetCreationFailed) {

@@ -102,24 +102,55 @@ comparable; at ~279 events/month there was little to protect.
 - Old step-numbered events remain in Amplitude's event list and should be
   hidden there.
 
-## Funnel
+## What is emitted, and from where
+
+This is an emission map, **not a funnel definition**. Funnels live in Amplitude
+charts; nothing here constrains them. See "Two routes to revenue" below for why
+this list must not be pasted into a chart as an ordered sequence.
+
+| Event | Emitted from |
+|---|---|
+| `[Amplitude] Page Viewed` | autocapture, every route |
+| `Pricing Page Viewed` | pricing client |
+| `Sign In Started` | login form |
+| `Signed Up` | **server** — auth callback, create branch only |
+| `Logged In` | client, once per browser session |
+| `Stripe Connect Started` | onboarding wizard |
+| `Stripe Connected` | onboarding wizard, via callback marker |
+| `Google Connect Started` | onboarding wizard |
+| `Google Connected` | **server** — google callback |
+| `Workspace Spreadsheet Created` | **server** — google callback (auto), client (manual fallback) |
+| `Trial Started` | onboarding wizard |
+| `Backfill Completed` | dashboard poller — client-biased, see decision 3 |
+| `Checkout Started` | pricing client |
+| `Subscription Paid` | **server** — Stripe webhook |
+
+Users can be segmented by the `acquisition_channel` user property.
+
+## Two routes to revenue
+
+A user can buy directly from the pricing page — sign in, check out, done —
+**without connecting Stripe or Google, creating a spreadsheet, or starting a
+trial**. `app/api/billing/checkout/route.ts` requires only a session and a
+profile.
+
+So the list above is not a single path, and using it as one ordered funnel would
+be wrong: every step is a filter, and the onboarding steps would silently
+exclude every direct purchaser from the conversion rate.
+
+Only three events are on every route to revenue:
 
 ```
-[Amplitude] Page Viewed   (autocapture)
-  -> Sign In Started
-  -> Signed Up                 (server: auth callback, create branch only)
-  -> Stripe Connect Started
-  -> Stripe Connected
-  -> Google Connect Started
-  -> Google Connected              (server: google callback)
-  -> Workspace Spreadsheet Created (server: google callback, auto path)
-  -> Trial Started
-  -> Backfill Completed        (client-biased; see decision 3)
-  -> Checkout Started
-  -> Subscription Paid         (server: Stripe webhook)
+Page Viewed  ->  Signed Up  ->  Subscription Paid
 ```
 
-Segment by the `acquisition_channel` user property.
+The two routes have different shapes and need different chart settings — the
+trial route cannot convert in under 14 days by construction, while a direct
+purchase completes in minutes, so one conversion window cannot serve both.
+
+`Subscription Paid` carries `purchase_path` (`post_trial` | `direct` |
+`unknown`) so the routes can be separated on the purchase event itself, without
+depending on upstream events having fired correctly.
 
 ### Why these two are emitted server-side
 
@@ -144,6 +175,12 @@ creating the spreadsheet. That put a network call on the OAuth critical path:
 a slow Amplitude could exhaust the request budget and leave the user with a
 persisted connection, no spreadsheet, and no `sheetError` redirect — analytics
 breaking onboarding. Sheet-creation failure is now flagged rather than returned
-early, so the single emit point still runs and cannot be skipped.
+early, so the emit still runs and cannot be skipped by an early return.
+
+Because order no longer depends on call order, the emits run inside `after()`,
+once the response has been sent. The user never waits on Amplitude, and a stall
+cannot cost them the redirect. Each event is sent as its own request: Amplitude
+rejects a whole payload if any single event in it is invalid, and inside
+`after()` the extra round trip costs nothing.
 
 Keep this shape: capture times inline, send once, after the work.

@@ -76,8 +76,11 @@ async function emitSubscriptionPaidIfConverted(args: {
     subscription: Stripe.Subscription;
     isCreatedEvent: boolean;
     previousStatus: Stripe.Subscription.Status | undefined;
+    // Whether the user already had a subscription before this one. null when
+    // the profile could not be read.
+    hadPriorSubscription: boolean | null;
 }) {
-    const { subscription, isCreatedEvent, previousStatus } = args;
+    const { subscription, isCreatedEvent, previousStatus, hadPriorSubscription } = args;
 
     if (subscription.status !== "active") return;
 
@@ -112,6 +115,15 @@ async function emitSubscriptionPaidIfConverted(args: {
             currency: priceItem?.currency ?? null,
             from_trial: convertedFromTrial,
             subscription_id: subscription.id,
+            // Users can buy straight from the pricing page, skipping onboarding
+            // entirely, so the two routes to revenue must be separable in the
+            // funnel. See docs/adr/0002.
+            purchase_path:
+                hadPriorSubscription === null
+                    ? "unknown"
+                    : hadPriorSubscription
+                        ? "post_trial"
+                        : "direct",
         },
     });
 }
@@ -196,6 +208,15 @@ export async function POST(req: NextRequest) {
             case "customer.subscription.updated": {
                 const subscription = event.data.object as Stripe.Subscription;
                 console.log(`Stripe webhook: subscription created/updated: subId: ${subscription.id}, userId: ${subscription.metadata?.userId}`);
+
+                // Read before handleSubscriptionChange overwrites it. A user who
+                // already had a subscription trialed before paying; one who did
+                // not bought straight from the pricing page, skipping onboarding.
+                const webhookUserId = (subscription.metadata as any)?.userId as string | undefined;
+                const profileBeforeChange = webhookUserId
+                    ? await getUserProfile(webhookUserId).catch(() => null)
+                    : null;
+
                 await handleSubscriptionChange(subscription);
 
                 // previous_attributes only carries the fields that changed, so
@@ -211,6 +232,9 @@ export async function POST(req: NextRequest) {
                         subscription,
                         isCreatedEvent: event.type === "customer.subscription.created",
                         previousStatus,
+                        hadPriorSubscription: profileBeforeChange
+                            ? !!profileBeforeChange.subscriptionId
+                            : null,
                     });
                 } catch (err) {
                     console.error(`Stripe webhook: failed to emit Subscription Paid: subId: ${subscription.id}, error: ${err}`);

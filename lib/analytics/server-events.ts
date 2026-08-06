@@ -71,14 +71,14 @@ function toAmplitudeEvent(params: ServerEventParams) {
  * callback — where an analytics failure must not surface as a broken login, a
  * retried webhook, or an error page after a spreadsheet was created.
  *
- * Prefer one batched call to several sequential ones: each await adds its own
- * timeout budget to the request that triggered it.
+ * One event per request, deliberately. Amplitude rejects an entire payload if
+ * any single event in it is invalid, so batching would couple two independent
+ * events' failure. Callers that emit several should run inside `after()`, where
+ * the extra round trip costs the user nothing.
  */
-export async function trackServerEvents(
-    events: ServerEventParams[],
-): Promise<void> {
+export async function trackServerEvent(params: ServerEventParams): Promise<void> {
     try {
-        if (!AMPLITUDE_API_KEY || isDevEnvironment() || events.length === 0) {
+        if (!AMPLITUDE_API_KEY || isDevEnvironment()) {
             return;
         }
 
@@ -88,23 +88,21 @@ export async function trackServerEvents(
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             body: JSON.stringify({
                 api_key: AMPLITUDE_API_KEY,
-                events: events.map(toAmplitudeEvent),
+                events: [toAmplitudeEvent(params)],
             }),
         });
 
         if (!response.ok) {
             const body = await response.text().catch(() => "");
             console.error(
-                `Amplitude server events failed: status: ${response.status}, body: ${body}`,
+                `Amplitude server event failed: ${params.eventName}, status: ${response.status}, body: ${body}`,
             );
         }
     } catch (error) {
         // Swallowed deliberately, including AbortError from the timeout above.
-        const names = events.map((e) => e.eventName).join(", ");
-        console.error(`Amplitude server events threw: ${names}`, error);
+        console.error(
+            `Amplitude server event threw: ${params.eventName}`,
+            error,
+        );
     }
-}
-
-export async function trackServerEvent(params: ServerEventParams): Promise<void> {
-    return trackServerEvents([params]);
 }
