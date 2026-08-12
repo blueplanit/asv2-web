@@ -32,6 +32,16 @@ function getCoverImageUrl(post: BlogPostFields): string | undefined {
     return rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
 }
 
+function getBrandedMetadataTitle(title: string): string {
+    const trimmedTitle = title.trim();
+
+    if (/\|\s*SyncStaq(?:\s+Blog)?$/i.test(trimmedTitle)) {
+        return trimmedTitle.replace(/\|\s*SyncStaq\s+Blog$/i, `| ${APP_NAME}`);
+    }
+
+    return `${trimmedTitle} | ${APP_NAME}`;
+}
+
 // SEO metadata: use excerpt as meta description
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params;
@@ -45,7 +55,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             };
         }
 
-        const title = post.title;
+        const title = getBrandedMetadataTitle(post.title);
         const description =
             post.excerpt ||
             "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.";

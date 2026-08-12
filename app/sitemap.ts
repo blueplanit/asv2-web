@@ -5,8 +5,8 @@ import {
     getAllPageSlugs,
 } from "@/lib/contentful/contentful-queries";
 
-// Contentful publishes must appear without waiting for a site deployment or stale ISR artifact.
-export const dynamic = "force-dynamic";
+// Regenerate hourly so new Contentful entries appear promptly without querying on every request.
+export const revalidate = 3600;
 
 type SitemapEntry = MetadataRoute.Sitemap[number];
 
