@@ -12,7 +12,10 @@ export const metadata = createMarketingMetadata({
     path: "/blog",
 });
 
-export const revalidate = 60;
+// The Backstop Window. A Contentful webhook expires this listing as soon as a post changes.
+// See docs/adr/0003-contentful-delivery-quota.md.
+export const dynamic = "force-static";
+export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 
 // Optional helper to resolve Contentful asset -> URL
 function getCoverImageUrl(post: any): string | null {

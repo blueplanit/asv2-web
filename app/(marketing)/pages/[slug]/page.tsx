@@ -1,7 +1,7 @@
 // app/(marketing)/pages/[slug]/page.tsx
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getPageBySlug } from "@/lib/contentful/contentful-queries";
+import { getAllPageSlugs, getPageBySlug } from "@/lib/contentful/contentful-queries";
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";
@@ -60,7 +60,16 @@ export async function generateMetadata({
     });
 }
 
-export const revalidate = 60;
+// The Backstop Window. A Contentful webhook expires this page as soon as it changes.
+// See docs/adr/0003-contentful-delivery-quota.md.
+export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
+
+// This route was rendered on every request, because nothing was prerendered.
+// Reuses the cached slug listing, so the whole set costs the one call the sitemap spends.
+export async function generateStaticParams() {
+    const slugs = await getAllPageSlugs();
+    return slugs.map((slug) => ({ slug }));
+}
 
 export default async function CmsPage({
     params,

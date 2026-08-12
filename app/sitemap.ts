@@ -5,8 +5,9 @@ import {
     getAllPageSlugs,
 } from "@/lib/contentful/contentful-queries";
 
-// Regenerate hourly so new Contentful entries appear promptly without querying on every request.
-export const revalidate = 3600;
+// The Backstop Window. A Contentful webhook expires the listings this reads as soon as an
+// entry changes. See docs/adr/0003-contentful-delivery-quota.md.
+export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 
 type SitemapEntry = MetadataRoute.Sitemap[number];
 
@@ -28,16 +29,12 @@ const staticRoutes: Array<{
 const absolute = (path: string) => new URL(path, SITE_URL).toString();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    // A Contentful outage should not take the whole sitemap down.
+    // A Contentful error must throw. Next then keeps serving the last good sitemap.
+    // These reads were caught before, which was safe under an hourly rebuild. Under the
+    // Backstop Window, one failed regeneration would drop every post for a week.
     const [posts, pageSlugs] = await Promise.all([
-        getAllBlogPosts().catch((err) => {
-            console.error("sitemap: getAllBlogPosts failed", err);
-            return [];
-        }),
-        getAllPageSlugs().catch((err) => {
-            console.error("sitemap: getAllPageSlugs failed", err);
-            return [];
-        }),
+        getAllBlogPosts(),
+        getAllPageSlugs(),
     ]);
 
     const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({

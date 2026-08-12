@@ -17,8 +17,15 @@ import { APP_NAME, SITE_URL } from "@/lib/constants";
 import type { BlogPostFields } from "@/lib/contentful/contentful";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
-export const revalidate = 60;
+// The Backstop Window. A Contentful webhook expires this post as soon as it changes,
+// so the window only catches a failed webhook. See docs/adr/0003-contentful-delivery-quota.md.
+export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 
+// A newly published post is not in this list, which runs at build time.
+// dynamicParams stays true so that post still renders, on demand, the moment it publishes.
+export const dynamicParams = true;
+
+// Reuses the cached listing, so every post costs the one call the listing already spends.
 export async function generateStaticParams() {
     const slugs = await getAllBlogPostSlugs();
     return slugs.map((slug) => ({ slug }));

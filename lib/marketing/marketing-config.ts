@@ -1,7 +1,15 @@
 // lib/marketing/marketing-config.ts
 import "server-only";
 import { z } from "zod";
+import { unstable_cache } from "next/cache";
 import { contentfulClient } from "../contentful/contentful";
+import {
+    BACKSTOP_WINDOW_SECONDS,
+    COPY_PAGE_KEYS,
+    CONTENT_TYPES,
+    contentTypeTag,
+    copyKeyTag,
+} from "../contentful/content-routes";
 import { DEFAULT_MARKETING_COPY, type MarketingCopy } from "./marketing-copy";
 
 const heroSchema = z.object({
@@ -48,20 +56,40 @@ const marketingCopySchema = z.object({
     finalCta: finalCtaSchema,
 });
 
+// The raw read, cached. Only a successful read reaches the cache: the fallback below sits
+// outside it, so a Contentful outage can never store DEFAULT_MARKETING_COPY for the
+// whole Backstop Window. See docs/adr/0003-contentful-delivery-quota.md.
+const readLandingCopyEntry = () =>
+    unstable_cache(
+        async () => {
+            const res = await contentfulClient.getEntries({
+                content_type: CONTENT_TYPES.COPY_CONFIG,
+                limit: 1,
+                "fields.pageKey": COPY_PAGE_KEYS.LANDING,
+            });
+
+            return res.items[0] ?? null;
+        },
+        ["copy-config", COPY_PAGE_KEYS.LANDING],
+        {
+            revalidate: BACKSTOP_WINDOW_SECONDS,
+            tags: [
+                contentTypeTag(CONTENT_TYPES.COPY_CONFIG),
+                copyKeyTag(COPY_PAGE_KEYS.LANDING),
+            ],
+        },
+    )();
+
 export async function getMarketingCopy(): Promise<MarketingCopy> {
     try {
-        const res = await contentfulClient.getEntries({
-            content_type: "aSv2CopyAndConfig", // your landing page content type ID
-            limit: 1,
-            "fields.pageKey": "landing",
-        });
+        const entry = await readLandingCopyEntry();
 
-        if (!res.items.length) {
+        if (!entry) {
             console.warn("getMarketingCopy: no landing entries, using defaults");
             return DEFAULT_MARKETING_COPY;
         }
 
-        const fields = res.items[0].fields as any;
+        const fields = entry.fields as any;
         const rawConfig = fields.config ?? fields.marketingCopy ?? null;
 
         if (!rawConfig) {
@@ -79,7 +107,6 @@ export async function getMarketingCopy(): Promise<MarketingCopy> {
             return DEFAULT_MARKETING_COPY;
         }
 
-        console.log("getMarketingCopy: parsed", parsed.data);
         return parsed.data as MarketingCopy;
     } catch (err) {
         console.error("getMarketingCopy: Contentful error, using defaults", err);
