@@ -5,7 +5,7 @@ import {
     getAllPageSlugs,
 } from "@/lib/contentful/contentful-queries";
 
-// Regenerate hourly so newly published Contentful entries appear without a redeploy.
+// Regenerate hourly so new Contentful entries appear promptly without querying on every request.
 export const revalidate = 3600;
 
 type SitemapEntry = MetadataRoute.Sitemap[number];
@@ -28,8 +28,6 @@ const staticRoutes: Array<{
 const absolute = (path: string) => new URL(path, SITE_URL).toString();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const now = new Date();
-
     // A Contentful outage should not take the whole sitemap down.
     const [posts, pageSlugs] = await Promise.all([
         getAllBlogPosts().catch((err) => {
@@ -44,7 +42,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
         url: absolute(route.path),
-        lastModified: now,
         changeFrequency: route.changeFrequency,
         priority: route.priority,
     }));
@@ -53,13 +50,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const blogEntries: MetadataRoute.Sitemap = posts
         .filter((post) => Boolean(post.slug))
         .map((post) => {
-            const published = post.publishDate ? new Date(post.publishDate) : null;
-            const lastModified =
-                published && !Number.isNaN(published.getTime()) ? published : now;
+            const modifiedValue = post.updatedAt || post.publishDate;
+            const modified = modifiedValue ? new Date(modifiedValue) : null;
 
             return {
                 url: absolute(`/blog/${post.slug}`),
-                lastModified,
+                ...(modified && !Number.isNaN(modified.getTime())
+                    ? { lastModified: modified }
+                    : {}),
                 changeFrequency: "monthly" as const,
                 priority: 0.6,
             };
@@ -69,7 +67,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .filter(Boolean)
         .map((slug) => ({
             url: absolute(`/pages/${slug}`),
-            lastModified: now,
             changeFrequency: "yearly" as const,
             priority: 0.4,
         }));
