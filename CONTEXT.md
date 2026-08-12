@@ -43,6 +43,25 @@ _Avoid_: "checkpoint", "offset".
 Replacing a user's **Active Sync Config** + **Workspace Spreadsheet** with a fresh pair (e.g. when the old sheet nears capacity). The old Sync Config becomes `retired` and a new one is created + backfilled — **atomically**, so the (User, Connected Account) never has zero or two active configs at once.
 _Avoid_: "sheet swap", "migrate".
 
+### Content
+
+**Blog Post**:
+A `blogPostASv2` entry, rendered at `/blog/<slug>`.
+
+**CMS Page**:
+A `pageASv2` entry, rendered at `/pages/<slug>`. Not a marketing route like `/pricing`, which is code.
+_Avoid_: "page" bare (collides with a Next.js route).
+
+**Copy Config**:
+An `aSv2CopyAndConfig` entry, keyed by `pageKey`, supplying copy to a route that is otherwise code.
+
+**Delivery Quota**:
+The 100,000 monthly Contentful Delivery API calls shared by all three websites.
+_Avoid_: "rate limit" (it is a monthly budget).
+
+**Backstop Window**:
+How long a cached Contentful read survives with no webhook. Insurance against a failed webhook, not a freshness setting. See [ADR-0003](./docs/adr/0003-contentful-delivery-quota.md).
+
 ## Relationships
 
 - A **User** connects exactly one **Connected Account** today (multiple per user is a later feature).
