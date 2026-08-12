@@ -64,8 +64,8 @@ export async function generateMetadata({
 // See docs/adr/0003-contentful-delivery-quota.md.
 export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 
-// This route was rendered on every request, because nothing was prerendered.
-// Reuses the cached slug listing, so the whole set costs the one call the sitemap spends.
+// Prerenders every CMS Page. Reuses the cached slug listing, so the whole set costs
+// the one call the sitemap already spends.
 export async function generateStaticParams() {
     const slugs = await getAllPageSlugs();
     return slugs.map((slug) => ({ slug }));

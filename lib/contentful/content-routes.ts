@@ -5,7 +5,7 @@
 
 export const CONTENT_TYPES = {
     BLOG_POST: "blogPostASv2",
-    PAGE: "pageASv2",
+    CMS_PAGE: "pageASv2",
     COPY_CONFIG: "aSv2CopyAndConfig",
 } as const;
 
@@ -34,7 +34,7 @@ export const slugTag = (contentType: string, slug: string) =>
 
 // Expires a listing. A new, renamed, or removed entry changes what the listing shows.
 export const BLOG_INDEX_TAG = `contentful:${CONTENT_TYPES.BLOG_POST}:index`;
-export const PAGE_INDEX_TAG = `contentful:${CONTENT_TYPES.PAGE}:index`;
+export const CMS_PAGE_INDEX_TAG = `contentful:${CONTENT_TYPES.CMS_PAGE}:index`;
 
 // Expires one Copy Config entry, keyed by pageKey.
 export const copyKeyTag = (pageKey: string) =>

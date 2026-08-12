@@ -30,8 +30,8 @@ const absolute = (path: string) => new URL(path, SITE_URL).toString();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // A Contentful error must throw. Next then keeps serving the last good sitemap.
-    // These reads were caught before, which was safe under an hourly rebuild. Under the
-    // Backstop Window, one failed regeneration would drop every post for a week.
+    // A caught error would instead drop every post from the sitemap for the whole
+    // Backstop Window.
     const [posts, pageSlugs] = await Promise.all([
         getAllBlogPosts(),
         getAllPageSlugs(),

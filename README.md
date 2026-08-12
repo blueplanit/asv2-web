@@ -95,3 +95,43 @@ The web app IAM user needs `ssm:GetParameter` on both parameters (granted in `as
 4. Set `SURVEY_*_PARAM_NAME` env vars on the web app host.
 
 Survey answers are written with `valueInputOption: "RAW"` and formula-trigger characters are neutralized to prevent spreadsheet formula injection.
+
+## Contentful revalidation webhook
+
+One Contentful space serves three websites on a shared quota of 100,000 Delivery API
+calls per month. Every Contentful read here is cached for 7 days, and a webhook expires
+that cache when content changes. See [ADR-0003](./docs/adr/0003-contentful-delivery-quota.md).
+
+**Without the webhook, a published change takes up to 7 days to appear.** The steps below
+are required, not optional.
+
+### Web app env var
+
+```bash
+CONTENTFUL_WEBHOOK_SECRET=<a long random string>
+```
+
+Generate one with `openssl rand -hex 32`. Set it in Vercel for production and preview.
+
+### One-time Contentful setup
+
+1. In the space, open **Settings → Webhooks** and add a webhook named `asv2-web revalidate`.
+2. Set the URL to `https://www.syncstaq.com/api/revalidate`, method `POST`.
+3. Under **Triggers**, select *Entry* only, for `publish`, `unpublish`, `delete`, and `archive`.
+   The endpoint ignores every other entity, so Asset triggers only waste deliveries.
+4. Under **Headers**, add a secret header `x-revalidate-secret` with the value above.
+5. Leave the payload as the default. The endpoint reads `sys.id`, `sys.updatedAt`,
+   `sys.contentType`, `fields.slug`, and `fields.pageKey`.
+
+### Checking it works
+
+Publish any entry, then open the webhook's **Activity log**.
+
+- **200 with `confirmed: true`** — the change is live.
+- **200 with `revalidated: false`** — the entry belongs to one of the other two websites.
+  This is expected and is not a failure.
+- **503** — the endpoint could not confirm the change against the Delivery API. Contentful
+  retries. A run of these means content is stale, so check the log.
+
+A silently broken webhook is invisible for up to 7 days, so check this log after any change
+to the endpoint or the secret.

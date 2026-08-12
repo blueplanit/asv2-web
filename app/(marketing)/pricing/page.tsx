@@ -10,9 +10,8 @@ export const metadata = createMarketingMetadata({
     path: "/pricing",
 });
 
-// This page read the session on the server, which forced dynamic rendering and spent one
-// Contentful call per page view. PricingClient now reads the session in the browser.
-// force-static keeps it that way: a server-side session read here would fail the build.
+// PricingClient reads the session in the browser, so this page stays static.
+// force-static holds that: a server-side session read here fails the build.
 export const dynamic = "force-static";
 export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 

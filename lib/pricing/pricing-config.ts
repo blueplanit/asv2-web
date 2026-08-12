@@ -1,15 +1,8 @@
 // lib/pricing/pricing-config.ts
 import "server-only";
 import { z } from "zod";
-import { unstable_cache } from "next/cache";
-import { contentfulClient } from "../contentful/contentful";
-import {
-    BACKSTOP_WINDOW_SECONDS,
-    COPY_PAGE_KEYS,
-    CONTENT_TYPES,
-    contentTypeTag,
-    copyKeyTag,
-} from "../contentful/content-routes";
+import { getCopyConfig } from "../contentful/contentful-queries";
+import { COPY_PAGE_KEYS } from "../contentful/content-routes";
 
 const DEFAULT_TRUST_SIGNALS = [
     "Secure Stripe-hosted checkout",
@@ -129,33 +122,11 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
     }
 };
 
-// The raw read, cached. Only a successful read reaches the cache: the fallback below sits
-// outside it, so a Contentful outage can never store DEFAULT_PRICING_COPY for the
-// whole Backstop Window. See docs/adr/0003-contentful-delivery-quota.md.
-const readPricingCopyEntry = () =>
-    unstable_cache(
-        async () => {
-            const res = await contentfulClient.getEntries({
-                content_type: CONTENT_TYPES.COPY_CONFIG,
-                limit: 1,
-                "fields.pageKey": COPY_PAGE_KEYS.PRICING,
-            });
-
-            return res.items[0] ?? null;
-        },
-        ["copy-config", COPY_PAGE_KEYS.PRICING],
-        {
-            revalidate: BACKSTOP_WINDOW_SECONDS,
-            tags: [
-                contentTypeTag(CONTENT_TYPES.COPY_CONFIG),
-                copyKeyTag(COPY_PAGE_KEYS.PRICING),
-            ],
-        },
-    )();
-
+// The fallback below sits outside the cached read, so a Contentful outage never stores
+// DEFAULT_PRICING_COPY. See docs/adr/0003-contentful-delivery-quota.md.
 export async function getPricingCopy(): Promise<PricingCopy> {
     try {
-        const entry = await readPricingCopyEntry();
+        const entry = await getCopyConfig(COPY_PAGE_KEYS.PRICING);
 
         if (!entry) {
             console.warn("getPricingCopy: no pricing entries, using defaults");

@@ -6,7 +6,7 @@ import { getEntryById } from "@/lib/contentful/contentful";
 import {
     BLOG_INDEX_TAG,
     CONTENT_TYPES,
-    PAGE_INDEX_TAG,
+    CMS_PAGE_INDEX_TAG,
     SERVED_CONTENT_TYPES,
     contentTypeTag,
     copyKeyTag,
@@ -25,7 +25,7 @@ const REMOVAL_ACTIONS = ["unpublish", "delete", "archive"];
 const HANDLED_ACTIONS = ["publish", ...REMOVAL_ACTIONS];
 
 // The only Contentful entity that maps to content here.
-// An Asset removal ends in the same action word, and acting on it would let one deleted
+// An Asset removal ends in the same action word. Acting on it would let one deleted
 // image expire every cached post. See docs/adr/0003-contentful-delivery-quota.md.
 const ENTRY_ENTITY = "Entry";
 
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     try {
         if (isRemoval) {
-            const state = await waitForDeliveryApi(entryId, null, true);
+            const state = await waitForRemoval(entryId);
             if (state === "timed-out") return unconfirmed(timedOutReason(action));
         } else {
             // A publish payload without a timestamp names no version to wait for. The
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
                 );
             }
 
-            const state = await waitForDeliveryApi(entryId, updatedAt, false);
+            const state = await waitForVersion(entryId, updatedAt);
             if (state === "timed-out") return unconfirmed(timedOutReason(action));
         }
     } catch (err) {
@@ -148,44 +148,49 @@ function tagsFor(
 
     // A new, renamed, or removed entry changes the listing as well as the entry itself.
     // The listing is also the slug guard, so it must expire for a new slug to resolve.
-    if (contentType === CONTENT_TYPES.BLOG_POST) {
-        return [slugTag(contentType, slug), BLOG_INDEX_TAG];
-    }
+    const indexTag = INDEX_TAGS[contentType];
 
-    if (contentType === CONTENT_TYPES.PAGE) {
-        return [slugTag(contentType, slug), PAGE_INDEX_TAG];
-    }
-
-    return [slugTag(contentType, slug)];
+    return indexTag ? [slugTag(contentType, slug), indexTag] : [slugTag(contentType, slug)];
 }
 
+// The listing tag each slugged content type owns.
+const INDEX_TAGS: Record<string, string> = {
+    [CONTENT_TYPES.BLOG_POST]: BLOG_INDEX_TAG,
+    [CONTENT_TYPES.CMS_PAGE]: CMS_PAGE_INDEX_TAG,
+};
+
+type ConfirmState = "confirmed" | "timed-out";
+
 /**
- * Waits until the Delivery API serves the change the webhook announced.
+ * Polls the Delivery API until `isServed` accepts what it serves.
  *
  * Contentful accepts a publish before its Delivery API serves the new version. A visitor
  * arriving inside that lag would refill the cache from the old version and start a fresh
  * Backstop Window. One publish would then pin stale content for a week.
  */
-async function waitForDeliveryApi(
+async function pollDeliveryApi(
     entryId: string,
-    expectedUpdatedAt: string | null,
-    expectRemoved: boolean,
-): Promise<"confirmed" | "timed-out"> {
+    isServed: (entry: Awaited<ReturnType<typeof getEntryById>>) => boolean,
+): Promise<ConfirmState> {
     const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
 
     for (;;) {
-        const entry = await getEntryById(entryId);
-
-        if (expectRemoved) {
-            if (!entry) return "confirmed";
-        } else if (entry && isAtLeastAsNew(entry.sys?.updatedAt, expectedUpdatedAt)) {
-            return "confirmed";
-        }
+        if (isServed(await getEntryById(entryId))) return "confirmed";
 
         if (Date.now() >= deadline) return "timed-out";
         await sleep(CONFIRM_POLL_MS);
     }
 }
+
+// Waits until the Delivery API stops serving the entry.
+const waitForRemoval = (entryId: string) =>
+    pollDeliveryApi(entryId, (entry) => !entry);
+
+// Waits until the Delivery API serves a version no older than the webhook announced.
+const waitForVersion = (entryId: string, expectedUpdatedAt: string) =>
+    pollDeliveryApi(entryId, (entry) =>
+        Boolean(entry && isAtLeastAsNew(entry.sys?.updatedAt, expectedUpdatedAt)),
+    );
 
 // True when the served version is no older than the version the webhook announced.
 // A missing timestamp on either side confirms nothing.

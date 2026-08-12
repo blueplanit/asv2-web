@@ -11,8 +11,9 @@ import {
     BACKSTOP_WINDOW_SECONDS,
     BLOG_INDEX_TAG,
     CONTENT_TYPES,
-    PAGE_INDEX_TAG,
+    CMS_PAGE_INDEX_TAG,
     contentTypeTag,
+    copyKeyTag,
     slugTag,
 } from "./content-routes";
 
@@ -134,7 +135,7 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | 
 
 const readAllPageSlugs = async (): Promise<string[]> => {
     const res = await contentfulClient.getEntries({
-        content_type: CONTENT_TYPES.PAGE,
+        content_type: CONTENT_TYPES.CMS_PAGE,
         select: ["fields.slug"],
         limit: 1000,
     });
@@ -148,12 +149,12 @@ const readAllPageSlugs = async (): Promise<string[]> => {
 export const getAllPageSlugs = (): Promise<string[]> =>
     unstable_cache(readAllPageSlugs, ["page-slug-list"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
-        tags: [contentTypeTag(CONTENT_TYPES.PAGE), PAGE_INDEX_TAG],
+        tags: [contentTypeTag(CONTENT_TYPES.CMS_PAGE), CMS_PAGE_INDEX_TAG],
     })();
 
 const readPageBySlug = async (slug: string): Promise<PageFields | null> => {
     const res = await contentfulClient.getEntries({
-        content_type: CONTENT_TYPES.PAGE,
+        content_type: CONTENT_TYPES.CMS_PAGE,
         "fields.slug": slug,
         limit: 1,
     });
@@ -172,6 +173,27 @@ export async function getPageBySlug(slug: string): Promise<PageFields | null> {
 
     return unstable_cache(readPageBySlug, ["cms-page", slug], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
-        tags: [contentTypeTag(CONTENT_TYPES.PAGE), slugTag(CONTENT_TYPES.PAGE, slug)],
+        tags: [contentTypeTag(CONTENT_TYPES.CMS_PAGE), slugTag(CONTENT_TYPES.CMS_PAGE, slug)],
     })(slug);
 }
+
+/* Copy Config */
+
+const readCopyConfig = async (pageKey: string) => {
+    const res = await contentfulClient.getEntries({
+        content_type: CONTENT_TYPES.COPY_CONFIG,
+        limit: 1,
+        "fields.pageKey": pageKey,
+    });
+
+    return res.items[0] ?? null;
+};
+
+// Reads the Copy Config for one route, or null when the space holds none.
+// Only a successful read reaches the cache. Each caller keeps its own fallback outside,
+// so a Contentful outage never stores default copy for the whole Backstop Window.
+export const getCopyConfig = (pageKey: string) =>
+    unstable_cache(readCopyConfig, ["copy-config", pageKey], {
+        revalidate: BACKSTOP_WINDOW_SECONDS,
+        tags: [contentTypeTag(CONTENT_TYPES.COPY_CONFIG), copyKeyTag(pageKey)],
+    })(pageKey);

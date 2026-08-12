@@ -94,13 +94,26 @@ A logged-in visitor now sees the logged-out call to action for a moment after
 load. This affects the button label and the free-trial line. Prices, copy, and
 layout are identical either way, and crawlers see the static HTML.
 
+`/`, `/blog`, and `/pricing` also declare `force-static`. None of them may read a
+cookie or a header. The declaration turns a future dynamic read into a build
+failure rather than a silent return to one Contentful call per page view.
+
 `PRICING_PAGE_VIEWED` now fires after the session resolves, not on mount. Firing
 on mount would report every visitor as logged out, because `useSession` reports
 `loading` first. The event is lost for a visitor who leaves before the session
 call returns. That loss is small and falls on both groups equally. A wrong
 boolean would instead corrupt the split on the one page where it matters.
 
-### 6. A failure is never cached
+### 6. The listing reads a summary, not the whole post
+
+`getAllBlogPosts` selects every field except the body, and returns
+`BlogPostSummary`. The blog index and the sitemap need a title, a date, and a
+slug. Both previously pulled the full rich text of every post to get them.
+
+This saves payload, not calls. It is recorded because it narrows the return type
+of a shared function.
+
+### 7. A failure is never cached
 
 The cache stores successful reads only.
 
@@ -124,8 +137,12 @@ a Contentful outage now fails loudly, which is the safer failure.
 - Vercel preview deployments still hide entries whose `showInProduction` is
   false, because Vercel sets `NODE_ENV=production` for preview builds.
   `VERCEL_ENV` is what separates preview from production. This behaviour predates
-  this ADR and is deliberately left alone. `isProd` is now part of every cache
-  key, so a development entry can never satisfy a production request.
+  this ADR and is deliberately left alone.
+- Only the Blog Post reads vary by environment, so only they take `isProd` as a
+  cache key. The CMS Page and Copy Config queries apply no `showInProduction`
+  filter, so their results cannot differ between environments. Adding a
+  `showInProduction` field to either content type means adding the filter **and**
+  the cache key together.
 - The design assumes Vercel. `unstable_cache` needs a store shared across
   instances, and `revalidateTag` needs to reach every instance. Self-hosting this
   app requires a cache handler first.
