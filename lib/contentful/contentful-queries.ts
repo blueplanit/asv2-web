@@ -2,6 +2,15 @@
 import { contentfulClient, BlogPostFields, PageFields } from "./contentful";
 const isProd = process.env.NODE_ENV === "production";
 
+function mapBlogPost(item: {
+    fields: unknown;
+    sys: { updatedAt: string };
+}): BlogPostFields {
+    return {
+        ...(item.fields as BlogPostFields),
+        updatedAt: item.sys.updatedAt,
+    };
+}
 
 // All blog posts
 export async function getAllBlogPosts(): Promise<BlogPostFields[]> {
@@ -11,7 +20,7 @@ export async function getAllBlogPosts(): Promise<BlogPostFields[]> {
         ...(isProd ? { "fields.showInProduction": true } : {}),
     });
 
-    return res.items.map((item) => item.fields as BlogPostFields);
+    return res.items.map(mapBlogPost);
 }
 
 // All blog post slugs
@@ -53,7 +62,7 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | 
     });
 
     if (!res.items.length) return null;
-    const post = res.items[0].fields as BlogPostFields;
+    const post = mapBlogPost(res.items[0]);
 
     if (isProd && !post.showInProduction) return null;
 

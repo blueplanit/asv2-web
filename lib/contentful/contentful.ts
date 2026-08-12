@@ -21,6 +21,7 @@ export type BlogPostFields = {
     authorName?: string;
     coverImage?: any;
     tags?: string[];
+    updatedAt?: string;
 };
 
 export type PageFields = {
