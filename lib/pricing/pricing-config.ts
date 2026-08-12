@@ -127,12 +127,6 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
 export async function getPricingCopy(): Promise<PricingCopy> {
     try {
         const entry = await getCopyConfig(COPY_PAGE_KEYS.PRICING);
-
-        if (!entry) {
-            console.warn("getPricingCopy: no pricing entries, using defaults");
-            return DEFAULT_PRICING_COPY;
-        }
-
         const fields = entry.fields as Record<string, unknown>;
         const rawConfig = fields.config ?? fields.pricingCopy ?? null;
 

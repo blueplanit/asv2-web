@@ -1,7 +1,7 @@
 // app/(marketing)/pages/[slug]/page.tsx
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getAllPageSlugs, getPageBySlug } from "@/lib/contentful/contentful-queries";
+import { getAllCmsPageSlugs, getCmsPageBySlug } from "@/lib/contentful/contentful-queries";
 import {
     documentToReactComponents,
 } from "@contentful/rich-text-react-renderer";
@@ -50,7 +50,7 @@ export async function generateMetadata({
         });
     }
 
-    const page = await getPageBySlug(slug);
+    const page = await getCmsPageBySlug(slug);
     if (!page) return {};
 
     return createMarketingMetadata({
@@ -67,7 +67,7 @@ export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 // Prerenders every CMS Page. Reuses the cached slug listing, so the whole set costs
 // the one call the sitemap already spends.
 export async function generateStaticParams() {
-    const slugs = await getAllPageSlugs();
+    const slugs = await getAllCmsPageSlugs();
     return slugs.map((slug) => ({ slug }));
 }
 
@@ -79,7 +79,7 @@ export default async function CmsPage({
     // params is a Promise in Next 16 + React 19
     const { slug } = await params;
 
-    const page = await getPageBySlug(slug);
+    const page = await getCmsPageBySlug(slug);
     if (!page) return notFound();
 
     const bodyDoc = page.body as unknown as ContentfulRichTextDocument;

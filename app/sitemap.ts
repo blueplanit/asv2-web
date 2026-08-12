@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
 import {
     getAllBlogPosts,
-    getAllPageSlugs,
+    getAllCmsPageSlugs,
 } from "@/lib/contentful/contentful-queries";
 
 // The Backstop Window. A Contentful webhook expires the listings this reads as soon as an
@@ -34,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Backstop Window.
     const [posts, pageSlugs] = await Promise.all([
         getAllBlogPosts(),
-        getAllPageSlugs(),
+        getAllCmsPageSlugs(),
     ]);
 
     const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({

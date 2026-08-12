@@ -121,6 +121,15 @@ The cache stores successful reads only.
 copy, which is real hand-maintained text. The fallback now sits outside the
 cache, so an outage cannot store it.
 
+A missing Copy Config entry throws for the same reason. Contentful answers that
+read successfully, with zero items, so the cache would otherwise store the empty
+answer. The caller would then serve `DEFAULT_*` copy for the whole Backstop
+Window, which is the failure this decision prevents.
+
+The two slug reads keep returning `null` for a missing entry, and the cache
+keeps that answer. The difference is that no fallback hides it: a removed Blog
+Post or CMS Page must 404, and caching the 404 is correct.
+
 `app/sitemap.ts` no longer catches. It previously returned an empty sitemap on
 error, which was safe under an hourly rebuild. Under a 7-day window, one failed
 regeneration would drop every blog post from the sitemap for a week. A throw

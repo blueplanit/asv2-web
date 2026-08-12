@@ -36,9 +36,10 @@ const CONFIRM_POLL_MS = 1000;
 /**
  * On-Demand Revalidation for Contentful webhooks.
  *
- * This is how content normally reaches the site. The Backstop Window only catches a
- * webhook that failed, so this endpoint answers 503 when it cannot confirm a change,
- * which makes Contentful retry.
+ * This is how content normally reaches the site.
+ * The Backstop Window only catches a webhook that failed.
+ * This endpoint answers 503 when it cannot confirm a change.
+ * Contentful then retries the delivery.
  *
  * It answers 200 for an entry another website owns, so Contentful does not mark the
  * webhook as failing.
@@ -121,14 +122,14 @@ export async function POST(request: Request) {
         for (const tag of tags) revalidateTag(tag, "max");
     } catch (err) {
         console.error("Revalidation failed:", err);
-        return NextResponse.json({ error: "Unable to expire the Cache Tags" }, { status: 500 });
+        return NextResponse.json({ error: "Unable to expire the cache tags" }, { status: 500 });
     }
 
     return NextResponse.json({ revalidated: tags.length, confirmed: true, tags });
 }
 
 /**
- * Names the Cache Tags one change expires.
+ * Names the cache tags one change expires.
  *
  * A payload naming a single entry expires that entry alone. A payload without a slug or
  * pageKey names no entry, so it expires every cached read of the content type instead.
@@ -164,9 +165,10 @@ type ConfirmState = "confirmed" | "timed-out";
 /**
  * Polls the Delivery API until `isServed` accepts what it serves.
  *
- * Contentful accepts a publish before its Delivery API serves the new version. A visitor
- * arriving inside that lag would refill the cache from the old version and start a fresh
- * Backstop Window. One publish would then pin stale content for a week.
+ * Contentful accepts a publish before its Delivery API serves the new version.
+ * A visitor arriving inside that lag refills the cache from the old version.
+ * That visit also starts a fresh Backstop Window.
+ * One publish would then pin stale content for a week.
  */
 async function pollDeliveryApi(
     entryId: string,

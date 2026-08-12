@@ -54,12 +54,6 @@ const marketingCopySchema = z.object({
 export async function getMarketingCopy(): Promise<MarketingCopy> {
     try {
         const entry = await getCopyConfig(COPY_PAGE_KEYS.LANDING);
-
-        if (!entry) {
-            console.warn("getMarketingCopy: no landing entries, using defaults");
-            return DEFAULT_MARKETING_COPY;
-        }
-
         const fields = entry.fields as any;
         const rawConfig = fields.config ?? fields.marketingCopy ?? null;
 

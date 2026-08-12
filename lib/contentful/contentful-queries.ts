@@ -77,8 +77,9 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
     return res.items.map((item) => mapBlogPost<BlogPostSummary>(item));
 };
 
-// The one listing read. The index, the sitemap, generateStaticParams, and the slug
-// guards all share it, so the whole set costs a single Contentful call.
+// The one listing read.
+// The index, the sitemap, generateStaticParams, and the slug guards all share it.
+// The whole set therefore costs a single Contentful call.
 export const getAllBlogPosts = (): Promise<BlogPostSummary[]> =>
     unstable_cache(readAllBlogPosts, ["blog-post-list"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
@@ -133,7 +134,7 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | 
 
 /* CMS Pages */
 
-const readAllPageSlugs = async (): Promise<string[]> => {
+const readAllCmsPageSlugs = async (): Promise<string[]> => {
     const res = await contentfulClient.getEntries({
         content_type: CONTENT_TYPES.CMS_PAGE,
         select: ["fields.slug"],
@@ -146,13 +147,13 @@ const readAllPageSlugs = async (): Promise<string[]> => {
 };
 
 // The CMS Page slug listing. Feeds the sitemap, generateStaticParams, and the slug guard.
-export const getAllPageSlugs = (): Promise<string[]> =>
-    unstable_cache(readAllPageSlugs, ["page-slug-list"], {
+export const getAllCmsPageSlugs = (): Promise<string[]> =>
+    unstable_cache(readAllCmsPageSlugs, ["cms-page-slug-list"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.CMS_PAGE), CMS_PAGE_INDEX_TAG],
     })();
 
-const readPageBySlug = async (slug: string): Promise<PageFields | null> => {
+const readCmsPageBySlug = async (slug: string): Promise<PageFields | null> => {
     const res = await contentfulClient.getEntries({
         content_type: CONTENT_TYPES.CMS_PAGE,
         "fields.slug": slug,
@@ -165,13 +166,13 @@ const readPageBySlug = async (slug: string): Promise<PageFields | null> => {
 
 // Reads one CMS Page, or null when this site shows no page with the slug.
 // Guarded like getBlogPostBySlug, and for the same reason.
-export async function getPageBySlug(slug: string): Promise<PageFields | null> {
+export async function getCmsPageBySlug(slug: string): Promise<PageFields | null> {
     if (!slug) return null;
 
-    const slugs = await getAllPageSlugs();
+    const slugs = await getAllCmsPageSlugs();
     if (!slugs.includes(slug)) return null;
 
-    return unstable_cache(readPageBySlug, ["cms-page", slug], {
+    return unstable_cache(readCmsPageBySlug, ["cms-page", slug], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.CMS_PAGE), slugTag(CONTENT_TYPES.CMS_PAGE, slug)],
     })(slug);
@@ -186,12 +187,19 @@ const readCopyConfig = async (pageKey: string) => {
         "fields.pageKey": pageKey,
     });
 
-    return res.items[0] ?? null;
+    // A missing entry throws rather than returns null.
+    // unstable_cache stores a null, which pins the caller's default copy for the
+    // whole Backstop Window. A throw stores nothing.
+    if (!res.items.length) {
+        throw new Error(`No Copy Config entry for pageKey "${pageKey}".`);
+    }
+
+    return res.items[0];
 };
 
-// Reads the Copy Config for one route, or null when the space holds none.
-// Only a successful read reaches the cache. Each caller keeps its own fallback outside,
-// so a Contentful outage never stores default copy for the whole Backstop Window.
+// Reads the Copy Config for one route.
+// Only a successful read reaches the cache. Each caller keeps its fallback outside,
+// so an outage never stores default copy for the whole Backstop Window.
 export const getCopyConfig = (pageKey: string) =>
     unstable_cache(readCopyConfig, ["copy-config", pageKey], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
