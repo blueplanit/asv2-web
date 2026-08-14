@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
@@ -16,7 +16,6 @@ import { EVENT_NAMES } from "@/lib/analytics/event-names";
 type BillingInterval = "monthly" | "yearly";
 
 type PricingClientProps = {
-    isLoggedIn: boolean;
     copy: PricingCopy;
 };
 
@@ -103,18 +102,29 @@ function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
     );
 }
 
-export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
+export function PricingClient({ copy }: PricingClientProps) {
+    // The page is static, so the session is read here rather than on the server.
+    // status is "loading" until next-auth answers.
+    const { status } = useSession();
+    const isLoggedIn = status === "authenticated";
+
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
     const [showSignedInHint, setShowSignedInHint] = useState(false);
     const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
     const [pricingLoading, setPricingLoading] = useState(true);
+    const viewTracked = useRef(false);
 
+    // Wait for the session before reporting the view. Firing on mount would report every
+    // visitor as logged out, because status is "loading" first. See ADR-0003.
     useEffect(() => {
+        if (status === "loading" || viewTracked.current) return;
+
+        viewTracked.current = true;
         trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
             is_logged_in: isLoggedIn,
         });
-    }, []);
+    }, [status, isLoggedIn]);
 
     useEffect(() => {
         let cancelled = false;

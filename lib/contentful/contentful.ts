@@ -11,6 +11,24 @@ export const contentfulClient = createClient({
     environment,
 });
 
+// Production hides entries whose showInProduction flag is false.
+// Every cached read takes this as an argument, so it forms part of the cache key.
+// A development entry can then never satisfy a production request.
+export const isProd = () => process.env.NODE_ENV === "production";
+
+// Reads one entry by id, or null when the Delivery API does not serve it.
+// Never cached: the webhook uses it to see the live state, which a cached answer would hide.
+// The Delivery API serves published entries only, so null also means removed.
+export async function getEntryById(id: string) {
+    const res = await contentfulClient.getEntries({
+        "sys.id[in]": [id],
+        limit: 1,
+        include: 0,
+    });
+
+    return res.items[0] ?? null;
+}
+
 export type BlogPostFields = {
     showInProduction?: boolean;
     title: string;
@@ -23,6 +41,10 @@ export type BlogPostFields = {
     tags?: string[];
     updatedAt?: string;
 };
+
+// A Blog Post without its body. The listing reads this, so the index and the sitemap
+// never pull the rich text of every post just to show a title and a date.
+export type BlogPostSummary = Omit<BlogPostFields, "body">;
 
 export type PageFields = {
     title: string;

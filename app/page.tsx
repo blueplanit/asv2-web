@@ -14,7 +14,10 @@ export const metadata: Metadata = {
     },
 };
 
-export const revalidate = 60;
+// The Backstop Window. A Contentful webhook expires the landing Copy Config when it changes.
+// See docs/adr/0003-contentful-delivery-quota.md.
+export const dynamic = "force-static";
+export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 
 export default async function HomePage() {
     const copy = await getMarketingCopy();

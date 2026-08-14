@@ -1,7 +1,8 @@
 // lib/pricing/pricing-config.ts
 import "server-only";
 import { z } from "zod";
-import { contentfulClient } from "../contentful/contentful";
+import { getCopyConfig } from "../contentful/contentful-queries";
+import { COPY_PAGE_KEYS } from "../contentful/content-routes";
 
 const DEFAULT_TRUST_SIGNALS = [
     "Secure Stripe-hosted checkout",
@@ -121,20 +122,12 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
     }
 };
 
+// The fallback below sits outside the cached read, so a Contentful outage never stores
+// DEFAULT_PRICING_COPY. See docs/adr/0003-contentful-delivery-quota.md.
 export async function getPricingCopy(): Promise<PricingCopy> {
     try {
-        const res = await contentfulClient.getEntries({
-            content_type: "aSv2CopyAndConfig",
-            limit: 1,
-            "fields.pageKey": "pricing",
-        });
-
-        if (!res.items.length) {
-            console.warn("getPricingCopy: no pricing entries, using defaults");
-            return DEFAULT_PRICING_COPY;
-        }
-
-        const fields = res.items[0].fields as Record<string, unknown>;
+        const entry = await getCopyConfig(COPY_PAGE_KEYS.PRICING);
+        const fields = entry.fields as Record<string, unknown>;
         const rawConfig = fields.config ?? fields.pricingCopy ?? null;
 
         if (!rawConfig) {
