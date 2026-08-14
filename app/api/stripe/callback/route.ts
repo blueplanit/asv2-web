@@ -104,7 +104,16 @@ export async function GET(req: NextRequest) {
             stripeAccountId: connectedAccountId,
             businessName,
         });
-        return clearNonceCookie(NextResponse.redirect(new URL(successReturnTo, process.env.NEXTAUTH_URL)));
+        // Marker so the wizard can emit the funnel's "Stripe Connected" event;
+        // it strips the param on arrival, same as the error params above. Only
+        // the onboarding wizard listens for it — attaching it to a non-onboarding
+        // returnTo (e.g. the account page's /dashboard reconnect) would leave it
+        // stuck in the URL forever with nothing to strip it.
+        const successUrl = new URL(successReturnTo, process.env.NEXTAUTH_URL);
+        if (isOnboardingPath(successReturnTo)) {
+            successUrl.searchParams.set("stripeConnected", "1");
+        }
+        return clearNonceCookie(NextResponse.redirect(successUrl));
     } catch (err) {
         console.error("Error in Stripe Connect callback:", err);
         return new Response("Internal Server Error", { status: 500 });

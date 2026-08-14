@@ -11,6 +11,7 @@ import {
     trackAmplitudeError,
     trackAmplitudeEvent,
 } from "@/lib/analytics/amplitude-client";
+import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -110,7 +111,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
     const [pricingLoading, setPricingLoading] = useState(true);
 
     useEffect(() => {
-        trackAmplitudeEvent("Pricing Page Viewed", {
+        trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
             is_logged_in: isLoggedIn,
         });
     }, []);
@@ -170,7 +171,7 @@ export function PricingClient({ isLoggedIn, copy }: PricingClientProps) {
 
         setLoading(true);
         try {
-            trackAmplitudeEvent("Checkout Started", {
+            trackAmplitudeEvent(EVENT_NAMES.CHECKOUT_STARTED, {
                 plan_id: "pro",
                 interval,
             });

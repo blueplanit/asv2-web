@@ -18,6 +18,7 @@ import {
     trackAmplitudeError,
     trackAmplitudeEvent,
 } from "@/lib/analytics/amplitude-client";
+import { EVENT_NAMES, workspaceSpreadsheetCreatedInsertId } from "@/lib/analytics/event-names";
 
 type StepStatus = "complete" | "current" | "upcoming";
 type InitSheetTabStates = Array<{
@@ -210,6 +211,14 @@ export function OnboardingWizard() {
             );
             router.replace("/onboarding?step=3", { scroll: false });
         }
+
+        // Marker stripped so a refresh cannot double-count the connection.
+        // Google Connected has no equivalent here: it is emitted server-side
+        // from the callback, to keep it ordered ahead of the sheet event.
+        if (searchParams.get("stripeConnected") === "1") {
+            trackAmplitudeEvent(EVENT_NAMES.STRIPE_CONNECTED);
+            router.replace("/onboarding?step=2", { scroll: false });
+        }
     }, [searchParams, router]);
 
     // Spreadsheet ID associated with the onboarding config (if any)
@@ -329,9 +338,26 @@ export function OnboardingWizard() {
 
             await refresh(); // now userState has SyncConfig + sheet info
             const data = await res.json();
-            trackAmplitudeEvent("Onboarding Step 3 Completed: Create sheet", {
-                spreadsheet_id: data?.spreadsheetId ?? null,
-            });
+            // Same shape as the server-side emit in the Google callback, which
+            // covers the auto-create path. Sharing its insert_id lets Amplitude
+            // collapse the two if both ever fire for one spreadsheet.
+            const spreadsheetId = data?.spreadsheetId ?? null;
+            const createdByUserId = user.profile?.userId;
+            trackAmplitudeEvent(
+                EVENT_NAMES.WORKSPACE_SPREADSHEET_CREATED,
+                {
+                    spreadsheet_id: spreadsheetId,
+                    created_via: "manual",
+                },
+                spreadsheetId && createdByUserId
+                    ? {
+                        insertId: workspaceSpreadsheetCreatedInsertId(
+                            createdByUserId,
+                            spreadsheetId,
+                        ),
+                    }
+                    : undefined,
+            );
             return data;
         } catch (e) {
             setError(`Failed to create sheet: ${e instanceof Error ? e.message : JSON.stringify(e)}`)
@@ -423,7 +449,7 @@ export function OnboardingWizard() {
                 });
                 return true;
             }
-            trackAmplitudeEvent("Start Trial Succeeded", {
+            trackAmplitudeEvent(EVENT_NAMES.TRIAL_STARTED, {
                 status: data.status ?? null,
                 trial_ends_at: data.trialEndsAt ?? null,
             });
@@ -479,7 +505,7 @@ export function OnboardingWizard() {
                 goToStepByIndex(1);
                 return;
             }
-            trackAmplitudeEvent("Onboarding Step 1 Started: Connect Stripe");
+            trackAmplitudeEvent(EVENT_NAMES.STRIPE_CONNECT_STARTED);
             setSubmitting(true);
             // Stripe connect → Stripe OAuth
             window.location.href = "/api/stripe/connect";
@@ -490,7 +516,7 @@ export function OnboardingWizard() {
                 goToStepByIndex(2);
                 return;
             }
-            trackAmplitudeEvent("Onboarding Step 2 Started: Grant Sheets access");
+            trackAmplitudeEvent(EVENT_NAMES.GOOGLE_CONNECT_STARTED);
             setSubmitting(true);
             // Sheets access → Google OAuth
             window.location.href = "/api/google/connect";
@@ -514,7 +540,7 @@ export function OnboardingWizard() {
             }
 
             if (needsSheetCreation) {
-                trackAmplitudeEvent("Onboarding Step 3 Started: Create sheet (fallback)");
+                trackAmplitudeEvent(EVENT_NAMES.WORKSPACE_SPREADSHEET_CREATION_STARTED);
                 setSubmitting(true);
                 const createSheetResponse = await createSheet();
                 setSubmitting(false);
@@ -524,7 +550,7 @@ export function OnboardingWizard() {
             }
 
             try {
-                trackAmplitudeEvent("Onboarding Step 3 Started: Configure sync and start backfill");
+                trackAmplitudeEvent(EVENT_NAMES.SYNC_CONFIG_SETUP_STARTED);
                 setSubmitting(true);
                 // We own the redirect from here on; suppress the guard's redirect.
                 completingRef.current = true;
@@ -562,8 +588,7 @@ export function OnboardingWizard() {
                     selected_sync_objects_count: selectedDataSyncEntries.length,
                 };
 
-                trackAmplitudeEvent("Onboarding Step 3 Completed", eventProperties);
-                trackAmplitudeEvent("Onboarding Completed", eventProperties);
+                trackAmplitudeEvent(EVENT_NAMES.ONBOARDING_COMPLETED, eventProperties);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to start trial or save sync config");
                 completingRef.current = false;
