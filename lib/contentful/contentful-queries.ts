@@ -3,10 +3,15 @@ import { unstable_cache } from "next/cache";
 import {
     contentfulClient,
     isProd,
+    type BlogLanguage,
     type BlogPostFields,
     type BlogPostSummary,
     type PageFields,
 } from "./contentful";
+import {
+    DEFAULT_BLOG_LANGUAGE,
+    getBlogLanguage,
+} from "./blog-localization";
 import {
     BACKSTOP_WINDOW_SECONDS,
     BLOG_INDEX_TAG,
@@ -41,6 +46,7 @@ const BLOG_SUMMARY_FIELDS = [
     "fields.coverImage",
     "fields.tags",
     "fields.showInProduction",
+    "fields.language",
 ];
 
 function withProductionFilter(
@@ -80,19 +86,31 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
 // The one listing read.
 // The index, the sitemap, generateStaticParams, and the slug guards all share it.
 // The whole set therefore costs a single Contentful call.
-export const getAllBlogPosts = (): Promise<BlogPostSummary[]> =>
+const getAllLocalizedBlogPosts = (): Promise<BlogPostSummary[]> =>
     unstable_cache(readAllBlogPosts, ["blog-post-list"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.BLOG_POST), BLOG_INDEX_TAG],
     })(isProd());
 
-export async function getAllBlogPostSlugs(): Promise<string[]> {
-    const posts = await getAllBlogPosts();
+export { getAllLocalizedBlogPosts };
+
+export async function getAllBlogPosts(
+    language: BlogLanguage = DEFAULT_BLOG_LANGUAGE,
+): Promise<BlogPostSummary[]> {
+    const posts = await getAllLocalizedBlogPosts();
+    return posts.filter((post) => getBlogLanguage(post) === language);
+}
+
+export async function getAllBlogPostSlugs(
+    language: BlogLanguage = DEFAULT_BLOG_LANGUAGE,
+): Promise<string[]> {
+    const posts = await getAllBlogPosts(language);
     return posts.map((post) => post.slug).filter(Boolean);
 }
 
 const readBlogPostBySlug = async (
     slug: string,
+    language: BlogLanguage,
     production: boolean,
 ): Promise<BlogPostFields | null> => {
     const res = await contentfulClient.getEntries(
@@ -108,28 +126,32 @@ const readBlogPostBySlug = async (
     );
 
     if (!res.items.length) return null;
-    return mapBlogPost<BlogPostFields>(res.items[0]);
+    const post = mapBlogPost<BlogPostFields>(res.items[0]);
+    return getBlogLanguage(post) === language ? post : null;
 };
 
 // Reads one Blog Post, or null when this site shows no post with the slug.
 //
 // The slug comes from the URL, so an unchecked slug would let any visitor spend a call
 // and fill the cache. The listing is already cached, so the check costs nothing.
-export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | null> {
+export async function getBlogPostBySlug(
+    slug: string,
+    language: BlogLanguage = DEFAULT_BLOG_LANGUAGE,
+): Promise<BlogPostFields | null> {
     if (!slug) return null;
 
-    const slugs = await getAllBlogPostSlugs();
+    const slugs = await getAllBlogPostSlugs(language);
     if (!slugs.includes(slug)) return null;
 
     // unstable_cache fixes its tags when it wraps, so the wrapper is built per slug.
     // The key parts and the callback stay identical, so one slug always hits one entry.
-    return unstable_cache(readBlogPostBySlug, ["blog-post", slug], {
+    return unstable_cache(readBlogPostBySlug, ["blog-post", language, slug], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [
             contentTypeTag(CONTENT_TYPES.BLOG_POST),
             slugTag(CONTENT_TYPES.BLOG_POST, slug),
         ],
-    })(slug, isProd());
+    })(slug, language, isProd());
 }
 
 /* CMS Pages */

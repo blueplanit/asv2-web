@@ -12,6 +12,8 @@ type MarketingMetadataOptions = {
     publishedTime?: string;
     modifiedTime?: string;
     authors?: string[];
+    languages?: Record<string, string>;
+    openGraphLocale?: string;
 };
 
 export function createMarketingMetadata({
@@ -24,18 +26,22 @@ export function createMarketingMetadata({
     publishedTime,
     modifiedTime,
     authors,
+    languages,
+    openGraphLocale,
 }: MarketingMetadataOptions): Metadata {
     return {
         title,
         description,
         alternates: {
             canonical: path,
+            ...(languages ? { languages } : {}),
         },
         openGraph: {
             title,
             description,
             url: path,
             type,
+            ...(openGraphLocale ? { locale: openGraphLocale } : {}),
             ...(type === "article"
                 ? {
                     publishedTime,

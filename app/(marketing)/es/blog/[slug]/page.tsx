@@ -16,17 +16,14 @@ import { APP_NAME } from "@/lib/constants";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 import { BlogPostArticle } from "@/components/blog/blog-post-article";
 
-// The Backstop Window. A Contentful webhook expires this post as soon as it changes,
-// so the window only catches a failed webhook. See docs/adr/0003-contentful-delivery-quota.md.
-export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
+const SPANISH_EXPORT_METADATA_TITLE =
+    "Cómo exportar datos de Stripe a Google Sheets | SyncStaq";
 
-// A newly published post is not in this list, which runs at build time.
-// dynamicParams stays true so that post still renders, on demand, the moment it publishes.
+export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 export const dynamicParams = true;
 
-// Reuses the cached listing, so every post costs the one call the listing already spends.
 export async function generateStaticParams() {
-    const slugs = await getAllBlogPostSlugs("en");
+    const slugs = await getAllBlogPostSlugs("es");
     return slugs.map((slug) => ({ slug }));
 }
 
@@ -34,11 +31,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const { slug } = await params;
 
     try {
-        const post = await getBlogPostBySlug(slug, "en");
+        const post = await getBlogPostBySlug(slug, "es");
         if (!post) {
             return {
-                title: `Post not found | ${APP_NAME} Blog`,
-                description: "This blog post could not be found.",
+                title: `Artículo no encontrado | ${APP_NAME}`,
+                description: "No se pudo encontrar este artículo.",
             };
         }
 
@@ -46,11 +43,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         const languages = getAvailableBlogAlternates(slug, posts);
 
         return createMarketingMetadata({
-            title: getBrandedMetadataTitle(post.title),
+            title:
+                slug === "exportar-datos-stripe-google-sheets"
+                    ? SPANISH_EXPORT_METADATA_TITLE
+                    : getBrandedMetadataTitle(post.title),
             description:
                 post.excerpt ||
-                "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.",
-            path: `/blog/${slug}`,
+                "Guías prácticas para llevar datos de facturación de Stripe a Google Sheets.",
+            path: `/es/blog/${slug}`,
             type: "article",
             image: getCoverImageUrl(post),
             imageAlt: post.title,
@@ -58,24 +58,24 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             modifiedTime: post.updatedAt,
             authors: post.authorName ? [post.authorName] : undefined,
             languages,
-            openGraphLocale: "en_US",
+            openGraphLocale: "es_ES",
         });
     } catch (err) {
-        console.error("generateMetadata error for blog post", { slug, err });
+        console.error("generateMetadata error for Spanish blog post", { slug, err });
         return {
-            title: `Post not available | ${APP_NAME} Blog`,
-            description: "There was an error loading this blog post.",
+            title: `Artículo no disponible | ${APP_NAME}`,
+            description: "Se produjo un error al cargar este artículo.",
         };
     }
 }
 
-export default async function BlogPostPage({
+export default async function SpanishBlogPostPage({
     params,
 }: {
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = await params;
-    const post = await getBlogPostBySlug(slug, "en");
+    const post = await getBlogPostBySlug(slug, "es");
     if (!post) return notFound();
 
     const posts = await getAllLocalizedBlogPosts();
@@ -85,8 +85,8 @@ export default async function BlogPostPage({
         <BlogPostArticle
             post={post}
             slug={slug}
-            language="en"
-            alternatePath={alternates?.es}
+            language="es"
+            alternatePath={alternates?.en}
         />
     );
 }

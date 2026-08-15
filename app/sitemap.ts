@@ -1,9 +1,14 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
 import {
-    getAllBlogPosts,
+    getAllLocalizedBlogPosts,
     getAllCmsPageSlugs,
 } from "@/lib/contentful/contentful-queries";
+import {
+    getAvailableBlogAlternates,
+    getBlogLanguage,
+    getBlogPath,
+} from "@/lib/contentful/blog-localization";
 
 // The Backstop Window. A Contentful webhook expires the listings this reads as soon as an
 // entry changes. See docs/adr/0003-contentful-delivery-quota.md.
@@ -33,7 +38,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // A caught error would instead drop every post from the sitemap for the whole
     // Backstop Window.
     const [posts, pageSlugs] = await Promise.all([
-        getAllBlogPosts(),
+        getAllLocalizedBlogPosts(),
         getAllCmsPageSlugs(),
     ]);
 
@@ -43,17 +48,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: route.priority,
     }));
 
-    // getAllBlogPosts() filters on showInProduction in production, so drafts stay out.
+    // The listing filters on showInProduction in production, so drafts stay out.
     const blogEntries: MetadataRoute.Sitemap = posts
         .filter((post) => Boolean(post.slug))
         .map((post) => {
             const modifiedValue = post.updatedAt || post.publishDate;
             const modified = modifiedValue ? new Date(modifiedValue) : null;
 
+            const language = getBlogLanguage(post);
+            const alternates = getAvailableBlogAlternates(post.slug, posts);
+
             return {
-                url: absolute(`/blog/${post.slug}`),
+                url: absolute(getBlogPath(post.slug, language)),
                 ...(modified && !Number.isNaN(modified.getTime())
                     ? { lastModified: modified }
+                    : {}),
+                ...(alternates
+                    ? {
+                        alternates: {
+                            languages: {
+                                en: absolute(alternates.en),
+                                es: absolute(alternates.es),
+                            },
+                        },
+                    }
                     : {}),
                 changeFrequency: "monthly" as const,
                 priority: 0.6,
