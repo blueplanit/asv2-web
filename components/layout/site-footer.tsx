@@ -1,16 +1,25 @@
 // components/layout/site-footer.tsx
 import Link from "next/link";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, STRIPE_MARKETPLACE_URL } from "@/lib/constants";
 import { Brand } from "@/components/brand/brand";
-const productLinks = [
+
+type FooterLinkItem = {
+    label: string;
+    href: string;
+    // An external href leaves the site, so it renders an <a>, not a next/link <Link>.
+    external?: boolean;
+};
+
+const productLinks: FooterLinkItem[] = [
     // { label: "Overview", href: "#" },
     { label: "Dashboard", href: "/dashboard" },
     { label: "Pricing", href: "/pricing" },
+    { label: "Stripe App", href: STRIPE_MARKETPLACE_URL, external: true },
     // { label: "Changelog", href: "#" },
     // { label: "Status", href: "#" },
 ];
 
-const resourcesLinks = [
+const resourcesLinks: FooterLinkItem[] = [
     // { label: "Docs", href: "#" },
     // { label: "API Reference", href: "#" },
     // { label: "Guides", href: "#" },
@@ -22,14 +31,14 @@ const resourcesLinks = [
     { label: "Commission revenue share", href: "/use-cases/stripe-commission-revenue-share" },
 ];
 
-const companyLinks = [
+const companyLinks: FooterLinkItem[] = [
     { label: "About", href: "/pages/about" },
     // { label: "Customers", href: "#" },
     // { label: "Careers", href: "#" },
     { label: "Contact", href: "/pages/contact" },
 ];
 
-const legalLinks = [
+const legalLinks: FooterLinkItem[] = [
     { label: "Privacy", href: "/pages/privacy-policy" },
     { label: "Terms", href: "/pages/terms" },
     // { label: "Data Processing", href: "#" },
@@ -39,6 +48,30 @@ const legalLinks = [
 const socialLinks = [
     { label: "YouTube", href: "#" },
 ];
+
+const footerLinkClass =
+    "-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent";
+
+function FooterLink({ item }: { item: FooterLinkItem }) {
+    if (item.external) {
+        return (
+            <a
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={footerLinkClass}
+            >
+                {item.label}
+            </a>
+        );
+    }
+
+    return (
+        <Link href={item.href} className={footerLinkClass}>
+            {item.label}
+        </Link>
+    );
+}
 
 export function SiteFooter() {
     const year = new Date().getFullYear();
@@ -71,12 +104,7 @@ export function SiteFooter() {
                             <ul className="space-y-1.5">
                                 {productLinks.map((item) => (
                                     <li key={item.label}>
-                                        <Link
-                                            href={item.href}
-                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
-                                        >
-                                            {item.label}
-                                        </Link>
+                                        <FooterLink item={item} />
                                     </li>
                                 ))}
                             </ul>
@@ -89,12 +117,7 @@ export function SiteFooter() {
                             <ul className="space-y-1.5">
                                 {resourcesLinks.map((item) => (
                                     <li key={item.label}>
-                                        <Link
-                                            href={item.href}
-                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
-                                        >
-                                            {item.label}
-                                        </Link>
+                                        <FooterLink item={item} />
                                     </li>
                                 ))}
                             </ul>
@@ -107,12 +130,7 @@ export function SiteFooter() {
                             <ul className="space-y-1.5">
                                 {companyLinks.map((item) => (
                                     <li key={item.label}>
-                                        <Link
-                                            href={item.href}
-                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
-                                        >
-                                            {item.label}
-                                        </Link>
+                                        <FooterLink item={item} />
                                     </li>
                                 ))}
                             </ul>
@@ -125,12 +143,7 @@ export function SiteFooter() {
                             <ul className="space-y-1.5">
                                 {legalLinks.map((item) => (
                                     <li key={item.label}>
-                                        <Link
-                                            href={item.href}
-                                            className="-mx-2 block rounded-md px-2 py-1 cursor-pointer transition-colors hover:bg-slate-50 hover:text-slate-900 sm:mx-0 sm:inline sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent"
-                                        >
-                                            {item.label}
-                                        </Link>
+                                        <FooterLink item={item} />
                                     </li>
                                 ))}
                             </ul>
