@@ -6,6 +6,7 @@ import { Hero } from "@/components/marketing/hero";
 import { HowItWorksSection } from "@/components/marketing/how-it-works-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { getMarketingCopy } from "@/lib/marketing/marketing-config";
+import { STRIPE_MARKETPLACE_URL } from "@/lib/constants";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export default async function HomePage() {
                     <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/70 to-transparent" />
                 </div>
                 <HowItWorksSection copy={copy.howItWorks} />
-                <section className="grid gap-4 md:grid-cols-2">
+                <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <Link
                         href="/stripe-google-sheets-integration"
                         className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/40"
@@ -57,6 +58,20 @@ export default async function HomePage() {
                             reports from exports.
                         </p>
                     </Link>
+                    <a
+                        href={STRIPE_MARKETPLACE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/40"
+                    >
+                        <h2 className="text-base font-semibold text-slate-950">
+                            Stripe App Marketplace
+                        </h2>
+                        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                            Monitor your sync status directly from Stripe, with a quick link to your
+                            SyncStaq dashboard.
+                        </p>
+                    </a>
                 </section>
                 {/* FaqSection could take copy.faq the same way */}
                 <FinalCtaSection copy={copy.finalCta} />
