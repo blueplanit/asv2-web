@@ -110,6 +110,9 @@ boolean would instead corrupt the split on the one page where it matters.
 `BlogPostSummary`. The blog index and the sitemap need a title, a date, and a
 slug. Both previously pulled the full rich text of every post to get them.
 
+`select` does not reach includes. A `translationOf` entry resolved by `include: 1`
+therefore still arrives whole, body included.
+
 This saves payload, not calls. It is recorded because it narrows the return type
 of a shared function.
 

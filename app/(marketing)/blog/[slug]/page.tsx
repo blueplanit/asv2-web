@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         }
 
         const posts = await getAllBlogPosts();
-        const languages = getAvailableBlogAlternates(slug, posts);
+        const languages = getAvailableBlogAlternates(post, posts);
 
         return createMarketingMetadata({
             title: getBrandedMetadataTitle(post.seoTitle || post.title),
@@ -79,7 +79,7 @@ export default async function BlogPostPage({
     if (!post) return notFound();
 
     const posts = await getAllBlogPosts();
-    const alternates = getAvailableBlogAlternates(slug, posts);
+    const alternates = getAvailableBlogAlternates(post, posts);
 
     return (
         <BlogPostArticle
