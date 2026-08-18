@@ -8,10 +8,7 @@ import {
     type BlogPostSummary,
     type PageFields,
 } from "./contentful";
-import {
-    DEFAULT_BLOG_LANGUAGE,
-    getBlogLanguage,
-} from "./blog-localization";
+import { getBlogLanguage } from "./blog-localization";
 import {
     BACKSTOP_WINDOW_SECONDS,
     BLOG_INDEX_TAG,
@@ -47,6 +44,7 @@ const BLOG_SUMMARY_FIELDS = [
     "fields.tags",
     "fields.showInProduction",
     "fields.language",
+    "fields.translationOf",
 ];
 
 function withProductionFilter(
@@ -57,9 +55,10 @@ function withProductionFilter(
     return { ...query, "fields.showInProduction": true };
 }
 
-function mapBlogPost<T>(item: { fields: unknown; sys: { updatedAt: string } }): T {
+function mapBlogPost<T>(item: { fields: unknown; sys: { id: string; updatedAt: string } }): T {
     return {
         ...(item.fields as T),
+        id: item.sys.id,
         updatedAt: item.sys.updatedAt,
     };
 }
@@ -72,7 +71,7 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
             {
                 content_type: CONTENT_TYPES.BLOG_POST,
                 select: BLOG_SUMMARY_FIELDS,
-                include: 1, // resolves the coverImage asset
+                include: 1, // resolves the coverImage asset and translationOf entry
                 order: ["-fields.publishDate"],
                 limit: 1000,
             },
@@ -86,25 +85,25 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
 // The one listing read.
 // The index, the sitemap, generateStaticParams, and the slug guards all share it.
 // The whole set therefore costs a single Contentful call.
-const getAllLocalizedBlogPosts = (): Promise<BlogPostSummary[]> =>
+const getAllBlogPosts = (): Promise<BlogPostSummary[]> =>
     unstable_cache(readAllBlogPosts, ["blog-post-list"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.BLOG_POST), BLOG_INDEX_TAG],
     })(isProd());
 
-export { getAllLocalizedBlogPosts };
+export { getAllBlogPosts };
 
-export async function getAllBlogPosts(
-    language: BlogLanguage = DEFAULT_BLOG_LANGUAGE,
+export async function getBlogPostsByLanguage(
+    language: BlogLanguage,
 ): Promise<BlogPostSummary[]> {
-    const posts = await getAllLocalizedBlogPosts();
+    const posts = await getAllBlogPosts();
     return posts.filter((post) => getBlogLanguage(post) === language);
 }
 
 export async function getAllBlogPostSlugs(
-    language: BlogLanguage = DEFAULT_BLOG_LANGUAGE,
+    language: BlogLanguage,
 ): Promise<string[]> {
-    const posts = await getAllBlogPosts(language);
+    const posts = await getBlogPostsByLanguage(language);
     return posts.map((post) => post.slug).filter(Boolean);
 }
 
@@ -136,7 +135,7 @@ const readBlogPostBySlug = async (
 // and fill the cache. The listing is already cached, so the check costs nothing.
 export async function getBlogPostBySlug(
     slug: string,
-    language: BlogLanguage = DEFAULT_BLOG_LANGUAGE,
+    language: BlogLanguage,
 ): Promise<BlogPostFields | null> {
     if (!slug) return null;
 

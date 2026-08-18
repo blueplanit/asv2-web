@@ -5,13 +5,6 @@ import type {
 
 export const DEFAULT_BLOG_LANGUAGE: BlogLanguage = "en";
 
-const TRANSLATION_PAIRS = [
-    {
-        en: "stripe-export-google-sheets-automatically",
-        es: "exportar-datos-stripe-google-sheets",
-    },
-] as const;
-
 export function getBlogLanguage(post: { language?: BlogLanguage }): BlogLanguage {
     return post.language === "es" ? "es" : DEFAULT_BLOG_LANGUAGE;
 }
@@ -24,27 +17,29 @@ export function getAvailableBlogAlternates(
     slug: string,
     posts: BlogPostSummary[],
 ): Record<BlogLanguage, string> | undefined {
-    const pair = TRANSLATION_PAIRS.find(
-        (candidate) => candidate.en === slug || candidate.es === slug,
-    );
+    const currentPost = posts.find((post) => post.slug === slug);
+    if (!currentPost) return undefined;
 
-    if (!pair) return undefined;
+    const currentLanguage = getBlogLanguage(currentPost);
+    const englishPost = currentLanguage === "en"
+        ? currentPost
+        : posts.find(
+            (post) =>
+                getBlogLanguage(post) === "en" &&
+                post.id === currentPost.translationOf?.sys?.id,
+        );
+    const spanishPost = currentLanguage === "es"
+        ? currentPost
+        : posts.find(
+            (post) =>
+                getBlogLanguage(post) === "es" &&
+                post.translationOf?.sys?.id === currentPost.id,
+        );
 
-    const hasEnglish = posts.some(
-        (post) =>
-            getBlogLanguage(post) === "en" &&
-            post.slug === pair.en,
-    );
-    const hasSpanish = posts.some(
-        (post) =>
-            getBlogLanguage(post) === "es" &&
-            post.slug === pair.es,
-    );
-
-    if (!hasEnglish || !hasSpanish) return undefined;
+    if (!englishPost || !spanishPost) return undefined;
 
     return {
-        en: getBlogPath(pair.en, "en"),
-        es: getBlogPath(pair.es, "es"),
+        en: getBlogPath(englishPost.slug, "en"),
+        es: getBlogPath(spanishPost.slug, "es"),
     };
 }

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
     getAllBlogPostSlugs,
-    getAllLocalizedBlogPosts,
+    getAllBlogPosts,
     getBlogPostBySlug,
 } from "@/lib/contentful/contentful-queries";
 import {
@@ -15,9 +15,6 @@ import {
 import { APP_NAME } from "@/lib/constants";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 import { BlogPostArticle } from "@/components/blog/blog-post-article";
-
-const SPANISH_EXPORT_METADATA_TITLE =
-    "Cómo exportar datos de Stripe a Google Sheets | SyncStaq";
 
 export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 export const dynamicParams = true;
@@ -39,14 +36,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             };
         }
 
-        const posts = await getAllLocalizedBlogPosts();
+        const posts = await getAllBlogPosts();
         const languages = getAvailableBlogAlternates(slug, posts);
 
         return createMarketingMetadata({
-            title:
-                slug === "exportar-datos-stripe-google-sheets"
-                    ? SPANISH_EXPORT_METADATA_TITLE
-                    : getBrandedMetadataTitle(post.title),
+            title: getBrandedMetadataTitle(post.seoTitle || post.title),
             description:
                 post.excerpt ||
                 "Guías prácticas para llevar datos de facturación de Stripe a Google Sheets.",
@@ -78,7 +72,7 @@ export default async function SpanishBlogPostPage({
     const post = await getBlogPostBySlug(slug, "es");
     if (!post) return notFound();
 
-    const posts = await getAllLocalizedBlogPosts();
+    const posts = await getAllBlogPosts();
     const alternates = getAvailableBlogAlternates(slug, posts);
 
     return (

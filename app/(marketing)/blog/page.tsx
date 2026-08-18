@@ -1,6 +1,6 @@
 // app/blog/page.tsx
 import Link from "next/link";
-import { getAllBlogPosts } from "@/lib/contentful/contentful-queries";
+import { getBlogPostsByLanguage } from "@/lib/contentful/contentful-queries";
 import { APP_NAME } from "@/lib/constants";
 import { BlogPageViewTracker } from "@/components/analytics/blog-page-view-tracker";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
@@ -34,7 +34,7 @@ function getCoverImageUrl(post: any): string | null {
 }
 
 export default async function BlogIndexPage() {
-    const posts = await getAllBlogPosts();
+    const posts = await getBlogPostsByLanguage("en");
 
     if (!posts?.length) {
         return (

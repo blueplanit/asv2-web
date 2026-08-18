@@ -1,5 +1,5 @@
 // lib/contentful/contentful.ts
-import { createClient, Entry, EntrySkeletonType } from "contentful";
+import { createClient } from "contentful";
 
 const space = process.env.CONTENTFUL_SPACE_ID!;
 const accessToken = process.env.CONTENTFUL_CDA_TOKEN!;
@@ -32,10 +32,12 @@ export async function getEntryById(id: string) {
 }
 
 export type BlogPostFields = {
+    id: string;
     showInProduction?: boolean;
     language?: BlogLanguage;
     translationOf?: { sys?: { id?: string } };
     title: string;
+    seoTitle?: string;
     slug: string;
     excerpt?: string;
     body: any;
@@ -57,6 +59,3 @@ export type PageFields = {
     layoutVariant?: "default" | "centered" | "two-column";
     theme?: "light" | "dark" | "brand";
 };
-
-export type BlogPostEntry = Entry<EntrySkeletonType & { fields: BlogPostFields }>;
-export type PageEntry = Entry<EntrySkeletonType & { fields: PageFields }>;

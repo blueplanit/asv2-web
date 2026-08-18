@@ -17,8 +17,9 @@ behavior across the space would affect content owned by other websites.
   existing entries need no migration.
 - The optional `translationOf` field links the Spanish entry to its English source for
   editorial context.
-- Public translation pairs are listed in `lib/contentful/blog-localization.ts`. This keeps
-  routing and `hreflang` deterministic without adding a Contentful query.
+- The cached listing reads each entry ID and `translationOf` relationship, allowing routing
+  and `hreflang` to follow editorial links without another Contentful query or deployment.
+- The optional `seoTitle` field lets editors use a search title that differs from the H1.
 - English posts render at `/blog/[slug]`; Spanish posts render at `/es/blog/[slug]`.
 - The cached blog listing continues to be the source for the index, slug guards, sitemap,
   and translation availability.
@@ -41,6 +42,6 @@ without a site deployment.
 ## Consequences
 
 This approach keeps the experiment isolated and preserves the current Contentful quota
-strategy. Adding another translated article requires a new Spanish entry and a corresponding
-pair in `blog-localization.ts`. A larger localization program should replace this explicit
-mapping with a broader locale architecture.
+strategy. Adding another translated article requires only a new Spanish entry linked to its
+English source. A larger localization program should replace this entry-based convention with
+a broader locale architecture.

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
     getAllBlogPostSlugs,
-    getAllLocalizedBlogPosts,
+    getAllBlogPosts,
     getBlogPostBySlug,
 } from "@/lib/contentful/contentful-queries";
 import {
@@ -42,11 +42,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             };
         }
 
-        const posts = await getAllLocalizedBlogPosts();
+        const posts = await getAllBlogPosts();
         const languages = getAvailableBlogAlternates(slug, posts);
 
         return createMarketingMetadata({
-            title: getBrandedMetadataTitle(post.title),
+            title: getBrandedMetadataTitle(post.seoTitle || post.title),
             description:
                 post.excerpt ||
                 "Insights on Stripe → Google Sheets sync, infrastructure, and product updates.",
@@ -78,7 +78,7 @@ export default async function BlogPostPage({
     const post = await getBlogPostBySlug(slug, "en");
     if (!post) return notFound();
 
-    const posts = await getAllLocalizedBlogPosts();
+    const posts = await getAllBlogPosts();
     const alternates = getAvailableBlogAlternates(slug, posts);
 
     return (

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
 import {
-    getAllLocalizedBlogPosts,
+    getAllBlogPosts,
     getAllCmsPageSlugs,
 } from "@/lib/contentful/contentful-queries";
 import {
@@ -38,7 +38,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // A caught error would instead drop every post from the sitemap for the whole
     // Backstop Window.
     const [posts, pageSlugs] = await Promise.all([
-        getAllLocalizedBlogPosts(),
+        getAllBlogPosts(),
         getAllCmsPageSlugs(),
     ]);
 
