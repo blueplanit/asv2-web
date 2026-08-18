@@ -43,6 +43,20 @@ _Avoid_: "checkpoint", "offset".
 Replacing a user's **Active Sync Config** + **Workspace Spreadsheet** with a fresh pair (e.g. when the old sheet nears capacity). The old Sync Config becomes `retired` and a new one is created + backfilled — **atomically**, so the (User, Connected Account) never has zero or two active configs at once.
 _Avoid_: "sheet swap", "migrate".
 
+### Promotions
+
+**Promotion**:
+A sitewide discount campaign shown on public marketing pages, backed by exactly one published `promotionASv2` entry. The entry supplies banner copy and a reference to a **Promotion Code**; Stripe remains the source of truth for the discount amount and eligibility, so the number is never duplicated in Contentful.
+_Avoid_: "promo", "discount", "campaign" — each is used loosely elsewhere; "Promotion" is this project's precise term for the whole feature.
+
+**Promotion Code**:
+The Stripe object that carries the discount and gates redemption (`active`, `expires_at`, eligibility restrictions). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically.
+_Avoid_: "coupon" — Stripe's Coupon defines the discount math, but this project only ever references the Promotion Code that wraps one.
+
+**Ending a Promotion**:
+Unpublishing its entry. The revalidate webhook, on that action, both expires the page cache and deactivates the referenced Promotion Code at Stripe, so redemption stops everywhere at once, not just on the page.
+_Avoid_: "expiring" — no visitor-facing deadline exists; only a hidden, defensive one on the Promotion Code itself.
+
 ### Content
 
 **Blog Post**:
