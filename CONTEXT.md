@@ -46,7 +46,17 @@ _Avoid_: "sheet swap", "migrate".
 ### Content
 
 **Blog Post**:
-A `blogPostASv2` entry, rendered at `/blog/<slug>`.
+A `blogPostASv2` entry. An English post renders at `/blog/<slug>`, a Spanish post at `/es/blog/<slug>`.
+
+**Blog Language**:
+The `language` field on a Blog Post, `en` or `es`. A missing value means English, so existing entries need no migration.
+
+**Translation Link**:
+The `translationOf` field on a Spanish Blog Post, naming its English source. It supplies the reciprocal `hreflang` and the language links. See [ADR-0004](./docs/adr/0004-spanish-blog-experiment.md).
+_Avoid_: "translation pair" (no pairing is stored outside the entries).
+
+**SEO Title**:
+The optional `seoTitle` field on a Blog Post. A search title that differs from the on-page H1.
 
 **CMS Page**:
 A `pageASv2` entry, rendered at `/pages/<slug>`. Not a marketing route like `/pricing`, which is code.

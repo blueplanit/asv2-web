@@ -56,7 +56,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             const modified = modifiedValue ? new Date(modifiedValue) : null;
 
             const language = getBlogLanguage(post);
-            const alternates = getAvailableBlogAlternates(post.slug, posts);
+            const alternates = getAvailableBlogAlternates(post, posts);
 
             return {
                 url: absolute(getBlogPath(post.slug, language)),

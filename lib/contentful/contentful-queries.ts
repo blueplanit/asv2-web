@@ -36,6 +36,7 @@ const BLOG_SUMMARY_FIELDS = [
     "sys.id",
     "sys.updatedAt",
     "fields.title",
+    "fields.seoTitle",
     "fields.slug",
     "fields.excerpt",
     "fields.publishDate",
@@ -71,7 +72,9 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
             {
                 content_type: CONTENT_TYPES.BLOG_POST,
                 select: BLOG_SUMMARY_FIELDS,
-                include: 1, // resolves the coverImage asset and translationOf entry
+                // Resolves the coverImage asset. `select` does not reach includes, so a
+                // linked translationOf entry arrives whole. Only its id is read.
+                include: 1,
                 order: ["-fields.publishDate"],
                 limit: 1000,
             },
@@ -117,16 +120,22 @@ const readBlogPostBySlug = async (
             {
                 content_type: CONTENT_TYPES.BLOG_POST,
                 "fields.slug": slug,
-                limit: 1,
+                // One slug can exist once per language. The query cannot filter on language,
+                // because an English entry may omit the field, so read every match instead.
+                limit: 10,
                 include: 10,
             },
             production,
         ),
     );
 
-    if (!res.items.length) return null;
-    const post = mapBlogPost<BlogPostFields>(res.items[0]);
-    return getBlogLanguage(post) === language ? post : null;
+    // Picking items[0] would 404 the other language, and cache that 404 for the whole
+    // Backstop Window.
+    const post = res.items
+        .map((item) => mapBlogPost<BlogPostFields>(item))
+        .find((candidate) => getBlogLanguage(candidate) === language);
+
+    return post ?? null;
 };
 
 // Reads one Blog Post, or null when this site shows no post with the slug.
