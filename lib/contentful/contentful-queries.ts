@@ -3,10 +3,12 @@ import { unstable_cache } from "next/cache";
 import {
     contentfulClient,
     isProd,
+    type BlogLanguage,
     type BlogPostFields,
     type BlogPostSummary,
     type PageFields,
 } from "./contentful";
+import { getBlogLanguage } from "./blog-localization";
 import {
     BACKSTOP_WINDOW_SECONDS,
     BLOG_INDEX_TAG,
@@ -34,6 +36,7 @@ const BLOG_SUMMARY_FIELDS = [
     "sys.id",
     "sys.updatedAt",
     "fields.title",
+    "fields.seoTitle",
     "fields.slug",
     "fields.excerpt",
     "fields.publishDate",
@@ -41,6 +44,8 @@ const BLOG_SUMMARY_FIELDS = [
     "fields.coverImage",
     "fields.tags",
     "fields.showInProduction",
+    "fields.language",
+    "fields.translationOf",
 ];
 
 function withProductionFilter(
@@ -51,9 +56,10 @@ function withProductionFilter(
     return { ...query, "fields.showInProduction": true };
 }
 
-function mapBlogPost<T>(item: { fields: unknown; sys: { updatedAt: string } }): T {
+function mapBlogPost<T>(item: { fields: unknown; sys: { id: string; updatedAt: string } }): T {
     return {
         ...(item.fields as T),
+        id: item.sys.id,
         updatedAt: item.sys.updatedAt,
     };
 }
@@ -66,7 +72,9 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
             {
                 content_type: CONTENT_TYPES.BLOG_POST,
                 select: BLOG_SUMMARY_FIELDS,
-                include: 1, // resolves the coverImage asset
+                // Resolves the coverImage asset. `select` does not reach includes, so a
+                // linked translationOf entry arrives whole. Only its id is read.
+                include: 1,
                 order: ["-fields.publishDate"],
                 limit: 1000,
             },
@@ -80,19 +88,31 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
 // The one listing read.
 // The index, the sitemap, generateStaticParams, and the slug guards all share it.
 // The whole set therefore costs a single Contentful call.
-export const getAllBlogPosts = (): Promise<BlogPostSummary[]> =>
+const getAllBlogPosts = (): Promise<BlogPostSummary[]> =>
     unstable_cache(readAllBlogPosts, ["blog-post-list"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.BLOG_POST), BLOG_INDEX_TAG],
     })(isProd());
 
-export async function getAllBlogPostSlugs(): Promise<string[]> {
+export { getAllBlogPosts };
+
+export async function getBlogPostsByLanguage(
+    language: BlogLanguage,
+): Promise<BlogPostSummary[]> {
     const posts = await getAllBlogPosts();
+    return posts.filter((post) => getBlogLanguage(post) === language);
+}
+
+export async function getAllBlogPostSlugs(
+    language: BlogLanguage,
+): Promise<string[]> {
+    const posts = await getBlogPostsByLanguage(language);
     return posts.map((post) => post.slug).filter(Boolean);
 }
 
 const readBlogPostBySlug = async (
     slug: string,
+    language: BlogLanguage,
     production: boolean,
 ): Promise<BlogPostFields | null> => {
     const res = await contentfulClient.getEntries(
@@ -100,36 +120,46 @@ const readBlogPostBySlug = async (
             {
                 content_type: CONTENT_TYPES.BLOG_POST,
                 "fields.slug": slug,
-                limit: 1,
+                // One slug can exist once per language. The query cannot filter on language,
+                // because an English entry may omit the field, so read every match instead.
+                limit: 10,
                 include: 10,
             },
             production,
         ),
     );
 
-    if (!res.items.length) return null;
-    return mapBlogPost<BlogPostFields>(res.items[0]);
+    // Picking items[0] would 404 the other language, and cache that 404 for the whole
+    // Backstop Window.
+    const post = res.items
+        .map((item) => mapBlogPost<BlogPostFields>(item))
+        .find((candidate) => getBlogLanguage(candidate) === language);
+
+    return post ?? null;
 };
 
 // Reads one Blog Post, or null when this site shows no post with the slug.
 //
 // The slug comes from the URL, so an unchecked slug would let any visitor spend a call
 // and fill the cache. The listing is already cached, so the check costs nothing.
-export async function getBlogPostBySlug(slug: string): Promise<BlogPostFields | null> {
+export async function getBlogPostBySlug(
+    slug: string,
+    language: BlogLanguage,
+): Promise<BlogPostFields | null> {
     if (!slug) return null;
 
-    const slugs = await getAllBlogPostSlugs();
+    const slugs = await getAllBlogPostSlugs(language);
     if (!slugs.includes(slug)) return null;
 
     // unstable_cache fixes its tags when it wraps, so the wrapper is built per slug.
     // The key parts and the callback stay identical, so one slug always hits one entry.
-    return unstable_cache(readBlogPostBySlug, ["blog-post", slug], {
+    return unstable_cache(readBlogPostBySlug, ["blog-post", language, slug], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [
             contentTypeTag(CONTENT_TYPES.BLOG_POST),
             slugTag(CONTENT_TYPES.BLOG_POST, slug),
         ],
-    })(slug, isProd());
+    })(slug, language, isProd());
 }
 
 /* CMS Pages */

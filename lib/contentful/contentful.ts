@@ -1,5 +1,5 @@
 // lib/contentful/contentful.ts
-import { createClient, Entry, EntrySkeletonType } from "contentful";
+import { createClient } from "contentful";
 
 const space = process.env.CONTENTFUL_SPACE_ID!;
 const accessToken = process.env.CONTENTFUL_CDA_TOKEN!;
@@ -16,6 +16,8 @@ export const contentfulClient = createClient({
 // A development entry can then never satisfy a production request.
 export const isProd = () => process.env.NODE_ENV === "production";
 
+export type BlogLanguage = "en" | "es";
+
 // Reads one entry by id, or null when the Delivery API does not serve it.
 // Never cached: the webhook uses it to see the live state, which a cached answer would hide.
 // The Delivery API serves published entries only, so null also means removed.
@@ -30,8 +32,12 @@ export async function getEntryById(id: string) {
 }
 
 export type BlogPostFields = {
+    id: string;
     showInProduction?: boolean;
+    language?: BlogLanguage;
+    translationOf?: { sys?: { id?: string } };
     title: string;
+    seoTitle?: string;
     slug: string;
     excerpt?: string;
     body: any;
@@ -53,6 +59,3 @@ export type PageFields = {
     layoutVariant?: "default" | "centered" | "two-column";
     theme?: "light" | "dark" | "brand";
 };
-
-export type BlogPostEntry = Entry<EntrySkeletonType & { fields: BlogPostFields }>;
-export type PageEntry = Entry<EntrySkeletonType & { fields: PageFields }>;

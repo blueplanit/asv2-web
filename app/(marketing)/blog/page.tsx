@@ -1,6 +1,7 @@
 // app/blog/page.tsx
 import Link from "next/link";
-import { getAllBlogPosts } from "@/lib/contentful/contentful-queries";
+import { getBlogPostsByLanguage } from "@/lib/contentful/contentful-queries";
+import { getCoverImageUrl } from "@/lib/contentful/blog-presentation";
 import { APP_NAME } from "@/lib/constants";
 import { BlogPageViewTracker } from "@/components/analytics/blog-page-view-tracker";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
@@ -17,24 +18,8 @@ export const metadata = createMarketingMetadata({
 export const dynamic = "force-static";
 export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
 
-// Optional helper to resolve Contentful asset -> URL
-function getCoverImageUrl(post: any): string | null {
-    const asset = post.coverImage as any;
-    if (!asset || !asset.fields) return null;
-    const file = asset.fields.file;
-    if (!file) return null;
-
-    const rawUrl =
-        typeof file.url === "string"
-            ? file.url
-            : file["en-US"]?.url;
-
-    if (!rawUrl) return null;
-    return rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
-}
-
 export default async function BlogIndexPage() {
-    const posts = await getAllBlogPosts();
+    const posts = await getBlogPostsByLanguage("en");
 
     if (!posts?.length) {
         return (
