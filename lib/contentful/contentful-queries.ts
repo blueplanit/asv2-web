@@ -7,6 +7,7 @@ import {
     type BlogPostFields,
     type BlogPostSummary,
     type PageFields,
+    type PromotionFields,
 } from "./contentful";
 import { getBlogLanguage } from "./blog-localization";
 import {
@@ -14,6 +15,7 @@ import {
     BLOG_INDEX_TAG,
     CONTENT_TYPES,
     CMS_PAGE_INDEX_TAG,
+    PROMOTION_TAG,
     contentTypeTag,
     copyKeyTag,
     slugTag,
@@ -235,3 +237,37 @@ export const getCopyConfig = (pageKey: string) =>
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.COPY_CONFIG), copyKeyTag(pageKey)],
     })(pageKey);
+
+/* Promotion */
+
+const readActivePromotionEntry = async (production: boolean): Promise<PromotionFields | null> => {
+    const res = await contentfulClient.getEntries(
+        withProductionFilter(
+            {
+                content_type: CONTENT_TYPES.PROMOTION,
+                // Only enough to tell 0 / 1 / "more than 1" apart.
+                limit: 2,
+            },
+            production,
+        ),
+    );
+
+    // Zero published entries: no promotion to show.
+    // More than one published: a content mistake. Showing neither makes the mistake
+    // visible instead of silently guessing which one is "the" active Promotion.
+    // See ADR-0005.
+    if (res.items.length !== 1) return null;
+
+    const item = res.items[0];
+    return { ...(item.fields as Omit<PromotionFields, "id">), id: item.sys.id };
+};
+
+// Reads the currently active Promotion, or null when none is published (or more
+// than one is). Like the reads above, a Contentful error throws rather than
+// resolving to null — the fallback lives with the caller. See
+// lib/promotions/get-active-promotion.ts for the safe wrapper every consumer uses.
+export const getActivePromotionEntry = (): Promise<PromotionFields | null> =>
+    unstable_cache(readActivePromotionEntry, ["active-promotion"], {
+        revalidate: BACKSTOP_WINDOW_SECONDS,
+        tags: [PROMOTION_TAG],
+    })(isProd());
