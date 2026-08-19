@@ -50,6 +50,31 @@ export const contentfulRichTextOptions: Options = {
                 {children}
             </blockquote>
         ),
+        [BLOCKS.TABLE]: (_, children) => (
+            <div className="my-8 overflow-x-auto rounded-md border border-slate-300">
+                <table className="w-full min-w-[640px] border-collapse text-left">
+                    <tbody>{children}</tbody>
+                </table>
+            </div>
+        ),
+        [BLOCKS.TABLE_ROW]: (_, children) => (
+            <tr className="border-b border-slate-200 last:border-b-0">
+                {children}
+            </tr>
+        ),
+        [BLOCKS.TABLE_HEADER_CELL]: (_, children) => (
+            <th
+                scope="col"
+                className="border-r border-slate-300 bg-slate-100 px-4 py-3 align-top font-semibold text-slate-900 last:border-r-0 [&>p]:m-0 [&>p]:leading-6"
+            >
+                {children}
+            </th>
+        ),
+        [BLOCKS.TABLE_CELL]: (_, children) => (
+            <td className="border-r border-slate-200 px-4 py-3 align-top text-slate-700 last:border-r-0 [&>p]:m-0 [&>p]:leading-6">
+                {children}
+            </td>
+        ),
 
         [BLOCKS.EMBEDDED_ASSET]: (node) => {
             // Contentful assets data structure can vary (GraphQL vs REST)
