@@ -7,7 +7,6 @@ import {
     type BlogPostFields,
     type BlogPostSummary,
     type PageFields,
-    type PromotionFields,
 } from "./contentful";
 import { getBlogLanguage } from "./blog-localization";
 import {
@@ -240,7 +239,9 @@ export const getCopyConfig = (pageKey: string) =>
 
 /* Promotion */
 
-const readActivePromotionEntry = async (production: boolean): Promise<PromotionFields | null> => {
+export type PromotionEntry = { id: string; fields: Record<string, unknown> };
+
+const readActivePromotionEntry = async (production: boolean): Promise<PromotionEntry | null> => {
     const res = await contentfulClient.getEntries(
         withProductionFilter(
             {
@@ -259,14 +260,15 @@ const readActivePromotionEntry = async (production: boolean): Promise<PromotionF
     if (res.items.length !== 1) return null;
 
     const item = res.items[0];
-    return { ...(item.fields as Omit<PromotionFields, "id">), id: item.sys.id };
+    return { id: item.sys.id, fields: item.fields as Record<string, unknown> };
 };
 
-// Reads the currently active Promotion, or null when none is published (or more
-// than one is). Like the reads above, a Contentful error throws rather than
-// resolving to null — the fallback lives with the caller. See
-// lib/promotions/get-active-promotion.ts for the safe wrapper every consumer uses.
-export const getActivePromotionEntry = (): Promise<PromotionFields | null> =>
+// Reads the currently active Promotion entry, or null when none is published (or
+// more than one is). Returns the entry's raw fields, unvalidated — like the reads
+// above, a Contentful error throws rather than resolving to null, and shape
+// validation is the caller's job. See lib/promotions/get-active-promotion.ts for
+// the schema-checked, safe wrapper every consumer uses.
+export const getActivePromotionEntry = (): Promise<PromotionEntry | null> =>
     unstable_cache(readActivePromotionEntry, ["active-promotion"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [PROMOTION_TAG],
