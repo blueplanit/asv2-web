@@ -7,23 +7,20 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing/pricing-config";
+import type { BillingDisplay, BillingInterval } from "@/lib/pricing/get-billing-display";
 import {
     trackAmplitudeError,
     trackAmplitudeEvent,
 } from "@/lib/analytics/amplitude-client";
 import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
-type BillingInterval = "monthly" | "yearly";
-
 type PricingClientProps = {
     copy: PricingCopy;
 };
 
-type BillingDisplay = Record<BillingInterval, { price: string; intervalLabel: string }>;
-
 const DEFAULT_BILLING_DISPLAY: BillingDisplay = {
-    monthly: { price: "$19", intervalLabel: "/month" },
-    yearly: { price: "$190", intervalLabel: "/year" },
+    monthly: { price: "$19", intervalLabel: "/month", discountedPrice: null, percentOff: null },
+    yearly: { price: "$190", intervalLabel: "/year", discountedPrice: null, percentOff: null },
   };
 
 type FaqItem = {
@@ -113,39 +110,51 @@ export function PricingClient({ copy }: PricingClientProps) {
     const [showSignedInHint, setShowSignedInHint] = useState(false);
     const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
     const [pricingLoading, setPricingLoading] = useState(true);
+    const [promotionId, setPromotionId] = useState<string | null>(null);
     const viewTracked = useRef(false);
-
-    // Wait for the session before reporting the view. Firing on mount would report every
-    // visitor as logged out, because status is "loading" first. See ADR-0003.
-    useEffect(() => {
-        if (status === "loading" || viewTracked.current) return;
-
-        viewTracked.current = true;
-        trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
-            is_logged_in: isLoggedIn,
-        });
-    }, [status, isLoggedIn]);
 
     useEffect(() => {
         let cancelled = false;
+        const controller = new AbortController();
+        // PRICING_PAGE_VIEWED now waits on this fetch too (see below), so a stalled
+        // request — not just an error response — must still resolve pricingLoading.
+        const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
         setPricingLoading(true);
-        fetch("/api/billing/pricing")
+        fetch("/api/billing/pricing", { signal: controller.signal })
             .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
                 if (cancelled) return;
                 if (data?.billingDisplay) setBillingDisplay(data.billingDisplay);
+                setPromotionId(data?.promotionId ?? null);
             })
             .catch(() => { })
             .finally(() => {
+                window.clearTimeout(timeoutId);
                 if (cancelled) return;
                 setPricingLoading(false);
             });
 
         return () => {
             cancelled = true;
+            window.clearTimeout(timeoutId);
+            controller.abort();
         };
     }, []);
+
+    // Waits for both the session and the pricing fetch, so a visitor's actual
+    // promotion status is known before reporting — firing early would misreport
+    // both is_logged_in (status starts "loading", see ADR-0003) and promotion_active.
+    useEffect(() => {
+        if (status === "loading" || pricingLoading || viewTracked.current) return;
+
+        viewTracked.current = true;
+        trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
+            is_logged_in: isLoggedIn,
+            promotion_active: promotionId !== null,
+            ...(promotionId ? { promotion_id: promotionId } : {}),
+        });
+    }, [status, isLoggedIn, pricingLoading, promotionId]);
 
     const searchParams = useSearchParams();
     const authFlag = searchParams.get("auth");
@@ -220,7 +229,7 @@ export function PricingClient({ copy }: PricingClientProps) {
         }
     }
 
-    const { price, intervalLabel } = billingDisplay[interval];
+    const { price, intervalLabel, discountedPrice, percentOff } = billingDisplay[interval];
     const faqHeading = copy.included.faqTitle.trim().toLowerCase() === "faq" ? "FAQs" : copy.included.faqTitle;
 
     const freeTrialMsg = !isLoggedIn ? (
@@ -313,17 +322,32 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     </p>
                                 </div>
 
-                                <div className="flex items-end gap-2" aria-live="polite" aria-busy={pricingLoading}>
+                                <div aria-live="polite" aria-busy={pricingLoading}>
                                     {pricingLoading ? (
-                                        <>
+                                        <div className="flex items-end gap-2">
                                             <span className="inline-block h-10 w-28 animate-pulse rounded-md bg-slate-200/80 align-bottom" />
                                             <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-slate-200/60 align-bottom" />
-                                        </>
+                                        </div>
+                                    ) : discountedPrice ? (
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-slate-400 line-through">{price}</span>
+                                                {percentOff !== null && (
+                                                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                                                        {percentOff}% off
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-end gap-2">
+                                                <span className="text-4xl font-semibold tracking-tight text-slate-900">{discountedPrice}</span>
+                                                <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
+                                            </div>
+                                        </div>
                                     ) : (
-                                        <>
+                                        <div className="flex items-end gap-2">
                                             <span className="text-4xl font-semibold tracking-tight text-slate-900">{price}</span>
                                             <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
-                                        </>
+                                        </div>
                                     )}
                                 </div>
 
@@ -420,9 +444,21 @@ export function PricingClient({ copy }: PricingClientProps) {
                 <div className="mx-auto max-w-xl">
                     <div className="mb-2 flex items-baseline justify-between">
                         <p className="text-xs font-medium text-slate-600">{copy.plan.name}</p>
-                        <p className="text-sm font-semibold text-slate-900">
-                            {pricingLoading ? "Loading..." : `${price}${intervalLabel}`}
-                        </p>
+                        {pricingLoading ? (
+                            <p className="text-sm font-semibold text-slate-900">Loading...</p>
+                        ) : discountedPrice ? (
+                            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                                <span className="text-xs font-normal text-slate-400 line-through">{price}</span>
+                                <span>{discountedPrice}{intervalLabel}</span>
+                                {percentOff !== null && (
+                                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+                                        {percentOff}% off
+                                    </span>
+                                )}
+                            </p>
+                        ) : (
+                            <p className="text-sm font-semibold text-slate-900">{price}{intervalLabel}</p>
+                        )}
                     </div>
                     <button
                         type="button"
