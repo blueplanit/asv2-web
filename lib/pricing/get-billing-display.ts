@@ -48,10 +48,8 @@ function percentOffFor(unitAmount: number, discounted: number): number {
     return Math.round(((unitAmount - discounted) / unitAmount) * 100);
 }
 
-// Reads the live discount behind a Promotion Code, or null if it's not currently
-// redeemable. Never throws — an unreadable or stale code means "show full price."
-// Not shared with checkout's eventual validity check (docs/adr/0005): checkout also
-// has to construct session params, which may diverge enough to make sharing early.
+// The live discount behind a Promotion Code, or null if not currently redeemable.
+// Never throws — an unreadable or stale code means "show full price," not a crash.
 async function getPromotionDiscount(stripePromotionCodeId: string): Promise<Stripe.Coupon | null> {
     try {
         const promotionCode = await stripeBilling.promotionCodes.retrieve(stripePromotionCodeId, {

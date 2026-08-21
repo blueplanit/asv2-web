@@ -142,9 +142,8 @@ export function PricingClient({ copy }: PricingClientProps) {
         };
     }, []);
 
-    // Waits for both the session and the pricing fetch, so a visitor's actual
-    // promotion status is known before reporting — firing early would misreport
-    // both is_logged_in (status starts "loading", see ADR-0003) and promotion_active.
+    // Waits for the session and the pricing fetch, so is_logged_in and
+    // promotion_active are both accurate rather than defaulting wrong. See ADR-0003.
     useEffect(() => {
         if (status === "loading" || pricingLoading || viewTracked.current) return;
 
