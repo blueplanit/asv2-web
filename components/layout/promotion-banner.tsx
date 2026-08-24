@@ -74,9 +74,12 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
             />
             {/* z-50 clears the site header, which is relative z-40 and sits later in the
                 DOM, so an equal z-index would let it paint over this while scrolling. */}
+            {/* Symmetric px-12 keeps the copy centred on the viewport while reserving a
+                gutter the absolutely positioned dismiss button sits in, so long copy
+                cannot run underneath it on a narrow screen. */}
             <div
                 id={BANNER_ELEMENT_ID}
-                className="sticky top-0 z-50 flex items-center justify-center gap-3 bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white"
+                className="sticky top-0 z-50 flex items-center justify-center bg-indigo-600 px-12 py-2.5 text-sm font-medium text-white"
             >
                 <Link
                     href={promotion.ctaHref}
@@ -89,7 +92,7 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
                     type="button"
                     onClick={handleDismiss}
                     aria-label="Dismiss promotion"
-                    className="cursor-pointer rounded-full p-1 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer rounded-full p-1 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </button>
