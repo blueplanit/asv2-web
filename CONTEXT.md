@@ -58,7 +58,7 @@ The Stripe object that carries the discount and bounds it (`active`, `expires_at
 _Avoid_: "coupon" — Stripe's Coupon defines the discount math, but this project only ever references the Promotion Code that wraps one.
 
 **Ending a Promotion**:
-Unpublishing its entry. The revalidate webhook, on that action, both expires the page cache and deactivates the referenced Promotion Code at Stripe, so redemption stops everywhere at once, not just on the page.
+Two acts, both needed. Unpublishing the entry stops the site offering the discount within seconds. Deactivating the **Promotion Code** in the Stripe dashboard stops anyone redeeming it by typing the code. The site does the first; a person does the second. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
 _Avoid_: "expiring" — no visitor-facing deadline exists; only a hidden, defensive one on the Promotion Code itself.
 
 ### Content

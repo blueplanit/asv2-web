@@ -19,9 +19,13 @@ Set `max_redemptions` on every campaign's Promotion Code. Absent a deliberate fi
 
 The campaign runs until someone unpublishes the entry — no countdown, no committed end date. Banner copy is evergreen ("limited-time," no date, no "ends soon"); implying a deadline that doesn't exist is a dark pattern.
 
-### 3. Unpublishing ends redemption everywhere, not just visibility
+### 3. Unpublishing ends the campaign; deactivating the code stays manual
 
-The revalidate webhook already treats `unpublish` as a handled action. For a Promotion entry, it now also calls Stripe to set the Promotion Code's `active` to `false`. Without this, unpublishing only removes the banner — the code stays redeemable by anyone who already has it until the hidden `expires_at`. A failed Stripe call answers 503 so Contentful retries the whole webhook, matching how an unconfirmed content change is already handled.
+Unpublishing the entry removes the banner, restores the full price, and stops checkout applying anything. It does not touch Stripe. Whoever ends a campaign also deactivates the Promotion Code in the Stripe dashboard.
+
+Automating it was specified and then dropped. Contentful sends a tombstone for `unpublish`: `sys` only, no `fields`, so the webhook never receives the `stripePromotionCodeId` it would need. Recovering it needs a Preview API token, a Content Management token, or the id persisted at publish time — a new credential or new state, plus two failure modes. A Promotion Code the entry names but Stripe cannot find would fail deactivation forever, and under a retry-until-success rule the cache tag would never expire, so a typo would leave the banner up permanently. Deactivation would also be one-way: republishing the same entry would restore the banner over a dead code.
+
+What the automation would have closed is narrow. After unpublishing, nothing is applied automatically; the exposure is someone who learned the customer-facing code string typing it into Stripe's promo field, which `expires_at` and `max_redemptions` already bound. Starting a campaign is already a deliberate two-system act — create the code in Stripe, name it in Contentful, publish. Ending it the same way is symmetric, and one dashboard click.
 
 ### 4. Checkout determines the active promotion itself
 
