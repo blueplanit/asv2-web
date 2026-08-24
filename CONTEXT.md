@@ -50,7 +50,7 @@ A sitewide discount campaign shown on public marketing pages, backed by exactly 
 _Avoid_: "promo", "discount", "campaign" — each is used loosely elsewhere; "Promotion" is this project's precise term for the whole feature.
 
 **Promotion Code**:
-The Stripe object that carries the discount and gates redemption (`active`, `expires_at`, eligibility restrictions). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically.
+The Stripe object that carries the discount and bounds it (`active`, `expires_at`, `max_redemptions`). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically. It carries no eligibility restriction — every visitor who reaches checkout during a campaign qualifies. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
 _Avoid_: "coupon" — Stripe's Coupon defines the discount math, but this project only ever references the Promotion Code that wraps one.
 
 **Ending a Promotion**:

@@ -9,9 +9,11 @@ We're adding sitewide promotional banners and discounted pricing driven from Con
 
 ## Decisions
 
-### 1. Stripe is the source of truth for the discount and its deadline
+### 1. Stripe is the source of truth for the discount and its bounds
 
-A `promotionASv2` entry stores only banner copy and the ID of a Stripe Promotion Code. The discount amount, eligibility (`restrictions.first_time_transaction`), and a hidden defensive `expires_at` all live on the Stripe object. Checkout auto-applies it via `discounts: [{ promotion_code }]`, so the price shown pre-checkout and the price charged always come from the same read.
+A `promotionASv2` entry stores only banner copy and the ID of a Stripe Promotion Code. The discount amount, a hidden defensive `expires_at`, and a `max_redemptions` cap all live on the Stripe object. Checkout auto-applies it via `discounts: [{ promotion_code }]`, so the price shown pre-checkout and the price charged always come from the same read.
+
+Set `max_redemptions` on every campaign's Promotion Code. Absent a deliberate figure, use 100. It bounds a campaign that nobody remembers to end.
 
 ### 2. The promotion has no visitor-facing deadline
 
@@ -25,8 +27,32 @@ The revalidate webhook already treats `unpublish` as a handled action. For a Pro
 
 `/api/billing/checkout` re-reads the currently-published Promotion entry server-side, rather than trusting a promotion code ID supplied by the client — a client-supplied ID could name any currently-valid Stripe code, not necessarily the one campaign that's actually live.
 
+### 5. Anyone who reaches checkout during a campaign is eligible
+
+Promotion Codes carry no `restrictions.first_time_transaction`. Every visitor who reaches checkout while a Promotion is live gets the discount, including a user converting from a trial that started before the campaign.
+
+An earlier draft restricted campaigns to first-time customers. Stripe does not document whether a never-charged trial counts as a prior transaction, so that restriction risked silently refusing the discount to trial converters — the segment most likely to buy. A promise the banner makes and checkout declines is the failure this ADR exists to prevent, so eligibility is deliberately wide. A returning canceled customer also qualifies; that reads as win-back, not a leak. `max_redemptions` is what bounds the exposure.
+
+### 6. A discount never breaks the checkout button
+
+Two guards, because the price shown and the price charged must not diverge into a dead end:
+
+`discounts` and `allow_promotion_codes` are mutually exclusive on one Checkout Session, so a live campaign deletes the latter key. Setting it to `null` or `false` still trips Stripe's exclusivity error.
+
+If creating the discounted session throws, checkout retries once without the discount and logs at error level. Stripe documents throw-shaped errors for inapplicable codes but not whether they fire at session creation. A wrong guess would break the Subscribe button mid-campaign, so the retry covers the cases the docs leave open. The error log matters: reaching it means the banner is advertising a discount the customer will not receive.
+
+Checkout also resolves a real Stripe Customer via `ensureStripeCustomerId` rather than passing `customer_email`, so promotion eligibility evaluates against a known customer.
+
+### 7. Only a `forever` coupon gets a struck-through price
+
+`/pricing` shows a discounted per-interval price only when the coupon's `duration` is `forever`. A `once` or `repeating` coupon still runs the campaign and still applies at checkout, but the page shows the full price.
+
+A `once` coupon on a monthly plan discounts the first month alone. Rendering "$15/month" for it states an ongoing rate that is false from month two. That is the same deception as a countdown to a deadline that does not exist, which decision 2 already rejects.
+
 ## Consequences
 
 - While a Promotion is live, Stripe Checkout's manual "have a promo code?" field disappears (`discounts` and `allow_promotion_codes` are mutually exclusive on one session). A support-issued one-off code can't be combined with an active campaign.
 - At most one Promotion entry may be published at a time; if two are published by mistake, the site shows none rather than guessing.
 - The discount applies uniformly to both billing intervals — Stripe restricts coupons by Product, not by individual Price, so interval-specific promotions aren't reliably supported without confirming the monthly/yearly Prices sit under separate Products.
+- A Promotion Code that exhausts `max_redemptions` goes permanently inactive while its Contentful entry stays published. The banner keeps advertising the discount until someone unpublishes it. The error log from decision 6 is the only signal.
+- Eligibility is wide by design (decision 5), so a campaign discounts trial converters and returning customers alongside new ones. Model campaign cost against every visitor who can reach checkout, not against new signups.
