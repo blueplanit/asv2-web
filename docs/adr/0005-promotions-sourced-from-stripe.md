@@ -21,7 +21,7 @@ The campaign runs until someone unpublishes the entry — no countdown, no commi
 
 ### 3. Unpublishing ends the campaign; deactivating the code stays manual
 
-Unpublishing the entry removes the banner, restores the full price, and stops checkout applying anything. It does not touch Stripe. Whoever ends a campaign also deactivates the Promotion Code in the Stripe dashboard.
+Unpublishing the entry removes the banner, restores the full price, and stops checkout applying anything. It does not touch Stripe. Whoever ends a campaign also deactivates the Promotion Code in the Stripe dashboard. [docs/runbooks/promotions.md](../runbooks/promotions.md) carries the steps.
 
 Automating it was specified and then dropped. Contentful sends a tombstone for `unpublish`: `sys` only, no `fields`, so the webhook never receives the `stripePromotionCodeId` it would need. Recovering it needs a Preview API token, a Content Management token, or the id persisted at publish time — a new credential or new state, plus two failure modes. A Promotion Code the entry names but Stripe cannot find would fail deactivation forever, and under a retry-until-success rule the cache tag would never expire, so a typo would leave the banner up permanently. Deactivation would also be one-way: republishing the same entry would restore the banner over a dead code.
 

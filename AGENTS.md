@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md) has domain language and [docs/adr/](./docs/adr/) compiles decisions that are non-obvious from the code.
+Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md) has domain language, [docs/adr/](./docs/adr/) compiles decisions that are non-obvious from the code, and [docs/runbooks/](./docs/runbooks/) holds procedures a person carries out by hand.
 
 ## What this is
 
