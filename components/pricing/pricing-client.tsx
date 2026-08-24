@@ -332,12 +332,15 @@ export function PricingClient({ copy }: PricingClientProps) {
                                             <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-slate-200/60 align-bottom" />
                                         </div>
                                     ) : discountedPrice ? (
-                                        <div className="flex flex-col gap-1.5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm text-slate-400 line-through">{price}</span>
+                                        <div className="flex flex-col gap-2">
+                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">
+                                                Promotional price
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-2.5">
+                                                <span className="text-base font-medium text-slate-400 line-through">{price}</span>
                                                 {percentOff !== null && (
-                                                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                                                        {percentOff}% off
+                                                    <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-emerald-500/30">
+                                                        Save {percentOff}%
                                                     </span>
                                                 )}
                                             </div>
@@ -445,20 +448,22 @@ export function PricingClient({ copy }: PricingClientProps) {
 
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
                 <div className="mx-auto max-w-xl">
-                    <div className="mb-2 flex items-baseline justify-between">
+                    <div className="mb-2 flex items-center justify-between">
                         <p className="text-xs font-medium text-slate-600">{copy.plan.name}</p>
                         {pricingLoading ? (
                             <p className="text-sm font-semibold text-slate-900">Loading...</p>
                         ) : discountedPrice ? (
-                            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                                <span className="text-xs font-normal text-slate-400 line-through">{price}</span>
-                                <span>{discountedPrice}{intervalLabel}</span>
-                                {percentOff !== null && (
-                                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
-                                        {percentOff}% off
-                                    </span>
-                                )}
-                            </p>
+                            <div className="flex flex-col items-end gap-0.5">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] text-slate-400 line-through">{price}</span>
+                                    {percentOff !== null && (
+                                        <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                                            Save {percentOff}%
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="text-sm font-semibold text-slate-900">{discountedPrice}{intervalLabel}</span>
+                            </div>
                         ) : (
                             <p className="text-sm font-semibold text-slate-900">{price}{intervalLabel}</p>
                         )}
