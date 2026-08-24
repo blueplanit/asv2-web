@@ -46,8 +46,12 @@ _Avoid_: "sheet swap", "migrate".
 ### Promotions
 
 **Promotion**:
-A sitewide discount campaign shown on public marketing pages, backed by exactly one published `promotionASv2` entry. The entry supplies banner copy and a reference to a **Promotion Code**; Stripe remains the source of truth for the discount amount and eligibility, so the number is never duplicated in Contentful.
+A sitewide discount campaign shown on public marketing pages, backed by exactly one published `promotionASv2` entry. Publishing the entry is the only thing that starts a campaign: it supplies banner copy and names the **Promotion Code** that carries the discount. A Promotion Code no entry names is inert.
 _Avoid_: "promo", "discount", "campaign" — each is used loosely elsewhere; "Promotion" is this project's precise term for the whole feature.
+
+**Deliverable Discount**:
+A Promotion whose named **Promotion Code** also resolves at Stripe and is still redeemable. The banner needs only the published entry, but a struck-through price and an actual discount at checkout need both. The two conditions can disagree — a Promotion Code that expires or exhausts its `max_redemptions` under a still-published entry leaves the banner advertising a discount nothing delivers. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
+_Avoid_: calling a Promotion "active" without saying which of the two you mean.
 
 **Promotion Code**:
 The Stripe object that carries the discount and bounds it (`active`, `expires_at`, `max_redemptions`). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically. It carries no eligibility restriction — every visitor who reaches checkout during a campaign qualifies. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
