@@ -41,7 +41,7 @@ Two guards, because the price shown and the price charged must not diverge into 
 
 If creating the discounted session throws, checkout retries once without the discount and logs at error level. Stripe documents throw-shaped errors for inapplicable codes but not whether they fire at session creation. A wrong guess would break the Subscribe button mid-campaign, so the retry covers the cases the docs leave open. The error log matters: reaching it means the banner is advertising a discount the customer will not receive.
 
-Checkout also resolves a real Stripe Customer via `ensureStripeCustomerId` rather than passing `customer_email`, so promotion eligibility evaluates against a known customer.
+A discounted session also resolves a real Stripe Customer via `ensureStripeCustomerId` rather than passing `customer_email`, so eligibility evaluates against a known customer. Only a discounted session does. Outside a campaign the older `customer_email` path stands, so checkout is unchanged there and an abandoned checkout leaves no Customer record behind.
 
 ### 7. Only a `forever` coupon gets a struck-through price
 

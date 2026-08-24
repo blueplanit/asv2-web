@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { stripeBilling, BILLING_PRICES } from "@/lib/stripe/stripe-billing";
-import { getActivePromotion } from "@/lib/promotions/get-active-promotion";
+import { getDeliverableDiscount, isOngoingDiscount } from "@/lib/promotions/get-deliverable-discount";
 
 export type BillingInterval = "monthly" | "yearly";
 
@@ -48,50 +48,29 @@ function percentOffFor(unitAmount: number, discounted: number): number {
     return Math.round(((unitAmount - discounted) / unitAmount) * 100);
 }
 
-// The live discount behind a Promotion Code, or null if not currently redeemable.
-// Never throws — an unreadable or stale code means "show full price," not a crash.
-async function getPromotionDiscount(stripePromotionCodeId: string): Promise<Stripe.Coupon | null> {
-    try {
-        const promotionCode = await stripeBilling.promotionCodes.retrieve(stripePromotionCodeId, {
-            expand: ["promotion.coupon"],
-        });
-
-        if (!promotionCode.active) return null;
-
-        const coupon = promotionCode.promotion.coupon;
-        if (!coupon || typeof coupon === "string" || !coupon.valid) return null;
-
-        return coupon;
-    } catch (err) {
-        console.error("getBillingDisplay: could not read the Promotion Code, showing full price", err);
-        return null;
-    }
-}
-
 export async function getBillingDisplay(): Promise<BillingDisplayResult> {
     const monthlyId = BILLING_PRICES.pro.monthly;
     const yearlyId = BILLING_PRICES.pro.yearly;
 
-    const [monthly, yearly, promotion] = await Promise.all([
+    const [monthly, yearly, discount] = await Promise.all([
         stripeBilling.prices.retrieve(monthlyId),
         stripeBilling.prices.retrieve(yearlyId),
-        getActivePromotion(),
+        getDeliverableDiscount(),
     ]);
 
     if (!monthly.unit_amount || !monthly.currency) throw new Error("Monthly price missing unit_amount/currency");
     if (!yearly.unit_amount || !yearly.currency) throw new Error("Yearly price missing unit_amount/currency");
 
-    const coupon = promotion ? await getPromotionDiscount(promotion.stripePromotionCodeId) : null;
-    // Narrowed once here so the return below needs no non-null assertion — `coupon`
-    // can only be truthy when `promotion` was.
-    const activePromotion = coupon ? promotion : null;
+    // A non-ongoing discount still applies at checkout, so it stays reportable below
+    // — it just cannot be shown as the per-interval rate.
+    const shownCoupon = discount && isOngoingDiscount(discount.coupon) ? discount.coupon : null;
 
     function display(unitAmount: number, currency: string, intervalLabel: string) {
-        if (!coupon) {
+        if (!shownCoupon) {
             return { price: formatMoney(unitAmount, currency), intervalLabel, discountedPrice: null, percentOff: null };
         }
 
-        const discounted = discountedAmount(unitAmount, coupon);
+        const discounted = discountedAmount(unitAmount, shownCoupon);
         return {
             price: formatMoney(unitAmount, currency),
             intervalLabel,
@@ -105,6 +84,6 @@ export async function getBillingDisplay(): Promise<BillingDisplayResult> {
             monthly: display(monthly.unit_amount, monthly.currency, "/month"),
             yearly: display(yearly.unit_amount, yearly.currency, "/year"),
         },
-        promotionId: activePromotion?.id ?? null,
+        promotionId: discount?.promotion.id ?? null,
     };
 }

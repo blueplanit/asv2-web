@@ -7,11 +7,16 @@ import { ddb } from "@/lib/dynamo";
 import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";
 import { getUserProfile } from "@/lib/dynamo/user-profile";
+import type { UserProfile } from "@/lib/schemas/user-profile";
 
 const TABLE_NAME = process.env.DYNAMO_TABLE_NAME!;
 
-export async function ensureStripeCustomerId(userId: string): Promise<string> {
-    const profile = await getUserProfile(userId);
+// Pass knownProfile when the caller already read it, to save a second Dynamo read.
+export async function ensureStripeCustomerId(
+    userId: string,
+    knownProfile?: UserProfile,
+): Promise<string> {
+    const profile = knownProfile ?? (await getUserProfile(userId));
     if (!profile) throw new Error("User profile not found");
 
     if (profile.subscriptionCustomerId) {

@@ -117,6 +117,9 @@ async function emitSubscriptionPaidIfConverted(args: {
     const priceItem = subscription.items.data[0]?.price;
     const planInfo = mapStripePriceToPlan(priceItem?.id);
     const unitAmount = priceItem?.unit_amount;
+    // Checkout writes this only when the discount was actually applied, so a
+    // full-price subscription never reports itself as promoted. See ADR-0005.
+    const promotionId = ((subscription.metadata as any)?.promotionId as string) || null;
 
     await trackServerEvent({
         userId,
@@ -133,6 +136,8 @@ async function emitSubscriptionPaidIfConverted(args: {
             interval: planInfo?.interval ?? null,
             currency: priceItem?.currency ?? null,
             subscription_id: subscription.id,
+            promotion_active: promotionId !== null,
+            ...(promotionId ? { promotion_id: promotionId } : {}),
             // Users can buy straight from the pricing page, skipping onboarding
             // entirely, so the two routes to revenue must be separable in the
             // funnel. See docs/adr/0002.

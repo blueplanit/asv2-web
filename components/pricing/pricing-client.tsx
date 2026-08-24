@@ -189,9 +189,13 @@ export function PricingClient({ copy }: PricingClientProps) {
 
         setLoading(true);
         try {
+            // Reports that a Deliverable Discount existed at click time, matching
+            // PRICING_PAGE_VIEWED. Whether it applied lands on SUBSCRIPTION_PAID.
             trackAmplitudeEvent(EVENT_NAMES.CHECKOUT_STARTED, {
                 plan_id: "pro",
                 interval,
+                promotion_active: promotionId !== null,
+                ...(promotionId ? { promotion_id: promotionId } : {}),
             });
             const res = await fetch("/api/billing/checkout", {
                 method: "POST",
