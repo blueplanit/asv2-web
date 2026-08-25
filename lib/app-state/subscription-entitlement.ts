@@ -52,3 +52,14 @@ export function isUserProfileEntitled(
 
     return end >= now;
 }
+
+// Narrower than isUserProfileEntitled: excludes a trial. A trialing user is
+// entitled to the app but is still a Promotion's target audience, not an
+// existing customer — see ADR-0005 decision 5. Mirrors BillingBar's own
+// active-vs-upgrade-CTA split, which draws the same line.
+export function isUserProfileActivePaidSubscriber(
+    profile: UserProfile | null | undefined,
+): boolean {
+    if (!profile) return false;
+    return profile.subscriptionStatus === "active" && profile.subscriptionRawStatus !== "trialing";
+}

@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { X } from "lucide-react";
 import type { PromotionFields } from "@/lib/contentful/contentful";
 import { trackAmplitudeEvent } from "@/lib/analytics/amplitude-client";
@@ -30,12 +31,21 @@ function dismissedBeforePaintScript(promotionId: string) {
 
 export function PromotionBanner({ promotion }: PromotionBannerProps) {
     const pathname = usePathname() ?? "";
+    const { status: sessionStatus } = useSession();
 
-    // Visible by default so the server-rendered page carries the banner with no
-    // flash for the common case (a visitor who hasn't dismissed anything yet).
-    // A visitor who dismissed it is handled before paint by the script above.
+    // Defaults to not-dismissed. A visitor who already dismissed this Promotion
+    // is handled before paint by the script above, so this default only matters
+    // for the render(s) before the effect below confirms it either way.
     const [dismissed, setDismissed] = useState(false);
     const [checkedDismissal, setCheckedDismissal] = useState(false);
+    // An existing paying subscriber isn't this Promotion's audience (ADR-0005
+    // decision 5 is about new checkouts, not existing ones), but nothing about that
+    // is knowable server-side — the marketing pages stay session-agnostic on purpose
+    // (ADR-0003). Defaults to not-hidden; `subscriberCheckPending` below keeps the
+    // banner from rendering at all until this resolves one way or the other, so a
+    // subscriber never sees it flash on before disappearing.
+    const [hideForSubscriber, setHideForSubscriber] = useState(false);
+    const [checkedSubscriberStatus, setCheckedSubscriberStatus] = useState(false);
     const [impressionTracked, setImpressionTracked] = useState(false);
 
     useEffect(() => {
@@ -44,18 +54,50 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
         setCheckedDismissal(true);
     }, [promotion.id]);
 
+    useEffect(() => {
+        if (sessionStatus === "loading") return;
+        if (sessionStatus !== "authenticated") {
+            setCheckedSubscriberStatus(true);
+            return;
+        }
+
+        let cancelled = false;
+        fetch("/api/billing/subscription-status")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+                if (cancelled) return;
+                setHideForSubscriber(Boolean(data?.activePaidSubscriber));
+            })
+            .catch(() => { })
+            .finally(() => {
+                if (cancelled) return;
+                setCheckedSubscriberStatus(true);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [sessionStatus]);
+
     const suppressed = isSuppressedPath(pathname);
-    const visible = !dismissed && !suppressed;
+    // True until we know whether to hide for a subscriber: either the session
+    // itself hasn't resolved, or it resolved authenticated and the follow-up
+    // subscription-status fetch hasn't landed yet. Gating on this means the
+    // banner waits to render rather than rendering and then retracting.
+    const subscriberCheckPending =
+        sessionStatus === "loading" ||
+        (sessionStatus === "authenticated" && !checkedSubscriberStatus);
+    const visible = !dismissed && !suppressed && !hideForSubscriber && !subscriberCheckPending;
 
     useEffect(() => {
-        // Wait for the dismissal check. Without this, a visitor who already dismissed
-        // this exact Promotion still logs a "Viewed" event in the instant before the
-        // banner hides itself — both effects fire on the same first render, where
-        // `dismissed` still holds its pre-check default.
-        if (!checkedDismissal || !visible || impressionTracked) return;
+        // Waits for both checks. Without this, a visitor the banner is about to hide
+        // — already dismissed, or an existing subscriber — still logs a "Viewed" event
+        // in the instant before it does, since all these effects fire off the same
+        // first render, where the hiding state still holds its visible-by-default value.
+        if (!checkedDismissal || !checkedSubscriberStatus || !visible || impressionTracked) return;
         setImpressionTracked(true);
         trackAmplitudeEvent("Promotion Banner Viewed", { promotion_id: promotion.id });
-    }, [checkedDismissal, visible, impressionTracked, promotion.id]);
+    }, [checkedDismissal, checkedSubscriberStatus, visible, impressionTracked, promotion.id]);
 
     if (!visible) return null;
 
