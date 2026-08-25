@@ -33,31 +33,28 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
     const pathname = usePathname() ?? "";
     const { status: sessionStatus } = useSession();
 
-    // Defaults to not-dismissed. A visitor who already dismissed this Promotion
-    // is handled before paint by the script above, so this default only matters
-    // for the render(s) before the effect below confirms it either way.
-    const [dismissed, setDismissed] = useState(false);
-    const [checkedDismissal, setCheckedDismissal] = useState(false);
-    // An existing paying subscriber isn't this Promotion's audience (ADR-0005
-    // decision 5 is about new checkouts, not existing ones), but nothing about that
-    // is knowable server-side — the marketing pages stay session-agnostic on purpose
-    // (ADR-0003). Defaults to not-hidden; `subscriberCheckPending` below keeps the
-    // banner from rendering at all until this resolves one way or the other, so a
-    // subscriber never sees it flash on before disappearing.
-    const [hideForSubscriber, setHideForSubscriber] = useState(false);
-    const [checkedSubscriberStatus, setCheckedSubscriberStatus] = useState(false);
+    // undefined = not yet checked. Dismissal fails open to "not dismissed" (matches the
+    // pre-paint script's job of hiding an already-dismissed visitor before this resolves).
+    const [dismissed, setDismissed] = useState<boolean | undefined>(undefined);
+    // undefined = not yet checked. Unlike dismissal, this fails *closed*: nothing about
+    // subscriber status is knowable server-side (marketing pages stay session-agnostic,
+    // ADR-0003), so `subscriberCheckPending` below holds the banner unrendered rather
+    // than showing it and retracting once a subscriber (ADR-0005 decision 5) is found.
+    const [hideForSubscriber, setHideForSubscriber] = useState<boolean | undefined>(undefined);
     const [impressionTracked, setImpressionTracked] = useState(false);
+
+    const checkedDismissal = dismissed !== undefined;
+    const checkedSubscriberStatus = hideForSubscriber !== undefined;
 
     useEffect(() => {
         const storedId = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
         setDismissed(storedId === promotion.id);
-        setCheckedDismissal(true);
     }, [promotion.id]);
 
     useEffect(() => {
         if (sessionStatus === "loading") return;
         if (sessionStatus !== "authenticated") {
-            setCheckedSubscriberStatus(true);
+            setHideForSubscriber(false);
             return;
         }
 
@@ -68,10 +65,10 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
                 if (cancelled) return;
                 setHideForSubscriber(Boolean(data?.activePaidSubscriber));
             })
-            .catch(() => { })
-            .finally(() => {
+            // A network error never reached .then above, so fail open to "not hidden".
+            .catch(() => {
                 if (cancelled) return;
-                setCheckedSubscriberStatus(true);
+                setHideForSubscriber((current) => current ?? false);
             });
 
         return () => {
@@ -80,20 +77,15 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
     }, [sessionStatus]);
 
     const suppressed = isSuppressedPath(pathname);
-    // True until we know whether to hide for a subscriber: either the session
-    // itself hasn't resolved, or it resolved authenticated and the follow-up
-    // subscription-status fetch hasn't landed yet. Gating on this means the
-    // banner waits to render rather than rendering and then retracting.
+    // Holds the banner unrendered until we know whether to hide it for a subscriber.
     const subscriberCheckPending =
         sessionStatus === "loading" ||
         (sessionStatus === "authenticated" && !checkedSubscriberStatus);
-    const visible = !dismissed && !suppressed && !hideForSubscriber && !subscriberCheckPending;
+    const visible = dismissed !== true && !suppressed && hideForSubscriber !== true && !subscriberCheckPending;
 
     useEffect(() => {
-        // Waits for both checks. Without this, a visitor the banner is about to hide
-        // — already dismissed, or an existing subscriber — still logs a "Viewed" event
-        // in the instant before it does, since all these effects fire off the same
-        // first render, where the hiding state still holds its visible-by-default value.
+        // Waits for both checks, so a visitor the banner is about to hide for doesn't
+        // log a "Viewed" event in the instant before it does.
         if (!checkedDismissal || !checkedSubscriberStatus || !visible || impressionTracked) return;
         setImpressionTracked(true);
         trackAmplitudeEvent("Promotion Banner Viewed", { promotion_id: promotion.id });

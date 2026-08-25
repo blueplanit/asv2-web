@@ -99,6 +99,75 @@ function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
     );
 }
 
+type PriceDisplayProps = {
+    variant: "card" | "sticky";
+    loading: boolean;
+    price: string;
+    intervalLabel: string;
+    discountedPrice: string | null;
+    percentOff: number | null;
+};
+
+// Shared by the main plan card and the mobile sticky bar, so the loading /
+// discounted / plain-price decision can't drift between the two surfaces.
+function PriceDisplay({ variant, loading, price, intervalLabel, discountedPrice, percentOff }: PriceDisplayProps) {
+    if (variant === "card") {
+        if (loading) {
+            return (
+                <div className="flex items-end gap-2">
+                    <span className="inline-block h-10 w-28 animate-pulse rounded-md bg-slate-200/80 align-bottom" />
+                    <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-slate-200/60 align-bottom" />
+                </div>
+            );
+        }
+        if (discountedPrice) {
+            return (
+                <div className="flex flex-col gap-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">
+                        Promotional price
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <span className="text-base font-medium text-slate-400 line-through">{price}</span>
+                        {percentOff !== null && (
+                            <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-emerald-500/30">
+                                Save {percentOff}%
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-end gap-2">
+                        <span className="text-4xl font-semibold tracking-tight text-slate-900">{discountedPrice}</span>
+                        <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="flex items-end gap-2">
+                <span className="text-4xl font-semibold tracking-tight text-slate-900">{price}</span>
+                <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
+            </div>
+        );
+    }
+
+    if (loading) return <p className="text-sm font-semibold text-slate-900">Loading...</p>;
+    if (discountedPrice) {
+        return (
+            <div className="flex flex-col items-end gap-0.5">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400 line-through">{price}</span>
+                    {percentOff !== null && (
+                        <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                            Save {percentOff}%
+                        </span>
+                    )}
+                </div>
+                <span className="text-sm font-semibold text-slate-900">{discountedPrice}{intervalLabel}</span>
+            </div>
+        );
+    }
+    return <p className="text-sm font-semibold text-slate-900">{price}{intervalLabel}</p>;
+}
+
 export function PricingClient({ copy }: PricingClientProps) {
     // The page is static, so the session is read here rather than on the server.
     // status is "loading" until next-auth answers.
@@ -326,35 +395,14 @@ export function PricingClient({ copy }: PricingClientProps) {
                                 </div>
 
                                 <div aria-live="polite" aria-busy={pricingLoading}>
-                                    {pricingLoading ? (
-                                        <div className="flex items-end gap-2">
-                                            <span className="inline-block h-10 w-28 animate-pulse rounded-md bg-slate-200/80 align-bottom" />
-                                            <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-slate-200/60 align-bottom" />
-                                        </div>
-                                    ) : discountedPrice ? (
-                                        <div className="flex flex-col gap-2">
-                                            <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">
-                                                Promotional price
-                                            </p>
-                                            <div className="flex flex-wrap items-center gap-2.5">
-                                                <span className="text-base font-medium text-slate-400 line-through">{price}</span>
-                                                {percentOff !== null && (
-                                                    <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-emerald-500/30">
-                                                        Save {percentOff}%
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-end gap-2">
-                                                <span className="text-4xl font-semibold tracking-tight text-slate-900">{discountedPrice}</span>
-                                                <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-end gap-2">
-                                            <span className="text-4xl font-semibold tracking-tight text-slate-900">{price}</span>
-                                            <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
-                                        </div>
-                                    )}
+                                    <PriceDisplay
+                                        variant="card"
+                                        loading={pricingLoading}
+                                        price={price}
+                                        intervalLabel={intervalLabel}
+                                        discountedPrice={discountedPrice}
+                                        percentOff={percentOff}
+                                    />
                                 </div>
 
                                 <ul className="space-y-2">
@@ -448,25 +496,16 @@ export function PricingClient({ copy }: PricingClientProps) {
 
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
                 <div className="mx-auto max-w-xl">
-                    <div className="mb-2 flex items-center justify-between">
+                    <div className={`mb-2 flex justify-between ${discountedPrice ? "items-center" : "items-baseline"}`}>
                         <p className="text-xs font-medium text-slate-600">{copy.plan.name}</p>
-                        {pricingLoading ? (
-                            <p className="text-sm font-semibold text-slate-900">Loading...</p>
-                        ) : discountedPrice ? (
-                            <div className="flex flex-col items-end gap-0.5">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[11px] text-slate-400 line-through">{price}</span>
-                                    {percentOff !== null && (
-                                        <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                                            Save {percentOff}%
-                                        </span>
-                                    )}
-                                </div>
-                                <span className="text-sm font-semibold text-slate-900">{discountedPrice}{intervalLabel}</span>
-                            </div>
-                        ) : (
-                            <p className="text-sm font-semibold text-slate-900">{price}{intervalLabel}</p>
-                        )}
+                        <PriceDisplay
+                            variant="sticky"
+                            loading={pricingLoading}
+                            price={price}
+                            intervalLabel={intervalLabel}
+                            discountedPrice={discountedPrice}
+                            percentOff={percentOff}
+                        />
                     </div>
                     <button
                         type="button"

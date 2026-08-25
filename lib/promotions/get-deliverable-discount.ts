@@ -11,12 +11,8 @@ export type DeliverableDiscount = {
     coupon: Stripe.Coupon;
 };
 
-// The active Promotion plus its live Stripe discount, or null when none can be
-// delivered. Never throws: an unreadable or stale Promotion Code means full price,
-// not a broken page or a dead Subscribe button.
-//
-// The pricing display and checkout share this so they cannot disagree about whether
-// a Promotion is usable. See docs/adr/0005-promotions-sourced-from-stripe.md.
+// The active Promotion plus its live Stripe discount, or null if undeliverable. Never
+// throws, so a bad Promotion Code means full price, never a broken page or dead button.
 export async function getDeliverableDiscount(): Promise<DeliverableDiscount | null> {
     let promotion: PromotionFields | null = null;
 
@@ -45,9 +41,8 @@ export async function getDeliverableDiscount(): Promise<DeliverableDiscount | nu
     }
 }
 
-// Whether a discount can honestly be shown as the ongoing per-interval price. A
-// `once` or `repeating` coupon still applies at checkout, but stating it as the rate
-// would be false from the next invoice on. See ADR-0005 decision 7.
+// True only for a `forever` coupon — a `once`/`repeating` coupon still applies at
+// checkout, but showing it as the ongoing rate would be false after the next invoice.
 export function isOngoingDiscount(coupon: Stripe.Coupon): boolean {
     return coupon.duration === "forever";
 }

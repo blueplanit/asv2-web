@@ -12,19 +12,9 @@ const promotionFieldsSchema = z.object({
     showInProduction: z.boolean().optional(),
 });
 
-// Reads the currently active Promotion, or null when none should be shown.
-//
-// The fallback sits outside the cached read, so a Contentful outage never stores it
-// — see docs/adr/0003-contentful-delivery-quota.md point 7. This wrapper exists
-// (rather than every caller catching its own) because a Promotion is decorative on
-// every marketing page it touches, not core page content like a Copy Config entry:
-// an uncaught error here would fail the render of every marketing page, not just
-// omit a banner. "No promotion" is the one correct fallback for every consumer —
-// the banner, pricing display, checkout — so there is no per-caller default to lose
-// by sharing it here.
-//
-// A malformed entry (a required field missing or blank) also falls back to null
-// rather than rendering a banner with holes in it — same failure mode, same fix.
+// Reads the currently active Promotion, or null when none should be shown. Never
+// throws — a Contentful error or a malformed entry falls back to null outside the
+// cache, so an outage or a bad entry never fails a marketing page's render.
 export async function getActivePromotion(): Promise<PromotionFields | null> {
     try {
         const entry = await getActivePromotionEntry();

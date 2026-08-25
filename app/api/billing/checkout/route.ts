@@ -43,10 +43,8 @@ export async function POST(req: Request) {
     // code rather than the one campaign that is live. See ADR-0005 decision 4.
     const discount = await getDeliverableDiscount();
 
-    // Only a discounted session needs a real Customer, so Stripe can evaluate the
-    // Promotion Code against one (ADR-0005 decision 6). Without a discount the older
-    // customer_email path stands, which keeps this route unchanged outside a campaign
-    // and creates no Customer record for a checkout the visitor abandons.
+    // Only a discounted session resolves a real Customer, so Stripe can evaluate the
+    // Promotion Code against one (ADR-0005 decision 6); otherwise customer_email stands.
     const customerParams = discount
         ? { customer: await ensureStripeCustomerId(userId, userProfile) }
         : userProfile.subscriptionCustomerId
@@ -56,9 +54,8 @@ export async function POST(req: Request) {
     const successUrl = `${process.env.NEXTAUTH_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.NEXTAUTH_URL}/pricing?canceled=1`;
 
-    // Takes the discount rather than a flag, so one value decides both the metadata and
-    // the Stripe params. promotionId reaches SUBSCRIPTION_PAID through subscription
-    // metadata, so a full-price retry writes none and never reports itself as promoted.
+    // Takes the discount, not a flag, so one value decides both metadata and Stripe params —
+    // a full-price retry then naturally omits promotionId instead of reporting itself as promoted.
     function sessionParams(
         applied: DeliverableDiscount | null,
     ): Stripe.Checkout.SessionCreateParams {
@@ -93,10 +90,8 @@ export async function POST(req: Request) {
         try {
             checkoutSession = await stripeBilling.checkout.sessions.create(sessionParams(discount));
         } catch (err) {
-            // Retry unconditionally: Stripe documents throw-shaped errors for a code it
-            // will not apply, but not whether they fire here, and full price beats a dead
-            // Subscribe button. An unrelated failure lands here too and fails on the
-            // retry, so this log says the attempt failed, not why. See ADR-0005.
+            // Retries unconditionally at full price rather than fail the Subscribe button —
+            // Stripe doesn't document whether an inapplicable code throws here. See ADR-0005.
             console.error(
                 `checkout: session creation failed with Promotion ${discount.promotion.id} applied, retrying at full price`,
                 err,
