@@ -8,9 +8,8 @@ export default async function MarketingLayout({ children }: { children: React.Re
 
     return (
         <div className="min-h-screen flex flex-col">
-            {/* key forces a fresh instance per Promotion, so dismissal/impression
-                state from a prior Promotion can never leak into a new one if the
-                segment re-renders without a full navigation. */}
+            {/* key forces a fresh instance per Promotion, so a prior Promotion's
+                dismissal/impression state can never leak into a new one. */}
             {promotion && <PromotionBanner key={promotion.id} promotion={promotion} />}
             <SiteHeader variant="public" />
             <div className="flex-1">{children}</div>

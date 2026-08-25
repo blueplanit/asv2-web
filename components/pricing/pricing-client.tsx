@@ -108,6 +108,22 @@ type PriceDisplayProps = {
     percentOff: number | null;
 };
 
+// The "Save X%" pill, shared by the card and sticky variants below — same shape,
+// different sizing.
+function DiscountBadge({ percentOff, size }: { percentOff: number; size: "md" | "sm" }) {
+    const sizeClasses =
+        size === "md"
+            ? "px-2.5 py-1 text-xs shadow-sm shadow-emerald-500/30"
+            : "px-1.5 py-0.5 text-[9px]";
+    return (
+        <span
+            className={`animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 font-bold text-white ${sizeClasses}`}
+        >
+            Save {percentOff}%
+        </span>
+    );
+}
+
 // Shared by the main plan card and the mobile sticky bar, so the loading /
 // discounted / plain-price decision can't drift between the two surfaces.
 function PriceDisplay({ variant, loading, price, intervalLabel, discountedPrice, percentOff }: PriceDisplayProps) {
@@ -128,11 +144,7 @@ function PriceDisplay({ variant, loading, price, intervalLabel, discountedPrice,
                     </p>
                     <div className="flex flex-wrap items-center gap-2.5">
                         <span className="text-base font-medium text-slate-400 line-through">{price}</span>
-                        {percentOff !== null && (
-                            <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-emerald-500/30">
-                                Save {percentOff}%
-                            </span>
-                        )}
+                        {percentOff !== null && <DiscountBadge percentOff={percentOff} size="md" />}
                     </div>
                     <div className="flex items-end gap-2">
                         <span className="text-4xl font-semibold tracking-tight text-slate-900">{discountedPrice}</span>
@@ -155,11 +167,7 @@ function PriceDisplay({ variant, loading, price, intervalLabel, discountedPrice,
             <div className="flex flex-col items-end gap-0.5">
                 <div className="flex items-center gap-1.5">
                     <span className="text-[11px] text-slate-400 line-through">{price}</span>
-                    {percentOff !== null && (
-                        <span className="animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                            Save {percentOff}%
-                        </span>
-                    )}
+                    {percentOff !== null && <DiscountBadge percentOff={percentOff} size="sm" />}
                 </div>
                 <span className="text-sm font-semibold text-slate-900">{discountedPrice}{intervalLabel}</span>
             </div>

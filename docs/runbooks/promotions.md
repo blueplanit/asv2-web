@@ -8,7 +8,7 @@ A Promotion spans two systems. Stripe holds the discount. Contentful holds the b
 
 You need dashboard access to Stripe and to the Contentful space.
 
-Stripe is the source of truth for the discount amount. Contentful never stores a percentage. Publishing a Contentful entry is the only thing that starts a campaign.
+Stripe is the source of truth for the discount amount. Contentful never stores a percentage. Publishing a Contentful entry is the only thing that starts a Promotion.
 
 ## Start a Promotion
 
@@ -24,7 +24,7 @@ Set **duration** to `forever`. A `once` or `repeating` coupon still applies at c
 
 Attach it to that Coupon.
 
-Set `max_redemptions`. Use 100 unless you have a reason for another figure. It bounds a campaign nobody remembers to end.
+Set `max_redemptions`. Use 100 unless you have a reason for another figure. It bounds a Promotion nobody remembers to end.
 
 Do **not** restrict it to first-time customers. Trial converters get the discount, and that restriction may silently refuse them.
 
@@ -49,7 +49,7 @@ Content type `promotionASv2`. **Always create a new entry. Never reuse an old on
 | `bannerHeadline` | the banner copy |
 | `ctaLabel` | the link text |
 | `ctaHref` | usually `/pricing` |
-| `showInProduction` | check it for a live campaign |
+| `showInProduction` | check it for a live Promotion |
 
 Write evergreen copy. Name the discount and call it limited-time. Do not state a deadline or imply one with "ends soon". No deadline exists, so claiming one deceives the visitor.
 
@@ -73,7 +73,7 @@ The banner goes, the full price returns, and checkout stops applying the discoun
 
 The site does not do this for you. Nothing in the app touches Stripe when you unpublish.
 
-This matters more than it looks. Stripe Checkout shows the customer-facing code to everyone who buys during a campaign, and the "have a promo code?" box returns once the campaign ends. Anyone who bought during the campaign can type the code and still redeem it.
+This matters more than it looks. Stripe Checkout shows the customer-facing code to everyone who buys during a Promotion, and the "have a promo code?" box returns once the Promotion ends. Anyone who bought during the Promotion can type the code and still redeem it.
 
 ## Replace one Promotion with another
 
@@ -87,7 +87,7 @@ Keep the old entry as an unpublished draft. It records what ran.
 
 ## Why a new entry every time
 
-A visitor who dismisses the banner has that dismissal stored against the entry's ID. Reuse the entry and the ID does not change, so **everyone who dismissed the last campaign never sees the new one**. Your most frequent visitors are the ones you lose, and nothing reports it.
+A visitor who dismisses the banner has that dismissal stored against the entry's ID. Reuse the entry and the ID does not change, so **everyone who dismissed the last Promotion never sees the new one**. Your most frequent visitors are the ones you lose, and nothing reports it.
 
 ## When something looks wrong
 

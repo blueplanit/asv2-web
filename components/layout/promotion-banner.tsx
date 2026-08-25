@@ -29,32 +29,30 @@ function dismissedBeforePaintScript(promotionId: string) {
     return `try{if(localStorage.getItem(${JSON.stringify(DISMISSED_STORAGE_KEY)})===${JSON.stringify(promotionId)}){var s=document.createElement("style");s.textContent="#${BANNER_ELEMENT_ID}{display:none}";document.head.appendChild(s);}}catch(e){}`;
 }
 
+// A pending check fails open for dismissal (matches the pre-paint script) but fails
+// closed for the subscriber check — nothing about that is knowable server-side.
+type CheckStatus = "pending" | "yes" | "no";
+
 export function PromotionBanner({ promotion }: PromotionBannerProps) {
     const pathname = usePathname() ?? "";
     const { status: sessionStatus } = useSession();
 
-    // undefined = not yet checked. Dismissal fails open to "not dismissed" (matches the
-    // pre-paint script's job of hiding an already-dismissed visitor before this resolves).
-    const [dismissed, setDismissed] = useState<boolean | undefined>(undefined);
-    // undefined = not yet checked. Unlike dismissal, this fails *closed*: nothing about
-    // subscriber status is knowable server-side (marketing pages stay session-agnostic,
-    // ADR-0003), so `subscriberCheckPending` below holds the banner unrendered rather
-    // than showing it and retracting once a subscriber (ADR-0005 decision 5) is found.
-    const [hideForSubscriber, setHideForSubscriber] = useState<boolean | undefined>(undefined);
+    const [dismissed, setDismissed] = useState<CheckStatus>("pending");
+    const [hideForSubscriber, setHideForSubscriber] = useState<CheckStatus>("pending");
     const [impressionTracked, setImpressionTracked] = useState(false);
 
-    const checkedDismissal = dismissed !== undefined;
-    const checkedSubscriberStatus = hideForSubscriber !== undefined;
+    const checkedDismissal = dismissed !== "pending";
+    const checkedSubscriberStatus = hideForSubscriber !== "pending";
 
     useEffect(() => {
         const storedId = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
-        setDismissed(storedId === promotion.id);
+        setDismissed(storedId === promotion.id ? "yes" : "no");
     }, [promotion.id]);
 
     useEffect(() => {
         if (sessionStatus === "loading") return;
         if (sessionStatus !== "authenticated") {
-            setHideForSubscriber(false);
+            setHideForSubscriber("no");
             return;
         }
 
@@ -63,12 +61,12 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
             .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
                 if (cancelled) return;
-                setHideForSubscriber(Boolean(data?.activePaidSubscriber));
+                setHideForSubscriber(data?.activePaidSubscriber ? "yes" : "no");
             })
             // A network error never reached .then above, so fail open to "not hidden".
             .catch(() => {
                 if (cancelled) return;
-                setHideForSubscriber((current) => current ?? false);
+                setHideForSubscriber((current) => (current === "pending" ? "no" : current));
             });
 
         return () => {
@@ -81,7 +79,7 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
     const subscriberCheckPending =
         sessionStatus === "loading" ||
         (sessionStatus === "authenticated" && !checkedSubscriberStatus);
-    const visible = dismissed !== true && !suppressed && hideForSubscriber !== true && !subscriberCheckPending;
+    const visible = dismissed !== "yes" && !suppressed && hideForSubscriber !== "yes" && !subscriberCheckPending;
 
     useEffect(() => {
         // Waits for both checks, so a visitor the banner is about to hide for doesn't
@@ -95,7 +93,7 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
 
     function handleDismiss() {
         window.localStorage.setItem(DISMISSED_STORAGE_KEY, promotion.id);
-        setDismissed(true);
+        setDismissed("yes");
         trackAmplitudeEvent("Promotion Banner Dismissed", { promotion_id: promotion.id });
     }
 
@@ -108,9 +106,8 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
             />
             {/* z-50 clears the site header, which is relative z-40 and sits later in the
                 DOM, so an equal z-index would let it paint over this while scrolling. */}
-            {/* Symmetric px-12 keeps the copy centred on the viewport while reserving a
-                gutter the absolutely positioned dismiss button sits in, so long copy
-                cannot run underneath it on a narrow screen. */}
+            {/* Symmetric px-12 reserves the gutter the absolutely positioned dismiss button
+                sits in, so long copy cannot run underneath it on a narrow screen. */}
             <div
                 id={BANNER_ELEMENT_ID}
                 className="sticky top-0 z-50 flex items-center justify-center bg-indigo-600 px-12 py-2.5 text-sm font-medium text-white"

@@ -253,21 +253,16 @@ const readActivePromotionEntry = async (production: boolean): Promise<PromotionE
         ),
     );
 
-    // Zero published entries: no promotion to show.
-    // More than one published: a content mistake. Showing neither makes the mistake
-    // visible instead of silently guessing which one is "the" active Promotion.
-    // See ADR-0005.
+    // Zero or more-than-one published entry both mean "no Promotion" — more than one
+    // is a content mistake, and showing neither makes it visible rather than guessing (ADR-0005).
     if (res.items.length !== 1) return null;
 
     const item = res.items[0];
     return { id: item.sys.id, fields: item.fields as Record<string, unknown> };
 };
 
-// Reads the currently active Promotion entry, or null when none is published (or
-// more than one is). Returns the entry's raw fields, unvalidated — like the reads
-// above, a Contentful error throws rather than resolving to null, and shape
-// validation is the caller's job. See lib/promotions/get-active-promotion.ts for
-// the schema-checked, safe wrapper every consumer uses.
+// Reads the currently active Promotion entry (raw, unvalidated fields), or null when
+// none or more than one is published. See get-active-promotion.ts for the safe wrapper.
 export const getActivePromotionEntry = (): Promise<PromotionEntry | null> =>
     unstable_cache(readActivePromotionEntry, ["active-promotion"], {
         revalidate: BACKSTOP_WINDOW_SECONDS,

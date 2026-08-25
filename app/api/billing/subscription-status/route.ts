@@ -8,9 +8,8 @@ import { isUserProfileActivePaidSubscriber } from "@/lib/app-state/subscription-
 
 export const runtime = "nodejs";
 
-// Lets a marketing page (session-agnostic, static — see ADR-0003) ask about the
-// current visitor without giving up its own static rendering. Per-user, so never
-// publicly cached.
+// Lets a marketing page (session-agnostic, static per ADR-0003) ask about the
+// current visitor without giving up static rendering. Per-user, so never cached.
 export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).userId) {

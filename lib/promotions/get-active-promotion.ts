@@ -12,9 +12,8 @@ const promotionFieldsSchema = z.object({
     showInProduction: z.boolean().optional(),
 });
 
-// Reads the currently active Promotion, or null when none should be shown. Never
-// throws — a Contentful error or a malformed entry falls back to null outside the
-// cache, so an outage or a bad entry never fails a marketing page's render.
+// Reads the currently active Promotion, or null when none should be shown.
+// Never throws — a bad entry or a Contentful error falls back to null outside the cache.
 export async function getActivePromotion(): Promise<PromotionFields | null> {
     try {
         const entry = await getActivePromotionEntry();
