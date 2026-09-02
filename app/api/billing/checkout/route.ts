@@ -19,10 +19,25 @@ type Body = {
     interval: BillingInterval;
     expectedPromotionId?: string | null;
     expectedPromotionVersion?: string | null;
+    // Set once the visitor has been told the Promotion cannot apply to them. Safe to
+    // accept from the client: it can only raise the price, never lower it.
+    skipPromotion?: boolean;
 };
 
-function checkoutError(code: "checkout_unavailable" | "price_changed", status: 409 | 503) {
+function checkoutError(
+    code: "checkout_unavailable" | "price_changed" | "promotion_not_applicable",
+    status: 409 | 503,
+) {
     return NextResponse.json({ code }, { status });
+}
+
+// Stripe rejects a Promotion Code this customer cannot redeem, for example one held to
+// first-time buyers. Retrying repeats the same rejection, so the visitor is offered the
+// full price instead of being told to try again.
+function isPromotionNotApplicable(err: unknown): boolean {
+    if (!err || typeof err !== "object") return false;
+    const code = (err as { code?: unknown }).code;
+    return typeof code === "string" && code.startsWith("promotion_code_");
 }
 
 function isMissingStripeCustomer(err: unknown): boolean {
@@ -75,6 +90,10 @@ export async function POST(req: Request) {
         return checkoutError("price_changed", 409);
     }
 
+    // Checked against the live Promotion above, then dropped only because the visitor
+    // was told it cannot apply to them and chose the full price.
+    const appliedDiscount = body.skipPromotion ? null : discount;
+
     const storedCustomerParams = userProfile.subscriptionCustomerId
         ? { customer: userProfile.subscriptionCustomerId }
         : { customer_email: userProfile.email };
@@ -116,9 +135,20 @@ export async function POST(req: Request) {
     let checkoutSession: Stripe.Checkout.Session;
     try {
         checkoutSession = await stripeBilling.checkout.sessions.create(
-            sessionParams(storedCustomerParams, discount),
+            sessionParams(storedCustomerParams, appliedDiscount),
         );
     } catch (err) {
+        // Permanent for this customer, so the client offers the full price rather than
+        // a retry that would fail identically.
+        if (appliedDiscount && isPromotionNotApplicable(err)) {
+            console.error("checkout: Promotion cannot be redeemed by this customer", {
+                userId,
+                promotionId: appliedDiscount.promotion.id,
+                err,
+            });
+            return checkoutError("promotion_not_applicable", 409);
+        }
+
         // A deleted stored Customer is safe to replace. Keep every other parameter,
         // especially the Promotion Code, identical on the retry.
         if (userProfile.subscriptionCustomerId && isMissingStripeCustomer(err)) {
@@ -128,7 +158,7 @@ export async function POST(req: Request) {
             });
             try {
                 checkoutSession = await stripeBilling.checkout.sessions.create(
-                    sessionParams({ customer_email: userProfile.email }, discount),
+                    sessionParams({ customer_email: userProfile.email }, appliedDiscount),
                 );
             } catch (retryErr) {
                 console.error("checkout: session creation failed after replacing missing Customer", {
@@ -140,7 +170,7 @@ export async function POST(req: Request) {
         } else {
             console.error("checkout: session creation failed", {
                 userId,
-                promotionId: discount?.promotion.id ?? null,
+                promotionId: appliedDiscount?.promotion.id ?? null,
                 err,
             });
             return checkoutError("checkout_unavailable", 503);

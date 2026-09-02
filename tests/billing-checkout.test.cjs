@@ -44,7 +44,7 @@ function loadCheckoutRoute({ discount, profile, createSession, ensureCustomer })
     return loadTypeScriptModule(routePath, dependencies).POST;
 }
 
-function checkoutRequest(expectedPromotionId, expectedPromotionVersion) {
+function checkoutRequest(expectedPromotionId, expectedPromotionVersion, skipPromotion) {
     return new Request("https://example.com/api/billing/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -54,6 +54,7 @@ function checkoutRequest(expectedPromotionId, expectedPromotionVersion) {
             expectedPromotionId,
             expectedPromotionVersion:
                 expectedPromotionVersion ?? `${expectedPromotionId}:promo_code_123`,
+            skipPromotion,
         }),
     });
 }
@@ -62,6 +63,46 @@ const deliverableDiscount = {
     promotion: { id: "promotion-123" },
     promotionCodeId: "promo_code_123",
 };
+
+test("a Promotion this customer cannot redeem offers the full price instead of a retry", async () => {
+    const createCalls = [];
+    const POST = loadCheckoutRoute({
+        discount: deliverableDiscount,
+        profile: { email: "buyer@example.com" },
+        createSession: async (params) => {
+            createCalls.push(params);
+            throw { code: "promotion_code_customer_not_first_time", statusCode: 400 };
+        },
+        ensureCustomer: async () => "cus_unused",
+    });
+
+    const response = await POST(checkoutRequest("promotion-123"));
+    const body = await response.json();
+
+    assert.equal(response.status, 409);
+    assert.equal(body.code, "promotion_not_applicable");
+    assert.equal(createCalls.length, 1);
+});
+
+test("an acknowledged full price checks out while the Promotion is still live", async () => {
+    const createCalls = [];
+    const POST = loadCheckoutRoute({
+        discount: deliverableDiscount,
+        profile: { email: "buyer@example.com" },
+        createSession: async (params) => {
+            createCalls.push(params);
+            return { url: "https://checkout.stripe.test/full-price" };
+        },
+        ensureCustomer: async () => "cus_unused",
+    });
+
+    const response = await POST(checkoutRequest("promotion-123", undefined, true));
+
+    assert.equal(response.status, 200);
+    assert.equal(createCalls[0].discounts, undefined);
+    assert.equal(createCalls[0].allow_promotion_codes, true);
+    assert.equal(createCalls[0].metadata.promotionId, undefined);
+});
 
 test("discounted checkout has no pre-checkout Customer or DynamoDB dependency", async () => {
     const createCalls = [];

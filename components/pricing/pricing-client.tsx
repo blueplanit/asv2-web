@@ -196,7 +196,10 @@ export function PricingClient({ copy }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
     const [showSignedInHint, setShowSignedInHint] = useState(false);
-    const [checkoutError, setCheckoutError] = useState<string | null>(null);
+    const [checkoutNotice, setCheckoutNotice] = useState<{ title: string; description: string } | null>(null);
+    // Set once checkout reports the Promotion cannot apply to this account, so the next
+    // attempt asks for the full price rather than repeating the same rejection.
+    const [skipPromotion, setSkipPromotion] = useState(false);
     const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
     const [pricingLoading, setPricingLoading] = useState(true);
     const [promotionId, setPromotionId] = useState<string | null>(null);
@@ -261,7 +264,7 @@ export function PricingClient({ copy }: PricingClientProps) {
     }, [justLoggedIn]);
 
     async function handleSelectPlan() {
-        setCheckoutError(null);
+        setCheckoutNotice(null);
         // Both snackbars occupy the same slot, and the hint has served its purpose
         // once the visitor acts on the page.
         setShowSignedInHint(false);
@@ -299,6 +302,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                     interval,
                     expectedPromotionId: promotionId,
                     expectedPromotionVersion: promotionVersion,
+                    skipPromotion,
                 }),
             });
             if (!res.ok) {
@@ -310,7 +314,15 @@ export function PricingClient({ copy }: PricingClientProps) {
                     code: errorBody?.code,
                 });
 
-                if (res.status === 409 && errorBody?.code === "price_changed") {
+                const isPriceChanged = res.status === 409 && errorBody?.code === "price_changed";
+                const isPromotionNotApplicable =
+                    res.status === 409 && errorBody?.code === "promotion_not_applicable";
+
+                if (isPriceChanged || isPromotionNotApplicable) {
+                    // A changed Promotion resets the acknowledgement, since the offer the
+                    // visitor was refused is no longer the one on the page.
+                    setSkipPromotion(isPromotionNotApplicable);
+
                     const controller = new AbortController();
                     const timeoutId = window.setTimeout(() => controller.abort(), 8000);
                     setPricingLoading(true);
@@ -320,24 +332,41 @@ export function PricingClient({ copy }: PricingClientProps) {
                             setBillingDisplay(currentPricing.billingDisplay);
                             setPromotionId(currentPricing.promotionId ?? null);
                             setPromotionVersion(currentPricing.promotionVersion ?? null);
-                            setCheckoutError(
-                                "The promotional offer changed before checkout. We've refreshed the price — please review it and try again.",
-                            );
-                        } else {
-                            setCheckoutError(
-                                "The promotional offer changed before checkout. Please refresh the page to review the current price.",
-                            );
                         }
-                    } catch {
-                        setCheckoutError(
-                            "The promotional offer changed before checkout. Please refresh the page to review the current price.",
+                        const fullPrice = currentPricing?.billingDisplay?.[interval] ?? billingDisplay[interval];
+                        setCheckoutNotice(
+                            isPromotionNotApplicable
+                                ? {
+                                    title: "Promotion not applied",
+                                    description: `This promotion isn't available on your account, usually because a discount was already used. No charge was made. Start checkout again to continue at ${fullPrice.price}${fullPrice.intervalLabel}.`,
+                                }
+                                : currentPricing?.billingDisplay
+                                    ? {
+                                        title: "The price changed",
+                                        description:
+                                            "The promotional offer changed before checkout. No charge was made. We've refreshed the price, so please review it and try again.",
+                                    }
+                                    : {
+                                        title: "The price changed",
+                                        description:
+                                            "The promotional offer changed before checkout. No charge was made. Please refresh the page to review the current price.",
+                                    },
                         );
+                    } catch {
+                        setCheckoutNotice({
+                            title: isPromotionNotApplicable ? "Promotion not applied" : "The price changed",
+                            description:
+                                "The offer changed before checkout. No charge was made. Please refresh the page to review the current price.",
+                        });
                     } finally {
                         window.clearTimeout(timeoutId);
                         setPricingLoading(false);
                     }
                 } else {
-                    setCheckoutError("We couldn't start checkout. No charge was made. Please try again.");
+                    setCheckoutNotice({
+                        title: "Checkout didn't start",
+                        description: "We couldn't start checkout. No charge was made. Please try again.",
+                    });
                 }
                 setLoading(false);
                 return;
@@ -353,7 +382,10 @@ export function PricingClient({ copy }: PricingClientProps) {
                 trackAmplitudeError("Checkout Session Failed", "Checkout URL missing", {
                     interval,
                 });
-                setCheckoutError("We couldn't start checkout. No charge was made. Please try again.");
+                setCheckoutNotice({
+                    title: "Checkout didn't start",
+                    description: "We couldn't start checkout. No charge was made. Please try again.",
+                });
                 setLoading(false);
             }
         } catch (err) {
@@ -361,7 +393,10 @@ export function PricingClient({ copy }: PricingClientProps) {
             trackAmplitudeError("Checkout Session Failed", err, {
                 interval,
             });
-            setCheckoutError("We couldn't start checkout. No charge was made. Please try again.");
+            setCheckoutNotice({
+                title: "Checkout didn't start",
+                description: "We couldn't start checkout. No charge was made. Please try again.",
+            });
             setLoading(false);
         }
     }
@@ -401,11 +436,11 @@ export function PricingClient({ copy }: PricingClientProps) {
             {/* Stays until dismissed: a checkout the visitor must retry should not
                 disappear on its own while they are reading it. */}
             <Snackbar
-                open={checkoutError !== null}
-                onClose={() => setCheckoutError(null)}
+                open={checkoutNotice !== null}
+                onClose={() => setCheckoutNotice(null)}
                 variant="error"
-                title="Checkout didn't start"
-                description={checkoutError ?? undefined}
+                title={checkoutNotice?.title ?? ""}
+                description={checkoutNotice?.description}
                 animated
                 autoHideMs={0}
             />
