@@ -27,9 +27,9 @@ Automating it was specified and then dropped. Contentful sends a tombstone for `
 
 What the automation would have closed is narrow. After unpublishing, nothing is applied automatically; the exposure is someone who learned the customer-facing code string typing it into Stripe's promo field, which `expires_at` and `max_redemptions` already bound. Starting a Promotion is already a deliberate two-system act — create the code in Stripe, name it in Contentful, publish. Ending it the same way is symmetric, and one dashboard click.
 
-### 4. Checkout determines the active promotion itself
+### 4. Checkout determines the Promotion itself
 
-`/api/billing/checkout` re-reads the currently-published Promotion entry server-side, rather than trusting a promotion code ID supplied by the client — a client-supplied ID could name any currently-valid Stripe code, not necessarily the one Promotion that's actually live.
+`/api/billing/checkout` re-reads the currently-published Promotion entry server-side, rather than trusting a Promotion Code ID supplied by the client. The client sends an opaque version for the Deliverable Discount it displayed only as an optimistic concurrency check. The version covers both the Contentful entry and its Stripe Promotion Code. If either changed, checkout stops and the pricing page refreshes instead of silently opening at a different price.
 
 ### 5. Anyone who reaches checkout during a Promotion is eligible
 
@@ -37,15 +37,17 @@ Promotion Codes carry no `restrictions.first_time_transaction`. Every visitor wh
 
 An earlier draft restricted Promotions to first-time customers. Stripe does not document whether a never-charged trial counts as a prior transaction, so that restriction risked silently refusing the discount to trial converters — the segment most likely to buy. A promise the banner makes and checkout declines is the failure this ADR exists to prevent, so eligibility is deliberately wide. A returning canceled customer also qualifies; that reads as win-back, not a leak. `max_redemptions` is what bounds the exposure.
 
-### 6. A discount never breaks the checkout button
+### 6. Checkout never silently changes the advertised price
 
-Two guards, because the price shown and the price charged must not diverge into a dead end:
+Two guards keep the price shown and the price charged aligned without creating a dead end:
 
 `discounts` and `allow_promotion_codes` are mutually exclusive on one Checkout Session, so a live Promotion deletes the latter key. Setting it to `null` or `false` still trips Stripe's exclusivity error.
 
-If creating the discounted session throws, checkout retries once without the discount and logs at error level. Stripe documents throw-shaped errors for inapplicable codes but not whether they fire at session creation. A wrong guess would break the Subscribe button mid-Promotion, so the retry covers the cases the docs leave open. The error log matters: reaching it means the banner is advertising a discount the customer will not receive.
+If creating a discounted session fails, checkout does not retry at full price. It returns a temporary error, keeps the visitor on `/pricing`, and lets them try again. If the Promotion changed since `/pricing` loaded, the page refreshes the displayed price and asks the visitor to review it before another attempt.
 
-A discounted session also resolves a real Stripe Customer via `ensureStripeCustomerId` rather than passing `customer_email`, so eligibility evaluates against a known customer. Only a discounted session does. Outside a Promotion the older `customer_email` path stands, so checkout is unchanged there and an abandoned checkout leaves no Customer record behind.
+Checkout passes a stored Stripe Customer when one exists and otherwise passes `customer_email`. Subscription-mode Checkout creates the Customer itself, so starting checkout needs no Customer creation or DynamoDB write. A missing stored Customer is retried with `customer_email` only when Stripe identifies the `customer` parameter as the missing resource; the Promotion Code remains on that retry.
+
+The subscription webhook is the primary path that writes Stripe's Customer, subscription, plan, interval, period end, and status into the User profile. The billing success page independently reconciles the same state. A DynamoDB failure returns a webhook error so Stripe retries; a conditional failure counts as success only after a read proves that the complete intended state is already stored. The success page reports activation only after reconciliation succeeds.
 
 ### 7. Only a `forever` coupon gets a struck-through price
 
@@ -58,7 +60,7 @@ A `once` coupon on a monthly plan discounts the first month alone. Rendering "$1
 - While a Promotion is live, Stripe Checkout's manual "have a promo code?" field disappears (`discounts` and `allow_promotion_codes` are mutually exclusive on one session). A support-issued one-off code can't be combined with an active Promotion.
 - At most one Promotion entry may be published at a time; if two are published by mistake, the site shows none rather than guessing.
 - The discount applies uniformly to both billing intervals — Stripe restricts coupons by Product, not by individual Price, so interval-specific promotions aren't reliably supported without confirming the monthly/yearly Prices sit under separate Products.
-- A Promotion Code that exhausts `max_redemptions` goes permanently inactive while its Contentful entry stays published. The banner keeps advertising the discount until someone unpublishes it. The error log from decision 6 is the only signal.
+- A Promotion Code that exhausts `max_redemptions` goes permanently inactive while its Contentful entry stays published. The banner remains until someone unpublishes it, but checkout will not silently replace a previously displayed promotional price.
 - Eligibility is wide by design (decision 5), so a Promotion discounts trial converters and returning customers alongside new ones. Model Promotion cost against every visitor who can reach checkout, not against new signups.
-- **A stored `subscriptionCustomerId` that Stripe cannot resolve fails checkout with a 500, and the retry cannot recover it.** `customerParams` is built once, before the retry, so both attempts send the same customer. The retry only drops the discount. Deleting a customer in Stripe therefore breaks that one user's checkout permanently and silently, and any environment running a test key against live-mode ids breaks every checkout — which is what a Vercel preview against the production table would do. Widening the retry to also drop the customer was considered and rejected: the catch is deliberately broad, so a transient Stripe error would then mint a duplicate Customer for a user whose own is fine, trading a rare failure for a commoner one. Fixing it properly means inspecting the error for a missing *customer* specifically. The exposure predates Promotions, because `customer` was already sent whenever a stored id existed.
+- A stored `subscriptionCustomerId` that Stripe cannot resolve is replaced only after Stripe returns `resource_missing` for the `customer` parameter. Transient Stripe failures never mint a replacement Customer.
 - Stripe Checkout displays the Promotion Code's customer-facing code to every visitor who checks out during a Promotion. Deactivating the code when ending a Promotion (decision 3) is therefore load-bearing, not a formality: everyone who bought during the Promotion knows the string.

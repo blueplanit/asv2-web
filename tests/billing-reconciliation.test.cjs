@@ -1,0 +1,332 @@
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const test = require("node:test");
+const ts = require("typescript");
+const { loadTypeScriptModule } = require("./helpers/load-typescript-module.cjs");
+
+const projectRoot = path.join(__dirname, "..");
+
+class MockNextResponse extends Response {
+    static json(body, init) {
+        return new MockNextResponse(JSON.stringify(body), {
+            ...init,
+            headers: { "content-type": "application/json", ...init?.headers },
+        });
+    }
+}
+
+function subscriptionFixture(status = "active", customer = "cus_checkout") {
+    return {
+        id: "sub_paid",
+        customer,
+        status,
+        cancel_at_period_end: false,
+        cancel_at: null,
+        metadata: {
+            userId: "user-123",
+            priceId: "price_monthly",
+            subscription_stage: "paid",
+        },
+        items: {
+            data: [{ price: { id: "price_monthly", unit_amount: 1900, currency: "usd" } }],
+        },
+    };
+}
+
+function loadWebhookRoute({
+    updateActive,
+    updateInactive = async () => {},
+    getProfile,
+    eventType = "customer.subscription.created",
+    subscriptionStatus = "active",
+    customer = "cus_checkout",
+}) {
+    const subscription = subscriptionFixture(subscriptionStatus, customer);
+    return loadTypeScriptModule(
+        path.join(projectRoot, "app/api/stripe/webhook/route.ts"),
+        {
+            "server-only": {},
+            "next/server": { NextResponse: MockNextResponse },
+            "@/lib/stripe/stripe-billing": {
+                stripeBilling: {
+                    webhooks: {
+                        constructEvent: () => ({
+                            id: "evt_subscription_created",
+                            type: eventType,
+                            data: { object: subscription },
+                        }),
+                    },
+                    subscriptions: {
+                        retrieve: async () => subscription,
+                        cancel: async () => subscription,
+                    },
+                },
+            },
+            "@/lib/dynamo/user-profile": {
+                getUserProfile: getProfile,
+                updateUserSubscriptionStatusToActive: updateActive,
+                updateUserSubscriptionStatusToInactive: updateInactive,
+            },
+            "@/lib/billing/billing-plan-map": {
+                mapStripePriceToPlan: () => ({ planId: "pro", interval: "monthly" }),
+            },
+            "@/lib/billing/billing-period": { getSubscriptionPeriodEnd: () => 1_800_000_000 },
+            "@/lib/app-state/subscription-entitlement": {
+                isStripeSubscriptionEntitled: (status) => status === "active",
+                isStripeSubscriptionNonEntitledTerminal: (status) => status === "canceled",
+            },
+            "@/lib/utils": { isDevEnvironment: () => false },
+            "@/lib/analytics/server-events": { trackServerEvent: async () => {} },
+            "@/lib/analytics/event-names": { EVENT_NAMES: { SUBSCRIPTION_PAID: "paid" } },
+            "@/lib/billing/reconcile-subscription": {
+                reconcileActiveSubscription: updateActive,
+                reconcileInactiveSubscription: async (userId, accountRole, rawStatus, subscriptionId) =>
+                    updateInactive(userId, accountRole, rawStatus, subscriptionId),
+            },
+            "@/lib/billing/stripe-customer-id": {
+                requireStripeCustomerId: (customer) =>
+                    typeof customer === "string" ? customer : customer?.id,
+            },
+        },
+    ).POST;
+}
+
+function webhookRequest() {
+    return new Request("https://example.com/api/stripe/webhook", {
+        method: "POST",
+        headers: { "stripe-signature": "test-signature" },
+        body: "{}",
+    });
+}
+
+test("webhook returns 500 when DynamoDB cannot persist the Stripe state", async () => {
+    const POST = loadWebhookRoute({
+        updateActive: async () => {
+            throw new Error("DynamoDB is temporarily unavailable");
+        },
+        getProfile: async () => ({ accountRole: "user", subscriptionId: null }),
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 500);
+});
+
+test("webhook persists the complete entitled Stripe state", async () => {
+    let written;
+    const POST = loadWebhookRoute({
+        updateActive: async (userId, params, previousSubscriptionId) => {
+            written = { userId, params, previousSubscriptionId };
+        },
+        getProfile: async () => ({ accountRole: "user", subscriptionId: null }),
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(written, {
+        userId: "user-123",
+        previousSubscriptionId: null,
+        params: {
+            subscriptionId: "sub_paid",
+            stripeCustomerId: "cus_checkout",
+            planId: "pro",
+            interval: "monthly",
+            currentPeriodEnd: 1_800_000_000,
+            rawStatus: "active",
+        },
+    });
+});
+
+test("webhook extracts the ID from an expanded Stripe Customer", async () => {
+    let writtenCustomerId;
+    const POST = loadWebhookRoute({
+        updateActive: async (_userId, params) => {
+            writtenCustomerId = params.stripeCustomerId;
+        },
+        getProfile: async () => ({ accountRole: "user", subscriptionId: null }),
+        customer: { id: "cus_expanded" },
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.equal(writtenCustomerId, "cus_expanded");
+});
+
+test("deleted-subscription webhook returns 500 when inactivation cannot persist", async () => {
+    const POST = loadWebhookRoute({
+        updateActive: async () => {},
+        updateInactive: async () => {
+            throw new Error("DynamoDB is temporarily unavailable");
+        },
+        getProfile: async () => ({
+            accountRole: "user",
+            subscriptionId: "sub_paid",
+        }),
+        eventType: "customer.subscription.deleted",
+        subscriptionStatus: "canceled",
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 500);
+});
+
+function loadBillingConfirmation({ updateActive }) {
+    const subscription = subscriptionFixture();
+    return loadTypeScriptModule(
+        path.join(projectRoot, "lib/billing/billing-confirm.ts"),
+        {
+            "server-only": {},
+            "@/lib/stripe/stripe-billing": {
+                stripeBilling: {
+                    checkout: {
+                        sessions: {
+                            retrieve: async () => ({
+                                mode: "subscription",
+                                status: "complete",
+                                payment_status: "paid",
+                                customer: "cus_checkout",
+                                subscription,
+                                metadata: { userId: "user-123", priceId: "price_monthly" },
+                                line_items: { data: [] },
+                            }),
+                        },
+                    },
+                    subscriptions: { cancel: async () => {} },
+                },
+            },
+            "@/lib/dynamo/user-profile": {
+                getUserProfile: async () => ({ subscriptionId: null }),
+                updateUserSubscriptionStatusToActive: updateActive,
+            },
+            "@/lib/billing/reconcile-subscription": {
+                reconcileActiveSubscription: updateActive,
+            },
+            "@/lib/billing/stripe-customer-id": {
+                requireStripeCustomerId: (customer) =>
+                    typeof customer === "string" ? customer : customer?.id,
+            },
+            "./billing-plan-map": {
+                mapStripePriceToPlan: () => ({ planId: "pro", interval: "monthly" }),
+            },
+            "./billing-period": { getSubscriptionPeriodEnd: () => 1_800_000_000 },
+            "@/lib/app-state/subscription-entitlement": {
+                isStripeSubscriptionEntitled: () => true,
+            },
+        },
+    ).confirmCheckoutSessionAndActivateUser;
+}
+
+test("success confirmation rejects when DynamoDB cannot persist the Stripe state", async () => {
+    const confirm = loadBillingConfirmation({
+        updateActive: async () => {
+            throw new Error("DynamoDB is temporarily unavailable");
+        },
+    });
+
+    await assert.rejects(
+        confirm("cs_complete", "user-123"),
+        /DynamoDB is temporarily unavailable/,
+    );
+});
+
+function loadReconciler({ updateActive, getProfile }) {
+    return loadTypeScriptModule(
+        path.join(projectRoot, "lib/billing/reconcile-subscription.ts"),
+        {
+            "server-only": {},
+            "@/lib/dynamo/user-profile": {
+                getUserProfile: getProfile,
+                updateUserSubscriptionStatusToActive: updateActive,
+                updateUserSubscriptionStatusToInactive: async () => {},
+            },
+        },
+    ).reconcileActiveSubscription;
+}
+
+const completeSubscriptionState = {
+    subscriptionId: "sub_paid",
+    stripeCustomerId: "cus_checkout",
+    planId: "pro",
+    interval: "monthly",
+    currentPeriodEnd: 1_800_000_000,
+    rawStatus: "active",
+};
+
+test("conditional failure succeeds only when the complete state is already stored", async () => {
+    const reconcile = loadReconciler({
+        updateActive: async () => {
+            throw { name: "ConditionalCheckFailedException" };
+        },
+        getProfile: async () => ({
+            subscriptionStatus: "active",
+            subscriptionId: "sub_paid",
+            subscriptionCustomerId: "cus_checkout",
+            subscriptionPlanId: "pro",
+            subscriptionInterval: "monthly",
+            subscriptionCurrentPeriodEnd: new Date(1_800_000_000 * 1000).toISOString(),
+            subscriptionRawStatus: "active",
+        }),
+    });
+
+    await reconcile("user-123", completeSubscriptionState, null);
+});
+
+test("conditional failure remains an error when stored Stripe state differs", async () => {
+    const reconcile = loadReconciler({
+        updateActive: async () => {
+            throw { name: "ConditionalCheckFailedException" };
+        },
+        getProfile: async () => ({
+            subscriptionStatus: "active",
+            subscriptionId: "sub_paid",
+            subscriptionCustomerId: "cus_different",
+        }),
+    });
+
+    await assert.rejects(
+        reconcile("user-123", completeSubscriptionState, null),
+        (err) => err?.name === "ConditionalCheckFailedException",
+    );
+});
+
+function textContent(node) {
+    if (node == null || typeof node === "boolean") return "";
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(textContent).join(" ");
+    return textContent(node.props?.children);
+}
+
+test("success page never claims activation when confirmation fails", async () => {
+    const jsx = (type, props) => ({ type, props });
+    const page = loadTypeScriptModule(
+        path.join(projectRoot, "app/(app)/billing/success/page.tsx"),
+        {
+            "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: Symbol("Fragment") },
+            "next-auth": {
+                getServerSession: async () => ({ user: { userId: "user-123" } }),
+            },
+            "next/navigation": { redirect: () => { throw new Error("Unexpected redirect"); } },
+            "@/app/api/auth/[...nextauth]/route": { authOptions: {} },
+            "@/lib/billing/billing-confirm": {
+                confirmCheckoutSessionAndActivateUser: async () => {
+                    throw new Error("DynamoDB is temporarily unavailable");
+                },
+            },
+            "@/components/billing/activation-pending-retry": {
+                ActivationPendingRetry: () => null,
+            },
+        },
+        { jsx: ts.JsxEmit.ReactJSX },
+    ).default;
+
+    const rendered = await page({
+        searchParams: Promise.resolve({ session_id: "cs_complete" }),
+    });
+    const text = textContent(rendered);
+
+    assert.match(text, /confirming your checkout/i);
+    assert.doesNotMatch(text, /Subscription activated/i);
+});

@@ -6,15 +6,30 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { stripeBilling, BILLING_PRICES, type BillingPlanId, type BillingInterval } from "@/lib/stripe/stripe-billing";
 import { getUserProfile } from "@/lib/dynamo/user-profile";
-import { ensureStripeCustomerId } from "@/lib/dynamo/ensure-stripe-customer";
-import { getDeliverableDiscount, type DeliverableDiscount } from "@/lib/promotions/get-deliverable-discount";
+import {
+    deliverableDiscountVersion,
+    getDeliverableDiscount,
+    type DeliverableDiscount,
+} from "@/lib/promotions/get-deliverable-discount";
 
 export const runtime = "nodejs";
 
 type Body = {
     planId: BillingPlanId;
     interval: BillingInterval;
+    expectedPromotionId?: string | null;
+    expectedPromotionVersion?: string | null;
 };
+
+function checkoutError(code: "checkout_unavailable" | "price_changed", status: 409 | 503) {
+    return NextResponse.json({ code }, { status });
+}
+
+function isMissingStripeCustomer(err: unknown): boolean {
+    if (!err || typeof err !== "object") return false;
+    const stripeError = err as { code?: unknown; param?: unknown };
+    return stripeError.code === "resource_missing" && stripeError.param === "customer";
+}
 
 export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
@@ -34,29 +49,42 @@ export async function POST(req: Request) {
         return new NextResponse("Unknown plan/interval", { status: 400 });
     }
 
-    const userProfile = await getUserProfile(userId);
+    let userProfile;
+    try {
+        userProfile = await getUserProfile(userId);
+    } catch (err) {
+        console.error("checkout: could not read the user profile", { userId, err });
+        return checkoutError("checkout_unavailable", 503);
+    }
     if (!userProfile) {
         return new NextResponse("User profile not found", { status: 400 });
     }
 
-    // Read server-side. A Promotion Code from the client could name any valid Stripe
-    // code rather than the one campaign that is live. See ADR-0005 decision 4.
+    // A client-supplied Promotion Code could name any valid Stripe code rather than
+    // the one Promotion that is currently published. See ADR-0005 decision 4.
     const discount = await getDeliverableDiscount();
 
-    // Only a discounted session resolves a real Customer, so Stripe can evaluate the
-    // Promotion Code against one (ADR-0005 decision 6); otherwise customer_email stands.
-    const customerParams = discount
-        ? { customer: await ensureStripeCustomerId(userId, userProfile) }
-        : userProfile.subscriptionCustomerId
-            ? { customer: userProfile.subscriptionCustomerId }
-            : { customer_email: userProfile.email };
+    // The client supplies only what it displayed. The server still decides which
+    // Promotion Code is valid and refuses a changed price rather than silently charging it.
+    const promotionChanged = body.expectedPromotionVersion
+        ? body.expectedPromotionVersion !== deliverableDiscountVersion(discount)
+        : body.expectedPromotionId
+            ? body.expectedPromotionId !== discount?.promotion.id
+            : false;
+    if (promotionChanged) {
+        return checkoutError("price_changed", 409);
+    }
+
+    const storedCustomerParams = userProfile.subscriptionCustomerId
+        ? { customer: userProfile.subscriptionCustomerId }
+        : { customer_email: userProfile.email };
 
     const successUrl = `${process.env.NEXTAUTH_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.NEXTAUTH_URL}/pricing?canceled=1`;
 
-    // Takes the discount, not a flag, so one value decides both metadata and Stripe params —
-    // a full-price retry then naturally omits promotionId instead of reporting itself as promoted.
+    // One value decides both metadata and Stripe parameters, so reporting and billing agree.
     function sessionParams(
+        customerParams: { customer: string } | { customer_email: string },
         applied: DeliverableDiscount | null,
     ): Stripe.Checkout.SessionCreateParams {
         const metadata = {
@@ -85,21 +113,38 @@ export async function POST(req: Request) {
         };
     }
 
-    let checkoutSession;
-    if (discount) {
-        try {
-            checkoutSession = await stripeBilling.checkout.sessions.create(sessionParams(discount));
-        } catch (err) {
-            // Retries unconditionally at full price rather than fail the Subscribe button —
-            // Stripe doesn't document whether an inapplicable code throws here. See ADR-0005.
-            console.error(
-                `checkout: session creation failed with Promotion ${discount.promotion.id} applied, retrying at full price`,
+    let checkoutSession: Stripe.Checkout.Session;
+    try {
+        checkoutSession = await stripeBilling.checkout.sessions.create(
+            sessionParams(storedCustomerParams, discount),
+        );
+    } catch (err) {
+        // A deleted stored Customer is safe to replace. Keep every other parameter,
+        // especially the Promotion Code, identical on the retry.
+        if (userProfile.subscriptionCustomerId && isMissingStripeCustomer(err)) {
+            console.error("checkout: stored Stripe Customer is missing; retrying with email", {
+                userId,
+                customerId: userProfile.subscriptionCustomerId,
+            });
+            try {
+                checkoutSession = await stripeBilling.checkout.sessions.create(
+                    sessionParams({ customer_email: userProfile.email }, discount),
+                );
+            } catch (retryErr) {
+                console.error("checkout: session creation failed after replacing missing Customer", {
+                    userId,
+                    retryErr,
+                });
+                return checkoutError("checkout_unavailable", 503);
+            }
+        } else {
+            console.error("checkout: session creation failed", {
+                userId,
+                promotionId: discount?.promotion.id ?? null,
                 err,
-            );
-            checkoutSession = await stripeBilling.checkout.sessions.create(sessionParams(null));
+            });
+            return checkoutError("checkout_unavailable", 503);
         }
-    } else {
-        checkoutSession = await stripeBilling.checkout.sessions.create(sessionParams(null));
     }
 
     return NextResponse.json({ url: checkoutSession.url });

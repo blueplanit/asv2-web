@@ -1,5 +1,6 @@
 // lib/promotions/get-deliverable-discount.ts
 import "server-only";
+import { createHash } from "node:crypto";
 import type Stripe from "stripe";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";
 import { getActivePromotion } from "./get-active-promotion";
@@ -10,6 +11,14 @@ export type DeliverableDiscount = {
     promotionCodeId: string;
     coupon: Stripe.Coupon;
 };
+
+export function deliverableDiscountVersion(discount: DeliverableDiscount | null): string | null {
+    return discount
+        ? createHash("sha256")
+            .update(`${discount.promotion.id}\0${discount.promotionCodeId}`)
+            .digest("base64url")
+        : null;
+}
 
 // The active Promotion plus its live Stripe discount, or null if undeliverable. Never
 // throws, so a bad Promotion Code means full price, never a broken page or dead button.

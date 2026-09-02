@@ -1,7 +1,10 @@
 // lib/billing/billing-confirm.ts
+import "server-only";
 import type Stripe from "stripe";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";
-import { getUserProfile, UpdateUserSubscriptionParams, updateUserSubscriptionStatusToActive } from "@/lib/dynamo/user-profile";
+import { getUserProfile, type UpdateUserSubscriptionParams } from "@/lib/dynamo/user-profile";
+import { reconcileActiveSubscription } from "@/lib/billing/reconcile-subscription";
+import { requireStripeCustomerId } from "@/lib/billing/stripe-customer-id";
 import { mapStripePriceToPlan } from "./billing-plan-map";
 import { getSubscriptionPeriodEnd } from "./billing-period";
 import { isStripeSubscriptionEntitled } from "@/lib/app-state/subscription-entitlement";
@@ -44,7 +47,7 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     const subscription = subscriptionExpanded;
     const newSubscriptionId = subscription.id;
-    const stripeCustomerId = session.customer as string;
+    const stripeCustomerId = requireStripeCustomerId(session.customer);
 
     const currentProfile = await getUserProfile(userId);
     const previousSubscriptionId = currentProfile?.subscriptionId;
@@ -64,7 +67,7 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     if (!entitled) {
         // Let webhook drive the state for non-entitled statuses
-        return;
+        return false;
     }
 
     const subParams: UpdateUserSubscriptionParams = {
@@ -76,15 +79,7 @@ export async function confirmCheckoutSessionAndActivateUser(
         rawStatus: status,
     };
 
-    // Update Database (Optimistic)
-    // We catch conditional errors just in case, but usually we overwrite
-    try {
-        await updateUserSubscriptionStatusToActive(userId, subParams, previousSubscriptionId);
-    } catch (err: any) {
-        // If ConditionalCheckFailed, the webhook likely already updated the DB.
-        // We can safely return here, OR proceed to check cancellation just to be safe.
-        console.log("Optimistic update skipped - DB likely already updated by webhook");
-    }
+    await reconcileActiveSubscription(userId, subParams, previousSubscriptionId);
 
     // Cancel the old subscription if it's different
     if (previousSubscriptionId && previousSubscriptionId !== newSubscriptionId) {
@@ -98,4 +93,6 @@ export async function confirmCheckoutSessionAndActivateUser(
             }
         }
     }
+
+    return true;
 }

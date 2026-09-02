@@ -3,6 +3,7 @@
 // SERVER-ONLY
 ////////////////////////////////////////////////////////////////////////////
 
+import "server-only";
 import { ddb } from "@/lib/dynamo";
 import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";

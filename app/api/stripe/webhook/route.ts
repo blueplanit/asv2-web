@@ -2,19 +2,19 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";
-import {
-    UpdateUserSubscriptionParams,
-    updateUserSubscriptionStatusToActive,
-    updateUserSubscriptionStatusToInactive,
-} from "@/lib/dynamo/user-profile";
+import { getUserProfile, type UpdateUserSubscriptionParams } from "@/lib/dynamo/user-profile";
 import Stripe from "stripe";
 import { mapStripePriceToPlan } from "@/lib/billing/billing-plan-map";
 import { getSubscriptionPeriodEnd } from "@/lib/billing/billing-period";
-import { getUserProfile } from "@/lib/dynamo/user-profile";
 import { isStripeSubscriptionEntitled, isStripeSubscriptionNonEntitledTerminal } from "@/lib/app-state/subscription-entitlement";
 import { isDevEnvironment } from "@/lib/utils";
 import { trackServerEvent } from "@/lib/analytics/server-events";
 import { EVENT_NAMES } from "@/lib/analytics/event-names";
+import {
+    reconcileActiveSubscription,
+    reconcileInactiveSubscription,
+} from "@/lib/billing/reconcile-subscription";
+import { requireStripeCustomerId } from "@/lib/billing/stripe-customer-id";
 
 export const runtime = "nodejs";
 
@@ -51,7 +51,7 @@ function buildUpdateParamsFromSubscription(
 
     const params: UpdateUserSubscriptionParams = {
         subscriptionId: subscription.id,
-        stripeCustomerId: subscription.customer as string,
+        stripeCustomerId: requireStripeCustomerId(subscription.customer),
         planId: planInfo?.planId,
         interval,
         currentPeriodEnd,
@@ -156,14 +156,12 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const { userId, params } = buildUpdateParamsFromSubscription(subscription);
 
     if (!userId) {
-        console.warn(`Stripe webhook: subscription without userId metadata: subId: ${subscription.id}, customer: ${subscription.customer}`);
-        return; // will end with 200 from the outer handler
+        throw new Error(`Stripe webhook: subscription ${subscription.id} has no userId`);
     }
 
     const profile = await getUserProfile(userId);
     if (!profile) {
-        console.warn(`Stripe webhook: no profile for userId: ${userId}, subId: ${subscription.id}, status: ${status}`);
-        return;
+        throw new Error(`Stripe webhook: no profile for userId ${userId}`);
     }
 
     const stage = (subscription.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
@@ -171,40 +169,34 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const isEntitled = isStripeSubscriptionEntitled(status);
     const isNonEntitledTerminal = isStripeSubscriptionNonEntitledTerminal(status);
 
-    try {
-        if (isEntitled) {
-            const shouldActivate =
-                stage === "paid" ||            // paid subs always allowed to become current (set in metadata on creation)
-                !profile.subscriptionId ||     // first-ever subscription
-                isCurrent;
+    if (isEntitled) {
+        const shouldActivate =
+            stage === "paid" ||            // paid subs always allowed to become current (set in metadata on creation)
+            !profile.subscriptionId ||     // first-ever subscription
+            isCurrent;
 
-            if (!shouldActivate) return;
+        if (!shouldActivate) return;
 
-            // Remember old id before we overwrite it
-            const previousId = profile.subscriptionId ?? null;
+        const previousId = profile.subscriptionId ?? null;
+        await reconcileActiveSubscription(userId, params, previousId);
 
-            // 1) Mark this sub as current/active in Dynamo
-            await updateUserSubscriptionStatusToActive(userId, params, previousId);
-
-            // 2) If we switched from a different sub, cancel the old one if it's a trial
-            if (previousId && previousId !== subscription.id) {
-                cancelPreviousTrialSubscription({
-                    previousSubscriptionId: previousId,
-                    userId,
-                });
-            }
-            return;
-        } else if (isNonEntitledTerminal) {
-            if (!isCurrent) return;
-            await updateUserSubscriptionStatusToInactive(userId, profile.accountRole, status, subscription.id);
-            return;
+        if (previousId && previousId !== subscription.id) {
+            cancelPreviousTrialSubscription({
+                previousSubscriptionId: previousId,
+                userId,
+            });
         }
-    } catch (err: any) {
-        // If this is a conditional failure (user profile not found), log and swallow.
-        // Only re-throw for real infra/bad-code errors.
-        console.error(`Stripe webhook: failed to update user subscription: userId: ${userId}, subId: ${subscription.id}, status: ${status}, error: ${err}`);
-        // decide: swallow vs rethrow
-        // For most SaaS, swallowing here is fine so Stripe doesn’t retry forever
+        return;
+    }
+
+    if (isNonEntitledTerminal) {
+        if (!isCurrent) return;
+        await reconcileInactiveSubscription(
+            userId,
+            profile.accountRole,
+            status,
+            subscription.id,
+        );
     }
 }
 
@@ -271,33 +263,8 @@ export async function POST(req: NextRequest) {
             }
             case "customer.subscription.deleted": {
                 const subscription = event.data.object as Stripe.Subscription;
-                const userId = (subscription.metadata as any)?.userId;
-                if (!userId) break;
-            
-                const profile = await getUserProfile(userId);
-                if (!profile) break;
-            
-                const isCurrent = profile.subscriptionId === subscription.id;
-                if (!isCurrent) {
-                    console.log(`Stripe webhook: ignoring deletion of non-current subscription: subId: ${subscription.id}, currentId: ${profile.subscriptionId}, userId: ${userId}`);
-                    break;
-                }
-            
-                console.log(`Stripe webhook: subscription deleted (current): subId: ${subscription.id}, userId: ${userId}`);
-            
-                try {
-                    await updateUserSubscriptionStatusToInactive(
-                        userId,
-                        profile.accountRole,
-                        subscription.status,
-                        subscription.id,
-                    );
-                } catch (err: any) {
-                    console.error(`Stripe webhook: failed to inactivate on deletion: userId: ${userId}, subId: ${subscription.id}, status: ${subscription.status}, error: ${err}`);
-                    // ConditionalCheckFailedException here again means: subscriptionId changed since we read; safe to swallow.
-                }
+                await handleSubscriptionChange(subscription);
                 break;
-            
             }
 
             // Optional: trial reminder

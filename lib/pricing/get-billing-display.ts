@@ -1,7 +1,11 @@
 import type Stripe from "stripe";
 import { unstable_cache } from "next/cache";
 import { stripeBilling, BILLING_PRICES } from "@/lib/stripe/stripe-billing";
-import { getDeliverableDiscount, isOngoingDiscount } from "@/lib/promotions/get-deliverable-discount";
+import {
+    deliverableDiscountVersion,
+    getDeliverableDiscount,
+    isOngoingDiscount,
+} from "@/lib/promotions/get-deliverable-discount";
 
 export type BillingInterval = "monthly" | "yearly";
 
@@ -21,6 +25,8 @@ export type BillingDisplayResult = {
     // The Promotion's Contentful entry id — same id space as the banner's own
     // analytics (components/layout/promotion-banner.tsx), for funnel correlation.
     promotionId: string | null;
+    // An optimistic concurrency token for the exact Promotion Code behind the display.
+    promotionVersion: string | null;
 };
 
 function formatMoney(unitAmount: number, currency: string) {
@@ -100,5 +106,6 @@ export async function getBillingDisplay(): Promise<BillingDisplayResult> {
             yearly: display(prices.yearly.unitAmount, prices.yearly.currency, "/year"),
         },
         promotionId: discount?.promotion.id ?? null,
+        promotionVersion: deliverableDiscountVersion(discount),
     };
 }

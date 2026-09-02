@@ -18,10 +18,21 @@ type PricingClientProps = {
     copy: PricingCopy;
 };
 
+type PricingApiResponse = {
+    billingDisplay?: BillingDisplay;
+    promotionId?: string | null;
+    promotionVersion?: string | null;
+};
+
 const DEFAULT_BILLING_DISPLAY: BillingDisplay = {
     monthly: { price: "$19", intervalLabel: "/month", discountedPrice: null, percentOff: null },
     yearly: { price: "$190", intervalLabel: "/year", discountedPrice: null, percentOff: null },
   };
+
+async function fetchCurrentPricing(signal: AbortSignal): Promise<PricingApiResponse | null> {
+    const response = await fetch("/api/billing/pricing", { signal });
+    return response.ok ? response.json() : null;
+}
 
 type FaqItem = {
     question: string;
@@ -185,9 +196,11 @@ export function PricingClient({ copy }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
     const [showSignedInHint, setShowSignedInHint] = useState(false);
+    const [checkoutError, setCheckoutError] = useState<string | null>(null);
     const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
     const [pricingLoading, setPricingLoading] = useState(true);
     const [promotionId, setPromotionId] = useState<string | null>(null);
+    const [promotionVersion, setPromotionVersion] = useState<string | null>(null);
     const viewTracked = useRef(false);
 
     useEffect(() => {
@@ -198,12 +211,12 @@ export function PricingClient({ copy }: PricingClientProps) {
         const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
         setPricingLoading(true);
-        fetch("/api/billing/pricing", { signal: controller.signal })
-            .then((r) => (r.ok ? r.json() : null))
+        fetchCurrentPricing(controller.signal)
             .then((data) => {
                 if (cancelled) return;
                 if (data?.billingDisplay) setBillingDisplay(data.billingDisplay);
                 setPromotionId(data?.promotionId ?? null);
+                setPromotionVersion(data?.promotionVersion ?? null);
             })
             .catch(() => { })
             .finally(() => {
@@ -248,6 +261,10 @@ export function PricingClient({ copy }: PricingClientProps) {
     }, [justLoggedIn]);
 
     async function handleSelectPlan() {
+        setCheckoutError(null);
+        // Both snackbars occupy the same slot, and the hint has served its purpose
+        // once the visitor acts on the page.
+        setShowSignedInHint(false);
         trackAmplitudeEvent("Upgrade To Pro Clicked", {
             source: "pricing_page",
             is_logged_in: isLoggedIn,
@@ -277,13 +294,51 @@ export function PricingClient({ copy }: PricingClientProps) {
             const res = await fetch("/api/billing/checkout", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ planId: "pro", interval }),
+                body: JSON.stringify({
+                    planId: "pro",
+                    interval,
+                    expectedPromotionId: promotionId,
+                    expectedPromotionVersion: promotionVersion,
+                }),
             });
             if (!res.ok) {
+                const errorBody = (await res.json().catch(() => null)) as { code?: string } | null;
                 console.error("Failed to create checkout session");
                 trackAmplitudeError("Checkout Session Failed", "Failed to create checkout session", {
                     interval,
+                    status: res.status,
+                    code: errorBody?.code,
                 });
+
+                if (res.status === 409 && errorBody?.code === "price_changed") {
+                    const controller = new AbortController();
+                    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+                    setPricingLoading(true);
+                    try {
+                        const currentPricing = await fetchCurrentPricing(controller.signal);
+                        if (currentPricing?.billingDisplay) {
+                            setBillingDisplay(currentPricing.billingDisplay);
+                            setPromotionId(currentPricing.promotionId ?? null);
+                            setPromotionVersion(currentPricing.promotionVersion ?? null);
+                            setCheckoutError(
+                                "The promotional offer changed before checkout. We've refreshed the price — please review it and try again.",
+                            );
+                        } else {
+                            setCheckoutError(
+                                "The promotional offer changed before checkout. Please refresh the page to review the current price.",
+                            );
+                        }
+                    } catch {
+                        setCheckoutError(
+                            "The promotional offer changed before checkout. Please refresh the page to review the current price.",
+                        );
+                    } finally {
+                        window.clearTimeout(timeoutId);
+                        setPricingLoading(false);
+                    }
+                } else {
+                    setCheckoutError("We couldn't start checkout. No charge was made. Please try again.");
+                }
                 setLoading(false);
                 return;
             }
@@ -298,6 +353,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                 trackAmplitudeError("Checkout Session Failed", "Checkout URL missing", {
                     interval,
                 });
+                setCheckoutError("We couldn't start checkout. No charge was made. Please try again.");
                 setLoading(false);
             }
         } catch (err) {
@@ -305,6 +361,7 @@ export function PricingClient({ copy }: PricingClientProps) {
             trackAmplitudeError("Checkout Session Failed", err, {
                 interval,
             });
+            setCheckoutError("We couldn't start checkout. No charge was made. Please try again.");
             setLoading(false);
         }
     }
@@ -339,6 +396,18 @@ export function PricingClient({ copy }: PricingClientProps) {
                 description={copy.snackbar.description}
                 animated
                 autoHideMs={7000}
+            />
+
+            {/* Stays until dismissed: a checkout the visitor must retry should not
+                disappear on its own while they are reading it. */}
+            <Snackbar
+                open={checkoutError !== null}
+                onClose={() => setCheckoutError(null)}
+                variant="error"
+                title="Checkout didn't start"
+                description={checkoutError ?? undefined}
+                animated
+                autoHideMs={0}
             />
 
             <main className="mx-auto max-w-6xl px-4 pb-28 pt-12 sm:pb-16 sm:pt-16">

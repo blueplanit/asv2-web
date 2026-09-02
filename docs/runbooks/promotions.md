@@ -95,7 +95,8 @@ A visitor who dismisses the banner has that dismissal stored against the entry's
 | --- | --- |
 | Nothing appears at all | Two entries are published, or a required field is empty, or the entry is unpublished |
 | Banner appears, price not struck through | The Coupon's `duration` is not `forever`. Checkout still discounts |
-| Banner appears, checkout charges full price | The Promotion Code is inactive, expired, or out of redemptions. Server logs carry the reason |
+| Banner appears, price is full | The Promotion Code is inactive, expired, out of redemptions, or its Coupon is not `forever` |
+| Checkout stops and refreshes the price | The Promotion ended or changed after the pricing page loaded |
 | Banner appears in a preview deployment only | `showInProduction` is unchecked |
 | Banner will not appear for you | You dismissed it, or you are signed in as a paying subscriber. Clear `promotion-banner-dismissed-id` and `promotion-banner-subscriber` from browser storage |
 
