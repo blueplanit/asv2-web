@@ -5,9 +5,14 @@ import { stripeBilling } from "@/lib/stripe/stripe-billing";
 import { getUserProfile, type UpdateUserSubscriptionParams } from "@/lib/dynamo/user-profile";
 import { reconcileActiveSubscription } from "@/lib/billing/reconcile-subscription";
 import { requireStripeCustomerId } from "@/lib/billing/stripe-customer-id";
+import { canBecomeCurrentSubscription } from "@/lib/billing/subscription-order";
+import { cancelPreviousTrialSubscription } from "@/lib/billing/cancel-previous-trial-subscription";
 import { mapStripePriceToPlan } from "./billing-plan-map";
 import { getSubscriptionPeriodEnd } from "./billing-period";
-import { isStripeSubscriptionEntitled } from "@/lib/app-state/subscription-entitlement";
+import {
+    isStripeSubscriptionEntitled,
+    isUserProfileEntitled,
+} from "@/lib/app-state/subscription-entitlement";
 
 // A checkout session that retrying can never activate. The caller reports it as invalid
 // rather than polling, which any other failure here still deserves.
@@ -86,6 +91,25 @@ export async function confirmCheckoutSessionAndActivateUser(
         return false;
     }
 
+    if (
+        previousSubscriptionId &&
+        previousSubscriptionId !== newSubscriptionId
+    ) {
+        const canReplace = await canBecomeCurrentSubscription(
+            subscription,
+            previousSubscriptionId,
+        );
+
+        if (!canReplace) {
+            console.warn("Ignoring an older checkout success session", {
+                userId,
+                incomingId: newSubscriptionId,
+                currentId: previousSubscriptionId,
+            });
+            return isUserProfileEntitled(currentProfile);
+        }
+    }
+
     const subParams: UpdateUserSubscriptionParams = {
         subscriptionId: newSubscriptionId,
         stripeCustomerId,
@@ -97,17 +121,11 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     await reconcileActiveSubscription(userId, subParams, previousSubscriptionId);
 
-    // Cancel the old subscription if it's different
     if (previousSubscriptionId && previousSubscriptionId !== newSubscriptionId) {
-        console.log(`Optimistic cleanup: canceling old subscription ${previousSubscriptionId}`);
-        try {
-            await stripeBilling.subscriptions.cancel(previousSubscriptionId);
-        } catch (err: any) {
-            // Ignore if already canceled or missing
-            if (err.code !== 'resource_missing' && !err.message.includes('No such subscription')) {
-                console.error("Failed to cancel old subscription optimistic cleanup:", err);
-            }
-        }
+        await cancelPreviousTrialSubscription({
+            previousSubscriptionId,
+            userId,
+        });
     }
 
     return true;

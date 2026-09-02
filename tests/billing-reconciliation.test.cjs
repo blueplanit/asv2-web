@@ -18,6 +18,7 @@ class MockNextResponse extends Response {
 function subscriptionFixture(status = "active", customer = "cus_checkout", metadata) {
     return {
         id: "sub_paid",
+        created: 200,
         customer,
         status,
         cancel_at_period_end: false,
@@ -41,6 +42,9 @@ function loadWebhookRoute({
     subscriptionStatus = "active",
     customer = "cus_checkout",
     metadata,
+    retrieveSubscription,
+    canBecomeCurrent = async () => true,
+    cancelPreviousTrial = async () => {},
 }) {
     const subscription = subscriptionFixture(subscriptionStatus, customer, metadata);
     return loadTypeScriptModule(
@@ -58,7 +62,7 @@ function loadWebhookRoute({
                         }),
                     },
                     subscriptions: {
-                        retrieve: async () => subscription,
+                        retrieve: retrieveSubscription ?? (async () => subscription),
                         cancel: async () => subscription,
                     },
                 },
@@ -87,6 +91,12 @@ function loadWebhookRoute({
             "@/lib/billing/stripe-customer-id": {
                 requireStripeCustomerId: (customer) =>
                     typeof customer === "string" ? customer : customer?.id,
+            },
+            "@/lib/billing/subscription-order": {
+                canBecomeCurrentSubscription: canBecomeCurrent,
+            },
+            "@/lib/billing/cancel-previous-trial-subscription": {
+                cancelPreviousTrialSubscription: cancelPreviousTrial,
             },
         },
     ).POST;
@@ -205,8 +215,62 @@ test("deleted-subscription webhook returns 500 when inactivation cannot persist"
     assert.equal(response.status, 500);
 });
 
-function loadBillingConfirmation({ updateActive }) {
-    const subscription = subscriptionFixture();
+test("a delayed older paid webhook cannot replace the current subscription", async () => {
+    let writes = 0;
+    let cancellations = 0;
+    const POST = loadWebhookRoute({
+        updateActive: async () => {
+            writes += 1;
+        },
+        getProfile: async () => ({
+            accountRole: "user",
+            subscriptionId: "sub_newer",
+        }),
+        canBecomeCurrent: async () => false,
+        cancelPreviousTrial: async () => {
+            cancellations += 1;
+        },
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.equal(writes, 0);
+    assert.equal(cancellations, 0);
+});
+
+test("a delayed webhook reconciles the subscription's current Stripe state", async () => {
+    let activeWrites = 0;
+    let inactiveWrites = 0;
+    const POST = loadWebhookRoute({
+        updateActive: async () => {
+            activeWrites += 1;
+        },
+        updateInactive: async () => {
+            inactiveWrites += 1;
+        },
+        getProfile: async () => ({
+            accountRole: "user",
+            subscriptionId: "sub_paid",
+        }),
+        subscriptionStatus: "active",
+        retrieveSubscription: async () => subscriptionFixture("canceled"),
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.equal(activeWrites, 0);
+    assert.equal(inactiveWrites, 1);
+});
+
+function loadBillingConfirmation({
+    updateActive,
+    profile = { subscriptionId: null },
+    subscription = subscriptionFixture(),
+    canBecomeCurrent = async () => true,
+    cancelPreviousTrial = async () => {},
+}) {
     return loadTypeScriptModule(
         path.join(projectRoot, "lib/billing/billing-confirm.ts"),
         {
@@ -230,7 +294,7 @@ function loadBillingConfirmation({ updateActive }) {
                 },
             },
             "@/lib/dynamo/user-profile": {
-                getUserProfile: async () => ({ subscriptionId: null }),
+                getUserProfile: async () => profile,
                 updateUserSubscriptionStatusToActive: updateActive,
             },
             "@/lib/billing/reconcile-subscription": {
@@ -240,12 +304,19 @@ function loadBillingConfirmation({ updateActive }) {
                 requireStripeCustomerId: (customer) =>
                     typeof customer === "string" ? customer : customer?.id,
             },
+            "@/lib/billing/subscription-order": {
+                canBecomeCurrentSubscription: canBecomeCurrent,
+            },
+            "@/lib/billing/cancel-previous-trial-subscription": {
+                cancelPreviousTrialSubscription: cancelPreviousTrial,
+            },
             "./billing-plan-map": {
                 mapStripePriceToPlan: () => ({ planId: "pro", interval: "monthly" }),
             },
             "./billing-period": { getSubscriptionPeriodEnd: () => 1_800_000_000 },
             "@/lib/app-state/subscription-entitlement": {
                 isStripeSubscriptionEntitled: () => true,
+                isUserProfileEntitled: () => true,
             },
         },
     ).confirmCheckoutSessionAndActivateUser;
@@ -261,6 +332,60 @@ test("success confirmation rejects when DynamoDB cannot persist the Stripe state
     await assert.rejects(
         confirm("cs_complete", "user-123"),
         /DynamoDB is temporarily unavailable/,
+    );
+});
+
+test("an old checkout success URL cannot replace or cancel the current subscription", async () => {
+    let writes = 0;
+    let cancellations = 0;
+    const confirm = loadBillingConfirmation({
+        updateActive: async () => {
+            writes += 1;
+        },
+        profile: {
+            subscriptionId: "sub_newer",
+            subscriptionStatus: "active",
+        },
+        canBecomeCurrent: async () => false,
+        cancelPreviousTrial: async () => {
+            cancellations += 1;
+        },
+    });
+
+    const activated = await confirm("cs_old", "user-123");
+
+    assert.equal(activated, true);
+    assert.equal(writes, 0);
+    assert.equal(cancellations, 0);
+});
+
+function loadSubscriptionOrder(retrieve) {
+    return loadTypeScriptModule(
+        path.join(projectRoot, "lib/billing/subscription-order.ts"),
+        {
+            "server-only": {},
+            "@/lib/stripe/stripe-billing": {
+                stripeBilling: { subscriptions: { retrieve } },
+            },
+        },
+    ).canBecomeCurrentSubscription;
+}
+
+test("only a strictly newer Stripe subscription can replace the current one", async () => {
+    const current = { ...subscriptionFixture(), id: "sub_current", created: 200 };
+    const canBecomeCurrent = loadSubscriptionOrder(async () => current);
+
+    assert.equal(
+        await canBecomeCurrent({ ...subscriptionFixture(), id: "sub_older", created: 199 }, current.id),
+        false,
+    );
+    assert.equal(
+        await canBecomeCurrent({ ...subscriptionFixture(), id: "sub_same_second", created: 200 }, current.id),
+        false,
+    );
+    assert.equal(
+        await canBecomeCurrent({ ...subscriptionFixture(), id: "sub_newer", created: 201 }, current.id),
+        true,
     );
 });
 

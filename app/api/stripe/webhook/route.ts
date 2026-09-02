@@ -15,6 +15,8 @@ import {
     reconcileInactiveSubscription,
 } from "@/lib/billing/reconcile-subscription";
 import { requireStripeCustomerId } from "@/lib/billing/stripe-customer-id";
+import { canBecomeCurrentSubscription } from "@/lib/billing/subscription-order";
+import { cancelPreviousTrialSubscription } from "@/lib/billing/cancel-previous-trial-subscription";
 
 export const runtime = "nodejs";
 
@@ -178,18 +180,29 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const isNonEntitledTerminal = isStripeSubscriptionNonEntitledTerminal(status);
 
     if (isEntitled) {
-        const shouldActivate =
-            stage === "paid" ||            // paid subs always allowed to become current (set in metadata on creation)
-            !profile.subscriptionId ||     // first-ever subscription
-            isCurrent;
+        let shouldActivate = !profile.subscriptionId || isCurrent;
 
-        if (!shouldActivate) return;
+        if (!shouldActivate && stage === "paid") {
+            shouldActivate = await canBecomeCurrentSubscription(
+                subscription,
+                profile.subscriptionId,
+            );
+        }
+
+        if (!shouldActivate) {
+            console.warn("Ignoring an older paid subscription", {
+                userId,
+                incomingId: subscription.id,
+                currentId: profile.subscriptionId,
+            });
+            return;
+        }
 
         const previousId = profile.subscriptionId ?? null;
         await reconcileActiveSubscription(userId, params, previousId);
 
         if (previousId && previousId !== subscription.id) {
-            cancelPreviousTrialSubscription({
+            await cancelPreviousTrialSubscription({
                 previousSubscriptionId: previousId,
                 userId,
             });
@@ -229,7 +242,11 @@ export async function POST(req: NextRequest) {
             // Single source of truth for subscription lifecycle
             case "customer.subscription.created":
             case "customer.subscription.updated": {
-                const subscription = event.data.object as Stripe.Subscription;
+                const deliveredSubscription = event.data.object as Stripe.Subscription;
+                // Re-read Stripe so delayed events cannot restore an old snapshot.
+                const subscription = await stripeBilling.subscriptions.retrieve(
+                    deliveredSubscription.id,
+                );
                 console.log(`Stripe webhook: subscription created/updated: subId: ${subscription.id}, userId: ${subscription.metadata?.userId}`);
 
                 // previous_attributes only carries the fields that changed, so
@@ -270,7 +287,10 @@ export async function POST(req: NextRequest) {
                 break;
             }
             case "customer.subscription.deleted": {
-                const subscription = event.data.object as Stripe.Subscription;
+                const deliveredSubscription = event.data.object as Stripe.Subscription;
+                const subscription = await stripeBilling.subscriptions.retrieve(
+                    deliveredSubscription.id,
+                );
                 await handleSubscriptionChange(subscription);
                 break;
             }
@@ -292,36 +312,4 @@ export async function POST(req: NextRequest) {
     }
 
     return new NextResponse("OK", { status: 200 });
-}
-
-/**
- * Cancel a previous subscription if it looks like a trial.
- * This is called after a new entitled subscription becomes current.
- */
-async function cancelPreviousTrialSubscription(args: {
-    previousSubscriptionId: string;
-    userId: string;
-}) {
-    const { previousSubscriptionId, userId } = args;
-
-    try {
-        const oldSub = await stripeBilling.subscriptions.retrieve(previousSubscriptionId);
-        const oldStage = (oldSub.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
-        const looksTrial = (oldStage === "trial" || oldSub.status === "trialing" || !!oldSub.trial_end) && oldSub.status !== "active" && oldSub.status !== "past_due";
-
-        if (!looksTrial) {
-            console.log(`Previous subscription is not a trial; not canceling automatically: prevSubId: ${previousSubscriptionId}, userId: ${userId}, oldStage: ${oldStage}, oldStatus: ${oldSub.status}`,);
-            return;
-        }
-
-        await stripeBilling.subscriptions.cancel(previousSubscriptionId);
-        console.log(`Canceled previous trial subscription after new subscription became current: prevSubId: ${previousSubscriptionId}, userId: ${userId}, oldStage: ${oldStage}, oldStatus: ${oldSub.status}`);
-    } catch (err) {
-        console.error("Failed to inspect/cancel previous subscription", {
-            userId,
-            previousId: previousSubscriptionId,
-            err,
-        });
-        // Swallow: events from this old sub are still gated by isCurrent in handleSubscriptionChange
-    }
 }
