@@ -264,7 +264,7 @@ test("success confirmation rejects when DynamoDB cannot persist the Stripe state
     );
 });
 
-function loadReconciler({ updateActive, getProfile }) {
+function loadReconcilers({ updateActive = async () => {}, updateInactive = async () => {}, getProfile }) {
     return loadTypeScriptModule(
         path.join(projectRoot, "lib/billing/reconcile-subscription.ts"),
         {
@@ -272,10 +272,14 @@ function loadReconciler({ updateActive, getProfile }) {
             "@/lib/dynamo/user-profile": {
                 getUserProfile: getProfile,
                 updateUserSubscriptionStatusToActive: updateActive,
-                updateUserSubscriptionStatusToInactive: async () => {},
+                updateUserSubscriptionStatusToInactive: updateInactive,
             },
         },
-    ).reconcileActiveSubscription;
+    );
+}
+
+function loadReconciler({ updateActive, getProfile }) {
+    return loadReconcilers({ updateActive, getProfile }).reconcileActiveSubscription;
 }
 
 const completeSubscriptionState = {
@@ -324,6 +328,32 @@ test("conditional failure remains an error when stored Stripe state differs", as
     );
 });
 
+test("a superseded cancellation is dropped rather than revoking a newer subscription", async () => {
+    const { reconcileInactiveSubscription } = loadReconcilers({
+        updateInactive: async () => {
+            throw { name: "ConditionalCheckFailedException" };
+        },
+        // A newer subscription became current between the read and the write.
+        getProfile: async () => ({ subscriptionId: "sub_newer" }),
+    });
+
+    await reconcileInactiveSubscription("user-123", "user", "canceled", "sub_paid");
+});
+
+test("a cancellation that should have applied stays an error", async () => {
+    const { reconcileInactiveSubscription } = loadReconcilers({
+        updateInactive: async () => {
+            throw { name: "ConditionalCheckFailedException" };
+        },
+        getProfile: async () => ({ subscriptionId: "sub_paid" }),
+    });
+
+    await assert.rejects(
+        reconcileInactiveSubscription("user-123", "user", "canceled", "sub_paid"),
+        (err) => err?.name === "ConditionalCheckFailedException",
+    );
+});
+
 function textContent(node) {
     if (node == null || typeof node === "boolean") return "";
     if (typeof node === "string" || typeof node === "number") return String(node);
@@ -331,9 +361,16 @@ function textContent(node) {
     return textContent(node.props?.children);
 }
 
-test("success page never claims activation when confirmation fails", async () => {
+class MockInvalidCheckoutSessionError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "InvalidCheckoutSessionError";
+    }
+}
+
+function loadSuccessPage(confirm) {
     const jsx = (type, props) => ({ type, props });
-    const page = loadTypeScriptModule(
+    return loadTypeScriptModule(
         path.join(projectRoot, "app/(app)/billing/success/page.tsx"),
         {
             "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: Symbol("Fragment") },
@@ -343,9 +380,8 @@ test("success page never claims activation when confirmation fails", async () =>
             "next/navigation": { redirect: () => { throw new Error("Unexpected redirect"); } },
             "@/app/api/auth/[...nextauth]/route": { authOptions: {} },
             "@/lib/billing/billing-confirm": {
-                confirmCheckoutSessionAndActivateUser: async () => {
-                    throw new Error("DynamoDB is temporarily unavailable");
-                },
+                confirmCheckoutSessionAndActivateUser: confirm,
+                InvalidCheckoutSessionError: MockInvalidCheckoutSessionError,
             },
             "@/components/billing/activation-pending-retry": {
                 ActivationPendingRetry: () => null,
@@ -353,6 +389,12 @@ test("success page never claims activation when confirmation fails", async () =>
         },
         { jsx: ts.JsxEmit.ReactJSX },
     ).default;
+}
+
+test("success page never claims activation when confirmation fails", async () => {
+    const page = loadSuccessPage(async () => {
+        throw new Error("DynamoDB is temporarily unavailable");
+    });
 
     const rendered = await page({
         searchParams: Promise.resolve({ session_id: "cs_complete" }),
@@ -360,5 +402,20 @@ test("success page never claims activation when confirmation fails", async () =>
     const text = textContent(rendered);
 
     assert.match(text, /confirming your checkout/i);
+    assert.doesNotMatch(text, /Subscription activated/i);
+});
+
+test("an unusable checkout session stops polling and reports itself invalid", async () => {
+    const page = loadSuccessPage(async () => {
+        throw new MockInvalidCheckoutSessionError("Checkout session does not belong to this user");
+    });
+
+    const rendered = await page({
+        searchParams: Promise.resolve({ session_id: "cs_other_user" }),
+    });
+    const text = textContent(rendered);
+
+    assert.match(text, /couldn't verify this checkout/i);
+    assert.doesNotMatch(text, /confirming your checkout/i);
     assert.doesNotMatch(text, /Subscription activated/i);
 });

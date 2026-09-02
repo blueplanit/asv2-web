@@ -2,7 +2,10 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { confirmCheckoutSessionAndActivateUser } from "@/lib/billing/billing-confirm";
+import {
+    confirmCheckoutSessionAndActivateUser,
+    InvalidCheckoutSessionError,
+} from "@/lib/billing/billing-confirm";
 import { ActivationPendingRetry } from "@/components/billing/activation-pending-retry";
 
 type SearchParams = {
@@ -29,7 +32,14 @@ export default async function BillingSuccessPage(props: {
             const activated = await confirmCheckoutSessionAndActivateUser(sessionId, userId);
             activationState = activated ? "active" : "pending";
         } catch (err) {
-            console.error("Subscription activation is pending:", err);
+            // Polling cannot rescue a session that is expired or not this user's, so
+            // those report as invalid instead of confirming forever.
+            if (err instanceof InvalidCheckoutSessionError) {
+                console.error("Checkout session cannot be activated:", err);
+                activationState = "invalid";
+            } else {
+                console.error("Subscription activation is pending:", err);
+            }
         }
     }
 

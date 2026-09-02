@@ -9,6 +9,15 @@ import { mapStripePriceToPlan } from "./billing-plan-map";
 import { getSubscriptionPeriodEnd } from "./billing-period";
 import { isStripeSubscriptionEntitled } from "@/lib/app-state/subscription-entitlement";
 
+// A checkout session that retrying can never activate. The caller reports it as invalid
+// rather than polling, which any other failure here still deserves.
+export class InvalidCheckoutSessionError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "InvalidCheckoutSessionError";
+    }
+}
+
 export async function confirmCheckoutSessionAndActivateUser(
     sessionId: string,
     userId: string,
@@ -19,11 +28,18 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     // Security: metadata must match the logged-in user
     if (session.metadata?.userId !== userId) {
-        throw new Error("Checkout session does not belong to this user");
+        throw new InvalidCheckoutSessionError("Checkout session does not belong to this user");
     }
 
     if (session.mode !== "subscription") {
-        throw new Error(`Checkout session is not subscription mode: ${session.mode}`);
+        throw new InvalidCheckoutSessionError(
+            `Checkout session is not subscription mode: ${session.mode}`,
+        );
+    }
+
+    // An expired session can never complete. An open one still can, so it stays pending.
+    if (session.status === "expired") {
+        throw new InvalidCheckoutSessionError("Checkout session expired");
     }
 
     // Make sure the session actually completed

@@ -16,8 +16,10 @@ function isConditionalFailure(err: unknown): boolean {
     );
 }
 
+// Mirrors updateUserSubscriptionStatusToActive, which sets a field only when it holds
+// a truthy value. A field the write skipped must not be required to match.
 function matchesOptional<T>(actual: T | null | undefined, expected: T | null | undefined) {
-    return expected === undefined || actual === expected;
+    return !expected || actual === expected;
 }
 
 export async function reconcileActiveSubscription(
@@ -71,13 +73,11 @@ export async function reconcileInactiveSubscription(
     } catch (err) {
         if (!isConditionalFailure(err)) throw err;
 
+        // The write's only guard is subscriptionId, so a conditional failure means the
+        // stored subscription is no longer this one. Deactivating would then revoke
+        // entitlement a newer subscription grants, so the superseded event is dropped.
         const latest = await getUserProfile(userId);
-        const alreadyApplied =
-            latest?.subscriptionStatus === "inactive" &&
-            latest.subscriptionId === expectedSubscriptionId &&
-            latest.subscriptionRawStatus === rawStatus;
-
-        if (alreadyApplied) return;
+        if (!latest || latest.subscriptionId !== expectedSubscriptionId) return;
         throw err;
     }
 }
