@@ -15,14 +15,14 @@ class MockNextResponse extends Response {
     }
 }
 
-function subscriptionFixture(status = "active", customer = "cus_checkout") {
+function subscriptionFixture(status = "active", customer = "cus_checkout", metadata) {
     return {
         id: "sub_paid",
         customer,
         status,
         cancel_at_period_end: false,
         cancel_at: null,
-        metadata: {
+        metadata: metadata ?? {
             userId: "user-123",
             priceId: "price_monthly",
             subscription_stage: "paid",
@@ -40,8 +40,9 @@ function loadWebhookRoute({
     eventType = "customer.subscription.created",
     subscriptionStatus = "active",
     customer = "cus_checkout",
+    metadata,
 }) {
-    const subscription = subscriptionFixture(subscriptionStatus, customer);
+    const subscription = subscriptionFixture(subscriptionStatus, customer, metadata);
     return loadTypeScriptModule(
         path.join(projectRoot, "app/api/stripe/webhook/route.ts"),
         {
@@ -110,6 +111,37 @@ test("webhook returns 500 when DynamoDB cannot persist the Stripe state", async 
     const response = await POST(webhookRequest());
 
     assert.equal(response.status, 500);
+});
+
+test("a subscription with no userId is accepted rather than retried forever", async () => {
+    let writes = 0;
+    const POST = loadWebhookRoute({
+        updateActive: async () => {
+            writes += 1;
+        },
+        getProfile: async () => ({ accountRole: "user", subscriptionId: null }),
+        metadata: {},
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.equal(writes, 0);
+});
+
+test("a missing profile is accepted rather than retried forever", async () => {
+    let writes = 0;
+    const POST = loadWebhookRoute({
+        updateActive: async () => {
+            writes += 1;
+        },
+        getProfile: async () => undefined,
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.equal(writes, 0);
 });
 
 test("webhook persists the complete entitled Stripe state", async () => {

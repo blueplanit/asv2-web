@@ -155,13 +155,21 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const status = subscription.status;
     const { userId, params } = buildUpdateParamsFromSubscription(subscription);
 
+    // Answers 200. A redelivery cannot add metadata the subscription has never carried,
+    // so throwing would retry a permanent failure for three days and bury the real ones.
     if (!userId) {
-        throw new Error(`Stripe webhook: subscription ${subscription.id} has no userId`);
+        console.error(`Stripe webhook: subscription ${subscription.id} has no userId, skipping`);
+        return;
     }
 
+    // A transient read failure throws out of getUserProfile and does reach Stripe as a
+    // retry. Only an absent profile lands here, and redelivery cannot restore that.
     const profile = await getUserProfile(userId);
     if (!profile) {
-        throw new Error(`Stripe webhook: no profile for userId ${userId}`);
+        console.error(
+            `Stripe webhook: no profile for userId ${userId}, skipping subscription ${subscription.id}`,
+        );
+        return;
     }
 
     const stage = (subscription.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
