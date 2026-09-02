@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { unstable_cache } from "next/cache";
 import { stripeBilling, BILLING_PRICES } from "@/lib/stripe/stripe-billing";
 import { getDeliverableDiscount, isOngoingDiscount } from "@/lib/promotions/get-deliverable-discount";
 
@@ -48,18 +49,32 @@ function percentOffFor(unitAmount: number, discounted: number): number {
     return Math.round(((unitAmount - discounted) / unitAmount) * 100);
 }
 
-export async function getBillingDisplay(): Promise<BillingDisplayResult> {
-    const monthlyId = BILLING_PRICES.pro.monthly;
-    const yearlyId = BILLING_PRICES.pro.yearly;
+// List prices carry no Promotion state and change rarely, so they hold the hour the
+// HTTP response used to buy. A throw caches nothing — see ADR-0003 point 7.
+const getProPriceAmounts = unstable_cache(
+    async () => {
+        const [monthly, yearly] = await Promise.all([
+            stripeBilling.prices.retrieve(BILLING_PRICES.pro.monthly),
+            stripeBilling.prices.retrieve(BILLING_PRICES.pro.yearly),
+        ]);
 
-    const [monthly, yearly, discount] = await Promise.all([
-        stripeBilling.prices.retrieve(monthlyId),
-        stripeBilling.prices.retrieve(yearlyId),
+        if (!monthly.unit_amount || !monthly.currency) throw new Error("Monthly price missing unit_amount/currency");
+        if (!yearly.unit_amount || !yearly.currency) throw new Error("Yearly price missing unit_amount/currency");
+
+        return {
+            monthly: { unitAmount: monthly.unit_amount, currency: monthly.currency },
+            yearly: { unitAmount: yearly.unit_amount, currency: yearly.currency },
+        };
+    },
+    ["stripe-pro-prices", BILLING_PRICES.pro.monthly, BILLING_PRICES.pro.yearly],
+    { revalidate: 3600 },
+);
+
+export async function getBillingDisplay(): Promise<BillingDisplayResult> {
+    const [prices, discount] = await Promise.all([
+        getProPriceAmounts(),
         getDeliverableDiscount(),
     ]);
-
-    if (!monthly.unit_amount || !monthly.currency) throw new Error("Monthly price missing unit_amount/currency");
-    if (!yearly.unit_amount || !yearly.currency) throw new Error("Yearly price missing unit_amount/currency");
 
     // A non-ongoing discount still applies at checkout, so it stays reportable below
     // — it just cannot be shown as the per-interval rate.
@@ -81,8 +96,8 @@ export async function getBillingDisplay(): Promise<BillingDisplayResult> {
 
     return {
         billingDisplay: {
-            monthly: display(monthly.unit_amount, monthly.currency, "/month"),
-            yearly: display(yearly.unit_amount, yearly.currency, "/year"),
+            monthly: display(prices.monthly.unitAmount, prices.monthly.currency, "/month"),
+            yearly: display(prices.yearly.unitAmount, prices.yearly.currency, "/year"),
         },
         promotionId: discount?.promotion.id ?? null,
     };
