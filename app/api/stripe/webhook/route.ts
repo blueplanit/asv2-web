@@ -180,8 +180,6 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
         return;
     }
 
-    const { params } = buildUpdateParamsFromSubscription(subscription);
-
     const stage = (subscription.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
     const isCurrent = profile.subscriptionId === subscription.id;
     const isEntitled = isStripeSubscriptionEntitled(status);
@@ -207,6 +205,9 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
         }
 
         const previousId = profile.subscriptionId ?? null;
+        // Built here, not above: the terminal branch never reads these, and the builder
+        // throws on an event payload carrying no resolvable Customer.
+        const { params } = buildUpdateParamsFromSubscription(subscription);
         await reconcileActiveSubscription(userId, params, previousId);
 
         if (previousId && previousId !== subscription.id) {
