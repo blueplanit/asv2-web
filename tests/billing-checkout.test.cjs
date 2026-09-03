@@ -64,6 +64,39 @@ const deliverableDiscount = {
     promotionCodeId: "promo_code_123",
 };
 
+test("a Promotion started after the page loaded still requires price review", async () => {
+    const createCalls = [];
+    const POST = loadCheckoutRoute({
+        discount: deliverableDiscount,
+        profile: { email: "buyer@example.com" },
+        createSession: async (params) => {
+            createCalls.push(params);
+            return { url: "https://checkout.stripe.test/session" };
+        },
+        ensureCustomer: async () => "cus_unused",
+    });
+
+    // The page showed no Promotion, so both expectations are sent as an explicit null.
+    // Built inline because checkoutRequest's ?? fallback would replace them.
+    const response = await POST(
+        new Request("https://example.com/api/billing/checkout", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                planId: "pro",
+                interval: "monthly",
+                expectedPromotionId: null,
+                expectedPromotionVersion: null,
+            }),
+        }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 409);
+    assert.equal(body.code, "price_changed");
+    assert.equal(createCalls.length, 0);
+});
+
 test("a Promotion this customer cannot redeem offers the full price instead of a retry", async () => {
     const createCalls = [];
     const POST = loadCheckoutRoute({

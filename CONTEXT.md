@@ -46,7 +46,7 @@ _Avoid_: "sheet swap", "migrate".
 ### Promotions
 
 **Promotion**:
-A sitewide discount campaign shown on public marketing pages, backed by exactly one published `promotionASv2` entry. Publishing the entry is the only thing that starts a campaign: it supplies banner copy and names the **Promotion Code** that carries the discount. A Promotion Code no entry names is inert.
+A sitewide discount offer shown on public marketing pages, backed by exactly one published `promotionASv2` entry. Publishing the entry is the only thing that starts a Promotion: it supplies banner copy and names the **Promotion Code** that carries the discount. A Promotion Code no entry names is inert.
 _Avoid_: "promo", "discount", "campaign" — each is used loosely elsewhere; "Promotion" is this project's precise term for the whole feature.
 
 **Deliverable Discount**:
@@ -54,7 +54,7 @@ A Promotion whose named **Promotion Code** also resolves at Stripe and is still 
 _Avoid_: calling a Promotion "active" without saying which of the two you mean.
 
 **Promotion Code**:
-The Stripe object that carries the discount and bounds it (`active`, `expires_at`, `max_redemptions`). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically. It carries no eligibility restriction — every visitor who reaches checkout during a campaign qualifies. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
+The Stripe object that carries the discount and bounds it (`active`, `expires_at`, `max_redemptions`). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically. It carries no eligibility restriction — every visitor who reaches checkout during a Promotion qualifies. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
 _Avoid_: "coupon" — Stripe's Coupon defines the discount math, but this project only ever references the Promotion Code that wraps one.
 
 **Ending a Promotion**:

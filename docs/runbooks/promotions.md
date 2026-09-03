@@ -57,6 +57,8 @@ Write evergreen copy. Name the discount and call it limited-time. Do not state a
 
 Two published entries make the site show **no** Promotion at all. That is a deliberate fail-safe against an editorial mistake, and it is silent.
 
+**A Vercel preview deployment cannot stage a Promotion.** Preview builds set `NODE_ENV=production`, so they apply the same `showInProduction` filter production does. Checking the box to see the banner on a preview also makes it live in production. Review the copy in Contentful, or in local development where the filter is skipped.
+
 ### 6. Check the site
 
 The banner appears on public marketing pages within seconds. `/pricing` shows the original price struck through, the discounted price, and the percent off. Checkout applies the discount with no code entry.
@@ -97,7 +99,7 @@ A visitor who dismisses the banner has that dismissal stored against the entry's
 | Banner appears, price not struck through | The Coupon's `duration` is not `forever`. Checkout still discounts |
 | Banner appears, price is full | The Promotion Code is inactive, expired, out of redemptions, or its Coupon is not `forever` |
 | Checkout stops and refreshes the price | The Promotion ended or changed after the pricing page loaded |
-| Banner appears in a preview deployment only | `showInProduction` is unchecked |
+| Banner appears on your machine but not on a deployment | `showInProduction` is unchecked. Vercel sets `NODE_ENV=production` for preview builds too, so an unchecked entry is hidden on preview and production alike, and shows only in local development |
 | Banner will not appear for you | You dismissed it, or you are signed in as a paying subscriber. Clear `promotion-banner-dismissed-id` and `promotion-banner-subscriber` from browser storage |
 
 A Promotion Code that runs out of redemptions goes permanently inactive while the entry stays published. The banner keeps advertising a discount nobody can get. Unpublish the entry.

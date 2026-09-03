@@ -31,9 +31,8 @@ function checkoutError(
     return NextResponse.json({ code }, { status });
 }
 
-// Stripe rejects a Promotion Code this customer cannot redeem, for example one held to
-// first-time buyers. Retrying repeats the same rejection, so the visitor is offered the
-// full price instead of being told to try again.
+// Stripe rejects a Promotion Code this customer cannot redeem, such as one held to
+// first-time buyers. Retrying repeats the rejection, so the full price is offered.
 function isPromotionNotApplicable(err: unknown): boolean {
     if (!err || typeof err !== "object") return false;
     const code = (err as { code?: unknown }).code;
@@ -82,11 +81,14 @@ export async function POST(req: Request) {
 
     // The client supplies only what it displayed. The server still decides which
     // Promotion Code is valid and refuses a changed price rather than silently charging it.
-    const promotionChanged = body.expectedPromotionVersion
-        ? body.expectedPromotionVersion !== deliverableDiscountVersion(discount)
-        : body.expectedPromotionId
-            ? body.expectedPromotionId !== discount?.promotion.id
-            : false;
+    // A sent-but-null expectation means the page showed no Promotion, so one starting
+    // since then is still a change, even though it lowers the price.
+    const promotionChanged =
+        body.expectedPromotionVersion !== undefined
+            ? (body.expectedPromotionVersion ?? null) !== deliverableDiscountVersion(discount)
+            : body.expectedPromotionId !== undefined
+                ? (body.expectedPromotionId ?? null) !== (discount?.promotion.id ?? null)
+                : false;
     if (promotionChanged) {
         return checkoutError("price_changed", 409);
     }

@@ -21,6 +21,10 @@ Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md
 - **Commit messages:** concise but sufficiently descriptive.
 - Match the surrounding code's style, naming, and idioms rather than importing new patterns.
 
+## Tests
+
+There is no repo-wide test runner. `tests/` holds targeted `node --test` files for the billing paths, run with `npm run test:billing`. They compile a route with `tests/helpers/load-typescript-module.cjs` and inject mocks, so adding an import to a covered route means adding it to that test's mock map or the test throws `Unexpected dependency`. Run the scripts, not `node --test tests/`, which tries to execute the helper.
+
 ## Related repos
 
 - `../asv2-serverless` — Lambdas (backfill, scheduler/master, sheet writer, recovery).

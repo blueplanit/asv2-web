@@ -73,9 +73,8 @@ export async function reconcileInactiveSubscription(
     } catch (err) {
         if (!isConditionalFailure(err)) throw err;
 
-        // The write's only guard is subscriptionId, so a conditional failure means the
-        // stored subscription is no longer this one. Deactivating would then revoke
-        // entitlement a newer subscription grants, so the superseded event is dropped.
+        // The write guards only subscriptionId, so a rejection means a newer subscription
+        // took over. Deactivating now would revoke the entitlement that one grants.
         const latest = await getUserProfile(userId);
         if (latest && latest.subscriptionId !== expectedSubscriptionId) return;
 

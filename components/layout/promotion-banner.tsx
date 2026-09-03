@@ -121,10 +121,7 @@ export function PromotionBanner({ promotion }: PromotionBannerProps) {
         trackAmplitudeEvent("Promotion Banner Dismissed", { promotion_id: promotion.id });
     }
 
-    // z-50 clears the site header, which is relative z-40 and sits later in the DOM,
-    // so an equal z-index would let it paint over this while scrolling.
-    // Symmetric px-12 reserves the gutter the absolutely positioned dismiss button
-    // sits in, so long copy cannot run underneath it on a narrow screen.
+    // z-50 outranks the header's z-40, and px-12 reserves the dismiss button's gutter.
     return (
         <div
             id={BANNER_ELEMENT_ID}
