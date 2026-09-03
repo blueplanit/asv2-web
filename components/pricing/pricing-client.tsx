@@ -415,6 +415,10 @@ export function PricingClient({ copy }: PricingClientProps) {
         </a>
     ) : null;
 
+    // Derived once, like primaryCtaLabel: both CTAs must gate identically, and three
+    // prior commits set this wrong by editing one site's condition in isolation.
+    const ctaDisabled = loading || status === "loading" || (isLoggedIn && pricingLoading);
+
     const primaryCtaLabel = isLoggedIn
         ? loading
             ? copy.ctaLabels.signedInLoading
@@ -538,7 +542,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     <button
                                         type="button"
                                         onClick={handleSelectPlan}
-                                        disabled={loading || status === "loading" || (isLoggedIn && pricingLoading)}
+                                        disabled={ctaDisabled}
                                         className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
                                     >
                                         {primaryCtaLabel}
@@ -624,7 +628,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                     <button
                         type="button"
                         onClick={handleSelectPlan}
-                        disabled={loading || status === "loading" || (isLoggedIn && pricingLoading)}
+                        disabled={ctaDisabled}
                         className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
                     >
                         {primaryCtaLabel}
