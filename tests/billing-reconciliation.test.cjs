@@ -495,6 +495,25 @@ test("a cancellation that should have applied stays an error", async () => {
     );
 });
 
+test("a missing profile remains an error after conditional inactivation fails", async () => {
+    const { reconcileInactiveSubscription } = loadReconcilers({
+        updateInactive: async () => {
+            throw { name: "ConditionalCheckFailedException" };
+        },
+        getProfile: async () => null,
+    });
+
+    await assert.rejects(
+        reconcileInactiveSubscription(
+            "user-123",
+            "user",
+            "canceled",
+            "sub_paid",
+        ),
+        (err) => err?.name === "ConditionalCheckFailedException",
+    );
+});
+
 function textContent(node) {
     if (node == null || typeof node === "boolean") return "";
     if (typeof node === "string" || typeof node === "number") return String(node);

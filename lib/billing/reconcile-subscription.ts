@@ -77,7 +77,8 @@ export async function reconcileInactiveSubscription(
         // stored subscription is no longer this one. Deactivating would then revoke
         // entitlement a newer subscription grants, so the superseded event is dropped.
         const latest = await getUserProfile(userId);
-        if (!latest || latest.subscriptionId !== expectedSubscriptionId) return;
+        if (latest && latest.subscriptionId !== expectedSubscriptionId) return;
+
         throw err;
     }
 }
