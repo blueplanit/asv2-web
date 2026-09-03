@@ -359,24 +359,19 @@ export function PricingClient({ copy }: PricingClientProps) {
                         setPromotionId(currentPricing.promotionId ?? null);
                         setPromotionVersion(currentPricing.promotionVersion ?? null);
                         setPricingStatus("ready");
-                        const fullPrice = currentPricing?.billingDisplay?.[interval] ?? billingDisplay[interval];
+                        // The guard above proved billingDisplay is present, so no fallback.
+                        const fullPrice = currentPricing.billingDisplay[interval];
                         setCheckoutNotice(
                             isPromotionNotApplicable
                                 ? {
                                     title: "Promotion not applied",
                                     description: `This promotion isn't available on your account, usually because a discount was already used. No charge was made. Start checkout again to continue at ${fullPrice.price}${fullPrice.intervalLabel}.`,
                                 }
-                                : currentPricing?.billingDisplay
-                                    ? {
-                                        title: "The price changed",
-                                        description:
-                                            "The promotional offer changed before checkout. No charge was made. We've refreshed the price, so please review it and try again.",
-                                    }
-                                    : {
-                                        title: "The price changed",
-                                        description:
-                                            "The promotional offer changed before checkout. No charge was made. Please refresh the page to review the current price.",
-                                    },
+                                : {
+                                    title: "The price changed",
+                                    description:
+                                        "The promotional offer changed before checkout. No charge was made. We've refreshed the price, so please review it and try again.",
+                                },
                         );
                     } catch {
                         setPricingStatus("error");
