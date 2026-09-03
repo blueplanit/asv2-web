@@ -51,6 +51,8 @@ Stripe sometimes refuses a Promotion Code for the customer rather than the reque
 
 An expectation the client sends as null means the page displayed no Promotion. A Promotion starting after that load is therefore still a change, and checkout stops even though the new price is lower. Only an expectation the client omits entirely is unchecked, which keeps an older client bundle working.
 
+That null only carries meaning because the Subscribe button waits for the pricing read, so a click cannot precede an answer. A failed read leaves the page on its hardcoded fallback price, which displays no Promotion, so null stays the honest expectation and checkout still stops rather than opening at a price the page never showed.
+
 The subscription webhook is the primary path that writes Stripe's Customer, subscription, plan, interval, period end, and status into the User profile. The billing success page independently reconciles the same state. A DynamoDB failure returns a webhook error so Stripe retries; a conditional failure counts as success only after a read proves that the complete intended state is already stored. The success page reports activation only after reconciliation succeeds.
 
 ### 7. Only a `forever` coupon gets a struck-through price

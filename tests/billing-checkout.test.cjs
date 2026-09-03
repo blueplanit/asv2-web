@@ -64,7 +64,7 @@ const deliverableDiscount = {
     promotionCodeId: "promo_code_123",
 };
 
-test("an omitted expectation is unchecked, so an early click still discounts", async () => {
+test("an omitted expectation stays unchecked, so an older client bundle still works", async () => {
     const createCalls = [];
     const POST = loadCheckoutRoute({
         discount: deliverableDiscount,
@@ -76,8 +76,8 @@ test("an omitted expectation is unchecked, so an early click still discounts", a
         ensureCustomer: async () => "cus_unused",
     });
 
-    // The client omits both fields until a pricing read answers. Null would instead
-    // assert "no Promotion was shown" and trip the changed-price guard.
+    // The current bundle always sends both fields. This covers a bundle predating them,
+    // which must not start failing because a Promotion went live.
     const response = await POST(
         new Request("https://example.com/api/billing/checkout", {
             method: "POST",
