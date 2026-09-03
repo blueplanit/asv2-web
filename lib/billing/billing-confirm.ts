@@ -52,7 +52,11 @@ export async function confirmCheckoutSessionAndActivateUser(
         throw new Error(`Checkout session not complete: ${session.status}`);
     }
 
-    if (session.payment_status !== "paid") {
+    const paymentSatisfied =
+        session.payment_status === "paid" ||
+        session.payment_status === "no_payment_required";
+
+    if (!paymentSatisfied) {
         throw new Error("Payment not completed yet");
     }
 

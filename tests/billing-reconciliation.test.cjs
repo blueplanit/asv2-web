@@ -270,6 +270,7 @@ function loadBillingConfirmation({
     subscription = subscriptionFixture(),
     canBecomeCurrent = async () => true,
     cancelPreviousTrial = async () => {},
+    paymentStatus = "paid",
 }) {
     return loadTypeScriptModule(
         path.join(projectRoot, "lib/billing/billing-confirm.ts"),
@@ -282,7 +283,7 @@ function loadBillingConfirmation({
                             retrieve: async () => ({
                                 mode: "subscription",
                                 status: "complete",
-                                payment_status: "paid",
+                                payment_status: paymentStatus,
                                 customer: "cus_checkout",
                                 subscription,
                                 metadata: { userId: "user-123", priceId: "price_monthly" },
@@ -333,6 +334,21 @@ test("success confirmation rejects when DynamoDB cannot persist the Stripe state
         confirm("cs_complete", "user-123"),
         /DynamoDB is temporarily unavailable/,
     );
+});
+
+test("a no-payment-required subscription is reconciled after checkout", async () => {
+    let writes = 0;
+    const confirm = loadBillingConfirmation({
+        paymentStatus: "no_payment_required",
+        updateActive: async () => {
+            writes += 1;
+        },
+    });
+
+    const activated = await confirm("cs_free", "user-123");
+
+    assert.equal(activated, true);
+    assert.equal(writes, 1);
 });
 
 test("an old checkout success URL cannot replace or cancel the current subscription", async () => {
