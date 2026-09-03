@@ -64,6 +64,32 @@ const deliverableDiscount = {
     promotionCodeId: "promo_code_123",
 };
 
+test("an omitted expectation is unchecked, so an early click still discounts", async () => {
+    const createCalls = [];
+    const POST = loadCheckoutRoute({
+        discount: deliverableDiscount,
+        profile: { email: "buyer@example.com" },
+        createSession: async (params) => {
+            createCalls.push(params);
+            return { url: "https://checkout.stripe.test/session" };
+        },
+        ensureCustomer: async () => "cus_unused",
+    });
+
+    // The client omits both fields until a pricing read answers. Null would instead
+    // assert "no Promotion was shown" and trip the changed-price guard.
+    const response = await POST(
+        new Request("https://example.com/api/billing/checkout", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ planId: "pro", interval: "monthly" }),
+        }),
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(createCalls[0].discounts, [{ promotion_code: "promo_code_123" }]);
+});
+
 test("a Promotion started after the page loaded still requires price review", async () => {
     const createCalls = [];
     const POST = loadCheckoutRoute({

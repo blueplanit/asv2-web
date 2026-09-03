@@ -204,6 +204,9 @@ export function PricingClient({ copy }: PricingClientProps) {
     const [pricingLoading, setPricingLoading] = useState(true);
     const [promotionId, setPromotionId] = useState<string | null>(null);
     const [promotionVersion, setPromotionVersion] = useState<string | null>(null);
+    // False until a pricing read answers. Sending a null expectation before then would
+    // read as "the page showed no Promotion" and trip the changed-price guard.
+    const [pricingKnown, setPricingKnown] = useState(false);
     const viewTracked = useRef(false);
 
     useEffect(() => {
@@ -220,6 +223,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                 if (data?.billingDisplay) setBillingDisplay(data.billingDisplay);
                 setPromotionId(data?.promotionId ?? null);
                 setPromotionVersion(data?.promotionVersion ?? null);
+                if (data) setPricingKnown(true);
             })
             .catch(() => { })
             .finally(() => {
@@ -300,8 +304,14 @@ export function PricingClient({ copy }: PricingClientProps) {
                 body: JSON.stringify({
                     planId: "pro",
                     interval,
-                    expectedPromotionId: promotionId,
-                    expectedPromotionVersion: promotionVersion,
+                    // Omitted, not null, until pricing is known: an omitted expectation
+                    // is unchecked, where a null one asserts "no Promotion was shown".
+                    ...(pricingKnown
+                        ? {
+                            expectedPromotionId: promotionId,
+                            expectedPromotionVersion: promotionVersion,
+                        }
+                        : {}),
                     skipPromotion,
                 }),
             });
@@ -332,6 +342,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                             setBillingDisplay(currentPricing.billingDisplay);
                             setPromotionId(currentPricing.promotionId ?? null);
                             setPromotionVersion(currentPricing.promotionVersion ?? null);
+                            setPricingKnown(true);
                         }
                         const fullPrice = currentPricing?.billingDisplay?.[interval] ?? billingDisplay[interval];
                         setCheckoutNotice(
@@ -536,7 +547,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     <button
                                         type="button"
                                         onClick={handleSelectPlan}
-                                        disabled={loading}
+                                        disabled={loading || pricingLoading}
                                         className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
                                     >
                                         {primaryCtaLabel}
@@ -622,7 +633,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                     <button
                         type="button"
                         onClick={handleSelectPlan}
-                        disabled={loading}
+                        disabled={loading || pricingLoading}
                         className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
                     >
                         {primaryCtaLabel}
