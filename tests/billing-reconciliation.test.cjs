@@ -94,6 +94,8 @@ function loadWebhookRoute({
             },
             "@/lib/billing/subscription-order": {
                 canBecomeCurrentSubscription: canBecomeCurrent,
+                isMissingStripeSubscription: (err) =>
+                    err?.code === "resource_missing",
             },
             "@/lib/billing/cancel-previous-trial-subscription": {
                 cancelPreviousTrialSubscription: cancelPreviousTrial,
@@ -213,6 +215,35 @@ test("deleted-subscription webhook returns 500 when inactivation cannot persist"
     const response = await POST(webhookRequest());
 
     assert.equal(response.status, 500);
+});
+
+test("a missing deleted subscription is reconciled from the signed event", async () => {
+    let written;
+    const POST = loadWebhookRoute({
+        updateActive: async () => {},
+        updateInactive: async (userId, accountRole, rawStatus, subscriptionId) => {
+            written = { userId, accountRole, rawStatus, subscriptionId };
+        },
+        getProfile: async () => ({
+            accountRole: "user",
+            subscriptionId: "sub_paid",
+        }),
+        eventType: "customer.subscription.deleted",
+        subscriptionStatus: "canceled",
+        retrieveSubscription: async () => {
+            throw { code: "resource_missing" };
+        },
+    });
+
+    const response = await POST(webhookRequest());
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(written, {
+        userId: "user-123",
+        accountRole: "user",
+        rawStatus: "canceled",
+        subscriptionId: "sub_paid",
+    });
 });
 
 test("a delayed older paid webhook cannot replace the current subscription", async () => {

@@ -312,10 +312,10 @@ export async function POST(req: NextRequest) {
                     );
                 } catch (err) {
                     if (!isMissingStripeSubscription(err)) throw err;
-                    console.error(
-                        `Stripe webhook: deleted subscription ${deliveredSubscription.id} no longer exists, skipping`,
+                    console.warn(
+                        `Stripe webhook: deleted subscription ${deliveredSubscription.id} no longer exists; using the signed deletion event`,
                     );
-                    break;
+                    subscription = deliveredSubscription;
                 }
                 await handleSubscriptionChange(subscription);
                 break;
