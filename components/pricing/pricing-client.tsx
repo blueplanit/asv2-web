@@ -24,6 +24,8 @@ type PricingApiResponse = {
     promotionVersion?: string | null;
 };
 
+type PricingStatus = "loading" | "ready" | "error";
+
 const DEFAULT_BILLING_DISPLAY: BillingDisplay = {
     monthly: { price: "$19", intervalLabel: "/month", discountedPrice: null, percentOff: null },
     yearly: { price: "$190", intervalLabel: "/year", discountedPrice: null, percentOff: null },
@@ -113,6 +115,7 @@ function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
 type PriceDisplayProps = {
     variant: "card" | "sticky";
     loading: boolean;
+    error: boolean;
     price: string;
     intervalLabel: string;
     discountedPrice: string | null;
@@ -137,7 +140,11 @@ function DiscountBadge({ percentOff, size }: { percentOff: number; size: "md" | 
 
 // Shared by the main plan card and the mobile sticky bar, so the loading /
 // discounted / plain-price decision can't drift between the two surfaces.
-function PriceDisplay({ variant, loading, price, intervalLabel, discountedPrice, percentOff }: PriceDisplayProps) {
+function PriceDisplay({ variant, loading, error, price, intervalLabel, discountedPrice, percentOff }: PriceDisplayProps) {
+    if (error) {
+        return <p className="text-sm font-medium text-red-600">Price temporarily unavailable</p>;
+    }
+
     if (variant === "card") {
         if (loading) {
             return (
@@ -201,7 +208,8 @@ export function PricingClient({ copy }: PricingClientProps) {
     // attempt asks for the full price rather than repeating the same rejection.
     const [skipPromotion, setSkipPromotion] = useState(false);
     const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
-    const [pricingLoading, setPricingLoading] = useState(true);
+    const [pricingStatus, setPricingStatus] = useState<PricingStatus>("loading");
+    const [pricingAttempt, setPricingAttempt] = useState(0);
     const [promotionId, setPromotionId] = useState<string | null>(null);
     const [promotionVersion, setPromotionVersion] = useState<string | null>(null);
     const viewTracked = useRef(false);
@@ -209,23 +217,28 @@ export function PricingClient({ copy }: PricingClientProps) {
     useEffect(() => {
         let cancelled = false;
         const controller = new AbortController();
-        // PRICING_PAGE_VIEWED now waits on this fetch too (see below), so a stalled
-        // request — not just an error response — must still resolve pricingLoading.
+        // A stalled request becomes a retryable error instead of leaving checkout open
+        // against a price the server never confirmed.
         const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
-        setPricingLoading(true);
+        setPricingStatus("loading");
         fetchCurrentPricing(controller.signal)
             .then((data) => {
                 if (cancelled) return;
-                if (data?.billingDisplay) setBillingDisplay(data.billingDisplay);
-                setPromotionId(data?.promotionId ?? null);
-                setPromotionVersion(data?.promotionVersion ?? null);
+                if (!data?.billingDisplay) {
+                    setPricingStatus("error");
+                    return;
+                }
+                setBillingDisplay(data.billingDisplay);
+                setPromotionId(data.promotionId ?? null);
+                setPromotionVersion(data.promotionVersion ?? null);
+                setPricingStatus("ready");
             })
-            .catch(() => { })
+            .catch(() => {
+                if (!cancelled) setPricingStatus("error");
+            })
             .finally(() => {
                 window.clearTimeout(timeoutId);
-                if (cancelled) return;
-                setPricingLoading(false);
             });
 
         return () => {
@@ -233,12 +246,12 @@ export function PricingClient({ copy }: PricingClientProps) {
             window.clearTimeout(timeoutId);
             controller.abort();
         };
-    }, []);
+    }, [pricingAttempt]);
 
     // Waits for the session and the pricing fetch, so is_logged_in and
     // promotion_active are both accurate rather than defaulting wrong. See ADR-0003.
     useEffect(() => {
-        if (status === "loading" || pricingLoading || viewTracked.current) return;
+        if (status === "loading" || pricingStatus !== "ready" || viewTracked.current) return;
 
         viewTracked.current = true;
         trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
@@ -246,7 +259,7 @@ export function PricingClient({ copy }: PricingClientProps) {
             promotion_active: promotionId !== null,
             ...(promotionId ? { promotion_id: promotionId } : {}),
         });
-    }, [status, isLoggedIn, pricingLoading, promotionId]);
+    }, [status, isLoggedIn, pricingStatus, promotionId]);
 
     const searchParams = useSearchParams();
     const authFlag = searchParams.get("auth");
@@ -268,6 +281,15 @@ export function PricingClient({ copy }: PricingClientProps) {
         // Both snackbars occupy the same slot, and the hint has served its purpose
         // once the visitor acts on the page.
         setShowSignedInHint(false);
+
+        if (isLoggedIn && pricingStatus !== "ready") {
+            if (pricingStatus === "error") {
+                setPricingStatus("loading");
+                setPricingAttempt((current) => current + 1);
+            }
+            return;
+        }
+
         trackAmplitudeEvent("Upgrade To Pro Clicked", {
             source: "pricing_page",
             is_logged_in: isLoggedIn,
@@ -327,14 +349,16 @@ export function PricingClient({ copy }: PricingClientProps) {
 
                     const controller = new AbortController();
                     const timeoutId = window.setTimeout(() => controller.abort(), 8000);
-                    setPricingLoading(true);
+                    setPricingStatus("loading");
                     try {
                         const currentPricing = await fetchCurrentPricing(controller.signal);
-                        if (currentPricing?.billingDisplay) {
-                            setBillingDisplay(currentPricing.billingDisplay);
-                            setPromotionId(currentPricing.promotionId ?? null);
-                            setPromotionVersion(currentPricing.promotionVersion ?? null);
+                        if (!currentPricing?.billingDisplay) {
+                            throw new Error("Current pricing unavailable");
                         }
+                        setBillingDisplay(currentPricing.billingDisplay);
+                        setPromotionId(currentPricing.promotionId ?? null);
+                        setPromotionVersion(currentPricing.promotionVersion ?? null);
+                        setPricingStatus("ready");
                         const fullPrice = currentPricing?.billingDisplay?.[interval] ?? billingDisplay[interval];
                         setCheckoutNotice(
                             isPromotionNotApplicable
@@ -355,14 +379,14 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     },
                         );
                     } catch {
+                        setPricingStatus("error");
                         setCheckoutNotice({
                             title: isPromotionNotApplicable ? "Promotion not applied" : "The price changed",
                             description:
-                                "The offer changed before checkout. No charge was made. Please refresh the page to review the current price.",
+                                "We couldn't load current pricing. No charge was made. Retry pricing before continuing.",
                         });
                     } finally {
                         window.clearTimeout(timeoutId);
-                        setPricingLoading(false);
                     }
                 } else {
                     setCheckoutNotice({
@@ -415,14 +439,17 @@ export function PricingClient({ copy }: PricingClientProps) {
         </a>
     ) : null;
 
-    // Derived once, like primaryCtaLabel: both CTAs must gate identically, and three
-    // prior commits set this wrong by editing one site's condition in isolation.
+    const pricingLoading = pricingStatus === "loading";
+    const pricingError = pricingStatus === "error";
+    // An error changes the signed-in CTA into a retry action, never checkout.
     const ctaDisabled = loading || status === "loading" || (isLoggedIn && pricingLoading);
 
     const primaryCtaLabel = isLoggedIn
-        ? loading
-            ? copy.ctaLabels.signedInLoading
-            : copy.ctaLabels.signedInIdle
+        ? pricingError
+            ? "Retry pricing"
+            : loading
+                ? copy.ctaLabels.signedInLoading
+                : copy.ctaLabels.signedInIdle
         : loading
             ? copy.ctaLabels.signedOutLoading
             : copy.ctaLabels.signedOutIdle;
@@ -516,6 +543,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     <PriceDisplay
                                         variant="card"
                                         loading={pricingLoading}
+                                        error={pricingError}
                                         price={price}
                                         intervalLabel={intervalLabel}
                                         discountedPrice={discountedPrice}
@@ -619,6 +647,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                         <PriceDisplay
                             variant="sticky"
                             loading={pricingLoading}
+                            error={pricingError}
                             price={price}
                             intervalLabel={intervalLabel}
                             discountedPrice={discountedPrice}
