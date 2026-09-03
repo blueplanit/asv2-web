@@ -3,7 +3,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";
 
-function isMissingStripeSubscription(err: unknown): boolean {
+export function isMissingStripeSubscription(err: unknown): boolean {
     return (
         !!err &&
         typeof err === "object" &&

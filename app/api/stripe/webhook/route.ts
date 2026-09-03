@@ -15,7 +15,10 @@ import {
     reconcileInactiveSubscription,
 } from "@/lib/billing/reconcile-subscription";
 import { requireStripeCustomerId } from "@/lib/billing/stripe-customer-id";
-import { canBecomeCurrentSubscription } from "@/lib/billing/subscription-order";
+import {
+    canBecomeCurrentSubscription,
+    isMissingStripeSubscription,
+} from "@/lib/billing/subscription-order";
 import { cancelPreviousTrialSubscription } from "@/lib/billing/cancel-previous-trial-subscription";
 
 export const runtime = "nodejs";
@@ -155,7 +158,10 @@ async function emitSubscriptionPaidIfConverted(args: {
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const status = subscription.status;
-    const { userId, params } = buildUpdateParamsFromSubscription(subscription);
+
+    // Read before building params: that builder can throw, which would skip the two
+    // permanent-condition guards below and make Stripe retry for three days.
+    const userId = ((subscription.metadata as any)?.userId as string | undefined) ?? null;
 
     // Answers 200. A redelivery cannot add metadata the subscription has never carried,
     // so throwing would retry a permanent failure for three days and bury the real ones.
@@ -173,6 +179,8 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
         );
         return;
     }
+
+    const { params } = buildUpdateParamsFromSubscription(subscription);
 
     const stage = (subscription.metadata as any)?.subscription_stage as "trial" | "paid" | undefined;
     const isCurrent = profile.subscriptionId === subscription.id;
@@ -244,9 +252,18 @@ export async function POST(req: NextRequest) {
             case "customer.subscription.updated": {
                 const deliveredSubscription = event.data.object as Stripe.Subscription;
                 // Re-read Stripe so delayed events cannot restore an old snapshot.
-                const subscription = await stripeBilling.subscriptions.retrieve(
-                    deliveredSubscription.id,
-                );
+                let subscription: Stripe.Subscription;
+                try {
+                    subscription = await stripeBilling.subscriptions.retrieve(
+                        deliveredSubscription.id,
+                    );
+                } catch (err) {
+                    if (!isMissingStripeSubscription(err)) throw err;
+                    console.error(
+                        `Stripe webhook: subscription ${deliveredSubscription.id} no longer exists, skipping`,
+                    );
+                    break;
+                }
                 console.log(`Stripe webhook: subscription created/updated: subId: ${subscription.id}, userId: ${subscription.metadata?.userId}`);
 
                 // previous_attributes only carries the fields that changed, so
@@ -288,9 +305,18 @@ export async function POST(req: NextRequest) {
             }
             case "customer.subscription.deleted": {
                 const deliveredSubscription = event.data.object as Stripe.Subscription;
-                const subscription = await stripeBilling.subscriptions.retrieve(
-                    deliveredSubscription.id,
-                );
+                let subscription: Stripe.Subscription;
+                try {
+                    subscription = await stripeBilling.subscriptions.retrieve(
+                        deliveredSubscription.id,
+                    );
+                } catch (err) {
+                    if (!isMissingStripeSubscription(err)) throw err;
+                    console.error(
+                        `Stripe webhook: deleted subscription ${deliveredSubscription.id} no longer exists, skipping`,
+                    );
+                    break;
+                }
                 await handleSubscriptionChange(subscription);
                 break;
             }
