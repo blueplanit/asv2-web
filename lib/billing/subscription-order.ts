@@ -19,6 +19,15 @@ export async function canBecomeCurrentSubscription(
         return true;
     }
 
+    // Checkout records the subscription it was created to replace. This resolves
+    // ordering when Stripe timestamps fall within the same second.
+    if (
+        incoming.metadata?.subscription_stage === "paid" &&
+        incoming.metadata?.replacesSubscriptionId === currentSubscriptionId
+    ) {
+        return true;
+    }
+
     let current: Stripe.Subscription;
     try {
         current = await stripeBilling.subscriptions.retrieve(currentSubscriptionId);
@@ -28,6 +37,6 @@ export async function canBecomeCurrentSubscription(
         throw err;
     }
 
-    // Ties fail closed because Stripe timestamps have one-second precision.
+    // Legacy subscriptions without an explicit link use conservative ordering.
     return incoming.created > current.created;
 }

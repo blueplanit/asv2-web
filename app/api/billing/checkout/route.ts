@@ -74,6 +74,7 @@ export async function POST(req: Request) {
     if (!userProfile) {
         return new NextResponse("User profile not found", { status: 400 });
     }
+    const replacesSubscriptionId = userProfile.subscriptionId;
 
     // A client-supplied Promotion Code could name any valid Stripe code rather than
     // the one Promotion that is currently published. See ADR-0005 decision 4.
@@ -113,6 +114,9 @@ export async function POST(req: Request) {
             priceId,
             subscription_stage: "paid",
             ...(applied ? { promotionId: applied.promotion.id } : {}),
+            ...(replacesSubscriptionId
+                ? { replacesSubscriptionId }
+                : {}),
         };
 
         return {

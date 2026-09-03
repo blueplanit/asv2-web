@@ -109,7 +109,10 @@ test("discounted checkout has no pre-checkout Customer or DynamoDB dependency", 
     let ensureCalls = 0;
     const POST = loadCheckoutRoute({
         discount: deliverableDiscount,
-        profile: { email: "buyer@example.com" },
+        profile: {
+            email: "buyer@example.com",
+            subscriptionId: "sub_trial",
+        },
         createSession: async (params) => {
             createCalls.push(params);
             return { url: "https://checkout.stripe.test/session" };
@@ -126,6 +129,10 @@ test("discounted checkout has no pre-checkout Customer or DynamoDB dependency", 
     assert.equal(ensureCalls, 0);
     assert.equal(createCalls[0].customer_email, "buyer@example.com");
     assert.deepEqual(createCalls[0].discounts, [{ promotion_code: "promo_code_123" }]);
+    assert.equal(
+        createCalls[0].subscription_data.metadata.replacesSubscriptionId,
+        "sub_trial",
+    );
 });
 
 test("an exhausted profile-read retry returns a recoverable checkout error", async () => {

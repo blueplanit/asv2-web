@@ -371,7 +371,7 @@ function loadSubscriptionOrder(retrieve) {
     ).canBecomeCurrentSubscription;
 }
 
-test("only a strictly newer Stripe subscription can replace the current one", async () => {
+test("a newer or explicitly replacing Stripe subscription can become current", async () => {
     const current = { ...subscriptionFixture(), id: "sub_current", created: 200 };
     const canBecomeCurrent = loadSubscriptionOrder(async () => current);
 
@@ -385,6 +385,22 @@ test("only a strictly newer Stripe subscription can replace the current one", as
     );
     assert.equal(
         await canBecomeCurrent({ ...subscriptionFixture(), id: "sub_newer", created: 201 }, current.id),
+        true,
+    );
+
+    assert.equal(
+        await canBecomeCurrent(
+            {
+                ...subscriptionFixture(),
+                id: "sub_same_second_paid",
+                created: 200,
+                metadata: {
+                    ...subscriptionFixture().metadata,
+                    replacesSubscriptionId: current.id,
+                },
+            },
+            current.id,
+        ),
         true,
     );
 });
