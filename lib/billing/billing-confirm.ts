@@ -1,10 +1,27 @@
 // lib/billing/billing-confirm.ts
+import "server-only";
 import type Stripe from "stripe";
 import { stripeBilling } from "@/lib/stripe/stripe-billing";
-import { getUserProfile, UpdateUserSubscriptionParams, updateUserSubscriptionStatusToActive } from "@/lib/dynamo/user-profile";
+import { getUserProfile, type UpdateUserSubscriptionParams } from "@/lib/dynamo/user-profile";
+import { reconcileActiveSubscription } from "@/lib/billing/reconcile-subscription";
+import { requireStripeCustomerId } from "@/lib/billing/stripe-customer-id";
+import { canBecomeCurrentSubscription } from "@/lib/billing/subscription-order";
+import { cancelPreviousTrialSubscription } from "@/lib/billing/cancel-previous-trial-subscription";
 import { mapStripePriceToPlan } from "./billing-plan-map";
 import { getSubscriptionPeriodEnd } from "./billing-period";
-import { isStripeSubscriptionEntitled } from "@/lib/app-state/subscription-entitlement";
+import {
+    isStripeSubscriptionEntitled,
+    isUserProfileEntitled,
+} from "@/lib/app-state/subscription-entitlement";
+
+// A checkout session that retrying can never activate. The caller reports it as invalid
+// rather than polling, which any other failure here still deserves.
+export class InvalidCheckoutSessionError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "InvalidCheckoutSessionError";
+    }
+}
 
 export async function confirmCheckoutSessionAndActivateUser(
     sessionId: string,
@@ -16,11 +33,18 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     // Security: metadata must match the logged-in user
     if (session.metadata?.userId !== userId) {
-        throw new Error("Checkout session does not belong to this user");
+        throw new InvalidCheckoutSessionError("Checkout session does not belong to this user");
     }
 
     if (session.mode !== "subscription") {
-        throw new Error(`Checkout session is not subscription mode: ${session.mode}`);
+        throw new InvalidCheckoutSessionError(
+            `Checkout session is not subscription mode: ${session.mode}`,
+        );
+    }
+
+    // An expired session can never complete. An open one still can, so it stays pending.
+    if (session.status === "expired") {
+        throw new InvalidCheckoutSessionError("Checkout session expired");
     }
 
     // Make sure the session actually completed
@@ -28,7 +52,11 @@ export async function confirmCheckoutSessionAndActivateUser(
         throw new Error(`Checkout session not complete: ${session.status}`);
     }
 
-    if (session.payment_status !== "paid") {
+    const paymentSatisfied =
+        session.payment_status === "paid" ||
+        session.payment_status === "no_payment_required";
+
+    if (!paymentSatisfied) {
         throw new Error("Payment not completed yet");
     }
 
@@ -44,7 +72,7 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     const subscription = subscriptionExpanded;
     const newSubscriptionId = subscription.id;
-    const stripeCustomerId = session.customer as string;
+    const stripeCustomerId = requireStripeCustomerId(session.customer);
 
     const currentProfile = await getUserProfile(userId);
     const previousSubscriptionId = currentProfile?.subscriptionId;
@@ -64,7 +92,26 @@ export async function confirmCheckoutSessionAndActivateUser(
 
     if (!entitled) {
         // Let webhook drive the state for non-entitled statuses
-        return;
+        return false;
+    }
+
+    if (
+        previousSubscriptionId &&
+        previousSubscriptionId !== newSubscriptionId
+    ) {
+        const canReplace = await canBecomeCurrentSubscription(
+            subscription,
+            previousSubscriptionId,
+        );
+
+        if (!canReplace) {
+            console.warn("Ignoring an older checkout success session", {
+                userId,
+                incomingId: newSubscriptionId,
+                currentId: previousSubscriptionId,
+            });
+            return isUserProfileEntitled(currentProfile);
+        }
     }
 
     const subParams: UpdateUserSubscriptionParams = {
@@ -76,26 +123,14 @@ export async function confirmCheckoutSessionAndActivateUser(
         rawStatus: status,
     };
 
-    // Update Database (Optimistic)
-    // We catch conditional errors just in case, but usually we overwrite
-    try {
-        await updateUserSubscriptionStatusToActive(userId, subParams, previousSubscriptionId);
-    } catch (err: any) {
-        // If ConditionalCheckFailed, the webhook likely already updated the DB.
-        // We can safely return here, OR proceed to check cancellation just to be safe.
-        console.log("Optimistic update skipped - DB likely already updated by webhook");
+    await reconcileActiveSubscription(userId, subParams, previousSubscriptionId);
+
+    if (previousSubscriptionId && previousSubscriptionId !== newSubscriptionId) {
+        await cancelPreviousTrialSubscription({
+            previousSubscriptionId,
+            userId,
+        });
     }
 
-    // Cancel the old subscription if it's different
-    if (previousSubscriptionId && previousSubscriptionId !== newSubscriptionId) {
-        console.log(`Optimistic cleanup: canceling old subscription ${previousSubscriptionId}`);
-        try {
-            await stripeBilling.subscriptions.cancel(previousSubscriptionId);
-        } catch (err: any) {
-            // Ignore if already canceled or missing
-            if (err.code !== 'resource_missing' && !err.message.includes('No such subscription')) {
-                console.error("Failed to cancel old subscription optimistic cleanup:", err);
-            }
-        }
-    }
+    return true;
 }

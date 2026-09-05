@@ -7,24 +7,34 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing/pricing-config";
+import type { BillingDisplay, BillingInterval } from "@/lib/pricing/get-billing-display";
 import {
     trackAmplitudeError,
     trackAmplitudeEvent,
 } from "@/lib/analytics/amplitude-client";
 import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
-type BillingInterval = "monthly" | "yearly";
-
 type PricingClientProps = {
     copy: PricingCopy;
 };
 
-type BillingDisplay = Record<BillingInterval, { price: string; intervalLabel: string }>;
+type PricingApiResponse = {
+    billingDisplay?: BillingDisplay;
+    promotionId?: string | null;
+    promotionVersion?: string | null;
+};
+
+type PricingStatus = "loading" | "ready" | "error";
 
 const DEFAULT_BILLING_DISPLAY: BillingDisplay = {
-    monthly: { price: "$19", intervalLabel: "/month" },
-    yearly: { price: "$190", intervalLabel: "/year" },
+    monthly: { price: "$19", intervalLabel: "/month", discountedPrice: null, percentOff: null },
+    yearly: { price: "$190", intervalLabel: "/year", discountedPrice: null, percentOff: null },
   };
+
+async function fetchCurrentPricing(signal: AbortSignal): Promise<PricingApiResponse | null> {
+    const response = await fetch("/api/billing/pricing", { signal });
+    return response.ok ? response.json() : null;
+}
 
 type FaqItem = {
     question: string;
@@ -102,6 +112,88 @@ function PricingFaqAccordion({ faqs }: { faqs: FaqItem[] }) {
     );
 }
 
+type PriceDisplayProps = {
+    variant: "card" | "sticky";
+    loading: boolean;
+    error: boolean;
+    price: string;
+    intervalLabel: string;
+    discountedPrice: string | null;
+    percentOff: number | null;
+};
+
+// The "Save X%" pill, shared by the card and sticky variants below — same shape,
+// different sizing.
+function DiscountBadge({ percentOff, size }: { percentOff: number; size: "md" | "sm" }) {
+    const sizeClasses =
+        size === "md"
+            ? "px-2.5 py-1 text-xs shadow-sm shadow-emerald-500/30"
+            : "px-1.5 py-0.5 text-[9px]";
+    return (
+        <span
+            className={`animate-in fade-in-0 zoom-in-95 duration-300 inline-flex items-center rounded-full bg-emerald-500 font-bold text-white ${sizeClasses}`}
+        >
+            Save {percentOff}%
+        </span>
+    );
+}
+
+// Shared by the main plan card and the mobile sticky bar, so the loading /
+// discounted / plain-price decision can't drift between the two surfaces.
+function PriceDisplay({ variant, loading, error, price, intervalLabel, discountedPrice, percentOff }: PriceDisplayProps) {
+    if (error) {
+        return <p className="text-sm font-medium text-red-600">Price temporarily unavailable</p>;
+    }
+
+    if (variant === "card") {
+        if (loading) {
+            return (
+                <div className="flex items-end gap-2">
+                    <span className="inline-block h-10 w-28 animate-pulse rounded-md bg-slate-200/80 align-bottom" />
+                    <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-slate-200/60 align-bottom" />
+                </div>
+            );
+        }
+        if (discountedPrice) {
+            return (
+                <div className="flex flex-col gap-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">
+                        Promotional price
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <span className="text-base font-medium text-slate-400 line-through">{price}</span>
+                        {percentOff !== null && <DiscountBadge percentOff={percentOff} size="md" />}
+                    </div>
+                    <div className="flex items-end gap-2">
+                        <span className="text-4xl font-semibold tracking-tight text-slate-900">{discountedPrice}</span>
+                        <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="flex items-end gap-2">
+                <span className="text-4xl font-semibold tracking-tight text-slate-900">{price}</span>
+                <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
+            </div>
+        );
+    }
+
+    if (loading) return <p className="text-sm font-semibold text-slate-900">Loading...</p>;
+    if (discountedPrice) {
+        return (
+            <div className="flex flex-col items-end gap-0.5">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400 line-through">{price}</span>
+                    {percentOff !== null && <DiscountBadge percentOff={percentOff} size="sm" />}
+                </div>
+                <span className="text-sm font-semibold text-slate-900">{discountedPrice}{intervalLabel}</span>
+            </div>
+        );
+    }
+    return <p className="text-sm font-semibold text-slate-900">{price}{intervalLabel}</p>;
+}
+
 export function PricingClient({ copy }: PricingClientProps) {
     // The page is static, so the session is read here rather than on the server.
     // status is "loading" until next-auth answers.
@@ -111,41 +203,63 @@ export function PricingClient({ copy }: PricingClientProps) {
     const [interval, setInterval] = useState<BillingInterval>("monthly");
     const [loading, setLoading] = useState(false);
     const [showSignedInHint, setShowSignedInHint] = useState(false);
+    const [checkoutNotice, setCheckoutNotice] = useState<{ title: string; description: string } | null>(null);
+    // Set once checkout reports the Promotion cannot apply to this account, so the next
+    // attempt asks for the full price rather than repeating the same rejection.
+    const [skipPromotion, setSkipPromotion] = useState(false);
     const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
-    const [pricingLoading, setPricingLoading] = useState(true);
+    const [pricingStatus, setPricingStatus] = useState<PricingStatus>("loading");
+    const [pricingAttempt, setPricingAttempt] = useState(0);
+    const [promotionId, setPromotionId] = useState<string | null>(null);
+    const [promotionVersion, setPromotionVersion] = useState<string | null>(null);
     const viewTracked = useRef(false);
-
-    // Wait for the session before reporting the view. Firing on mount would report every
-    // visitor as logged out, because status is "loading" first. See ADR-0003.
-    useEffect(() => {
-        if (status === "loading" || viewTracked.current) return;
-
-        viewTracked.current = true;
-        trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
-            is_logged_in: isLoggedIn,
-        });
-    }, [status, isLoggedIn]);
 
     useEffect(() => {
         let cancelled = false;
+        const controller = new AbortController();
+        // A stalled request becomes a retryable error instead of leaving checkout open
+        // against a price the server never confirmed.
+        const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
-        setPricingLoading(true);
-        fetch("/api/billing/pricing")
-            .then((r) => (r.ok ? r.json() : null))
+        setPricingStatus("loading");
+        fetchCurrentPricing(controller.signal)
             .then((data) => {
                 if (cancelled) return;
-                if (data?.billingDisplay) setBillingDisplay(data.billingDisplay);
+                if (!data?.billingDisplay) {
+                    setPricingStatus("error");
+                    return;
+                }
+                setBillingDisplay(data.billingDisplay);
+                setPromotionId(data.promotionId ?? null);
+                setPromotionVersion(data.promotionVersion ?? null);
+                setPricingStatus("ready");
             })
-            .catch(() => { })
+            .catch(() => {
+                if (!cancelled) setPricingStatus("error");
+            })
             .finally(() => {
-                if (cancelled) return;
-                setPricingLoading(false);
+                window.clearTimeout(timeoutId);
             });
 
         return () => {
             cancelled = true;
+            window.clearTimeout(timeoutId);
+            controller.abort();
         };
-    }, []);
+    }, [pricingAttempt]);
+
+    // Waits for the session and the pricing fetch, so is_logged_in and
+    // promotion_active are both accurate rather than defaulting wrong. See ADR-0003.
+    useEffect(() => {
+        if (status === "loading" || pricingStatus !== "ready" || viewTracked.current) return;
+
+        viewTracked.current = true;
+        trackAmplitudeEvent(EVENT_NAMES.PRICING_PAGE_VIEWED, {
+            is_logged_in: isLoggedIn,
+            promotion_active: promotionId !== null,
+            ...(promotionId ? { promotion_id: promotionId } : {}),
+        });
+    }, [status, isLoggedIn, pricingStatus, promotionId]);
 
     const searchParams = useSearchParams();
     const authFlag = searchParams.get("auth");
@@ -163,6 +277,19 @@ export function PricingClient({ copy }: PricingClientProps) {
     }, [justLoggedIn]);
 
     async function handleSelectPlan() {
+        setCheckoutNotice(null);
+        // Both snackbars occupy the same slot, and the hint has served its purpose
+        // once the visitor acts on the page.
+        setShowSignedInHint(false);
+
+        if (isLoggedIn && pricingStatus !== "ready") {
+            if (pricingStatus === "error") {
+                setPricingStatus("loading");
+                setPricingAttempt((current) => current + 1);
+            }
+            return;
+        }
+
         trackAmplitudeEvent("Upgrade To Pro Clicked", {
             source: "pricing_page",
             is_logged_in: isLoggedIn,
@@ -181,20 +308,87 @@ export function PricingClient({ copy }: PricingClientProps) {
 
         setLoading(true);
         try {
+            // Reports that a Deliverable Discount existed at click time, matching
+            // PRICING_PAGE_VIEWED. Whether it applied lands on SUBSCRIPTION_PAID.
             trackAmplitudeEvent(EVENT_NAMES.CHECKOUT_STARTED, {
                 plan_id: "pro",
                 interval,
+                promotion_active: promotionId !== null,
+                ...(promotionId ? { promotion_id: promotionId } : {}),
             });
             const res = await fetch("/api/billing/checkout", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ planId: "pro", interval }),
+                body: JSON.stringify({
+                    planId: "pro",
+                    interval,
+                    // Always sent. Only a signed-in click reaches here, and that button
+                    // waits for the pricing read, so null honestly means no Promotion shown.
+                    expectedPromotionId: promotionId,
+                    expectedPromotionVersion: promotionVersion,
+                    skipPromotion,
+                }),
             });
             if (!res.ok) {
+                const errorBody = (await res.json().catch(() => null)) as { code?: string } | null;
                 console.error("Failed to create checkout session");
                 trackAmplitudeError("Checkout Session Failed", "Failed to create checkout session", {
                     interval,
+                    status: res.status,
+                    code: errorBody?.code,
                 });
+
+                const isPriceChanged = res.status === 409 && errorBody?.code === "price_changed";
+                const isPromotionNotApplicable =
+                    res.status === 409 && errorBody?.code === "promotion_not_applicable";
+
+                if (isPriceChanged || isPromotionNotApplicable) {
+                    // A changed Promotion resets the acknowledgement, since the offer the
+                    // visitor was refused is no longer the one on the page.
+                    setSkipPromotion(isPromotionNotApplicable);
+
+                    const controller = new AbortController();
+                    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+                    setPricingStatus("loading");
+                    try {
+                        const currentPricing = await fetchCurrentPricing(controller.signal);
+                        if (!currentPricing?.billingDisplay) {
+                            throw new Error("Current pricing unavailable");
+                        }
+                        setBillingDisplay(currentPricing.billingDisplay);
+                        setPromotionId(currentPricing.promotionId ?? null);
+                        setPromotionVersion(currentPricing.promotionVersion ?? null);
+                        setPricingStatus("ready");
+                        // The guard above proved billingDisplay is present, so no fallback.
+                        const fullPrice = currentPricing.billingDisplay[interval];
+                        setCheckoutNotice(
+                            isPromotionNotApplicable
+                                ? {
+                                    title: "Promotion not applied",
+                                    description: `This promotion isn't available on your account, usually because a discount was already used. No charge was made. Start checkout again to continue at ${fullPrice.price}${fullPrice.intervalLabel}.`,
+                                }
+                                : {
+                                    title: "The price changed",
+                                    description:
+                                        "The promotional offer changed before checkout. No charge was made. We've refreshed the price, so please review it and try again.",
+                                },
+                        );
+                    } catch {
+                        setPricingStatus("error");
+                        setCheckoutNotice({
+                            title: isPromotionNotApplicable ? "Promotion not applied" : "The price changed",
+                            description:
+                                "We couldn't load current pricing. No charge was made. Retry pricing before continuing.",
+                        });
+                    } finally {
+                        window.clearTimeout(timeoutId);
+                    }
+                } else {
+                    setCheckoutNotice({
+                        title: "Checkout didn't start",
+                        description: "We couldn't start checkout. No charge was made. Please try again.",
+                    });
+                }
                 setLoading(false);
                 return;
             }
@@ -209,6 +403,10 @@ export function PricingClient({ copy }: PricingClientProps) {
                 trackAmplitudeError("Checkout Session Failed", "Checkout URL missing", {
                     interval,
                 });
+                setCheckoutNotice({
+                    title: "Checkout didn't start",
+                    description: "We couldn't start checkout. No charge was made. Please try again.",
+                });
                 setLoading(false);
             }
         } catch (err) {
@@ -216,11 +414,15 @@ export function PricingClient({ copy }: PricingClientProps) {
             trackAmplitudeError("Checkout Session Failed", err, {
                 interval,
             });
+            setCheckoutNotice({
+                title: "Checkout didn't start",
+                description: "We couldn't start checkout. No charge was made. Please try again.",
+            });
             setLoading(false);
         }
     }
 
-    const { price, intervalLabel } = billingDisplay[interval];
+    const { price, intervalLabel, discountedPrice, percentOff } = billingDisplay[interval];
     const faqHeading = copy.included.faqTitle.trim().toLowerCase() === "faq" ? "FAQs" : copy.included.faqTitle;
 
     const freeTrialMsg = !isLoggedIn ? (
@@ -232,10 +434,17 @@ export function PricingClient({ copy }: PricingClientProps) {
         </a>
     ) : null;
 
+    const pricingLoading = pricingStatus === "loading";
+    const pricingError = pricingStatus === "error";
+    // An error changes the signed-in CTA into a retry action, never checkout.
+    const ctaDisabled = loading || status === "loading" || (isLoggedIn && pricingLoading);
+
     const primaryCtaLabel = isLoggedIn
-        ? loading
-            ? copy.ctaLabels.signedInLoading
-            : copy.ctaLabels.signedInIdle
+        ? pricingError
+            ? "Retry pricing"
+            : loading
+                ? copy.ctaLabels.signedInLoading
+                : copy.ctaLabels.signedInIdle
         : loading
             ? copy.ctaLabels.signedOutLoading
             : copy.ctaLabels.signedOutIdle;
@@ -250,6 +459,18 @@ export function PricingClient({ copy }: PricingClientProps) {
                 description={copy.snackbar.description}
                 animated
                 autoHideMs={7000}
+            />
+
+            {/* Stays until dismissed: a checkout the visitor must retry should not
+                disappear on its own while they are reading it. */}
+            <Snackbar
+                open={checkoutNotice !== null}
+                onClose={() => setCheckoutNotice(null)}
+                variant="error"
+                title={checkoutNotice?.title ?? ""}
+                description={checkoutNotice?.description}
+                animated
+                autoHideMs={0}
             />
 
             <main className="mx-auto max-w-6xl px-4 pb-28 pt-12 sm:pb-16 sm:pt-16">
@@ -313,18 +534,16 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     </p>
                                 </div>
 
-                                <div className="flex items-end gap-2" aria-live="polite" aria-busy={pricingLoading}>
-                                    {pricingLoading ? (
-                                        <>
-                                            <span className="inline-block h-10 w-28 animate-pulse rounded-md bg-slate-200/80 align-bottom" />
-                                            <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-slate-200/60 align-bottom" />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="text-4xl font-semibold tracking-tight text-slate-900">{price}</span>
-                                            <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
-                                        </>
-                                    )}
+                                <div aria-live="polite" aria-busy={pricingLoading}>
+                                    <PriceDisplay
+                                        variant="card"
+                                        loading={pricingLoading}
+                                        error={pricingError}
+                                        price={price}
+                                        intervalLabel={intervalLabel}
+                                        discountedPrice={discountedPrice}
+                                        percentOff={percentOff}
+                                    />
                                 </div>
 
                                 <ul className="space-y-2">
@@ -346,7 +565,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                                     <button
                                         type="button"
                                         onClick={handleSelectPlan}
-                                        disabled={loading}
+                                        disabled={ctaDisabled}
                                         className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
                                     >
                                         {primaryCtaLabel}
@@ -418,16 +637,22 @@ export function PricingClient({ copy }: PricingClientProps) {
 
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
                 <div className="mx-auto max-w-xl">
-                    <div className="mb-2 flex items-baseline justify-between">
+                    <div className={`mb-2 flex justify-between ${discountedPrice ? "items-center" : "items-baseline"}`}>
                         <p className="text-xs font-medium text-slate-600">{copy.plan.name}</p>
-                        <p className="text-sm font-semibold text-slate-900">
-                            {pricingLoading ? "Loading..." : `${price}${intervalLabel}`}
-                        </p>
+                        <PriceDisplay
+                            variant="sticky"
+                            loading={pricingLoading}
+                            error={pricingError}
+                            price={price}
+                            intervalLabel={intervalLabel}
+                            discountedPrice={discountedPrice}
+                            percentOff={percentOff}
+                        />
                     </div>
                     <button
                         type="button"
                         onClick={handleSelectPlan}
-                        disabled={loading}
+                        disabled={ctaDisabled}
                         className="inline-flex w-full cursor-pointer items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-70"
                     >
                         {primaryCtaLabel}

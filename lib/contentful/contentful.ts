@@ -59,3 +59,14 @@ export type PageFields = {
     layoutVariant?: "default" | "centered" | "two-column";
     theme?: "light" | "dark" | "brand";
 };
+
+// A Promotion carries no slug or pageKey — see ADR-0005. `id` is the entry's sys.id,
+// used to key a visitor's banner dismissal so a later, different Promotion shows again.
+export type PromotionFields = {
+    id: string;
+    showInProduction?: boolean;
+    stripePromotionCodeId: string;
+    bannerHeadline: string;
+    ctaLabel: string;
+    ctaHref: string;
+};

@@ -150,11 +150,15 @@ a Contentful outage now fails loudly, which is the safer failure.
   false, because Vercel sets `NODE_ENV=production` for preview builds.
   `VERCEL_ENV` is what separates preview from production. This behaviour predates
   this ADR and is deliberately left alone.
-- Only the Blog Post reads vary by environment, so only they take `isProd` as a
+- The Blog Post and Promotion reads vary by environment, so both take `isProd` as a
   cache key. The CMS Page and Copy Config queries apply no `showInProduction`
   filter, so their results cannot differ between environments. Adding a
   `showInProduction` field to either content type means adding the filter **and**
   the cache key together.
+- A Promotion therefore cannot be staged on a preview deployment. Preview builds set
+  `NODE_ENV=production`, so they filter on `showInProduction` exactly as production
+  does. Making preview a real staging environment means gating on `VERCEL_ENV`
+  instead, which changes this behaviour for every content type at once.
 - The design assumes Vercel. `unstable_cache` needs a store shared across
   instances, and `revalidateTag` needs to reach every instance. Self-hosting this
   app requires a cache handler first.

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md) has domain language and [docs/adr/](./docs/adr/) compiles decisions that are non-obvious from the code.
+Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md) has domain language, [docs/adr/](./docs/adr/) compiles decisions that are non-obvious from the code, and [docs/runbooks/](./docs/runbooks/) holds procedures a person carries out by hand.
 
 ## What this is
 
@@ -20,6 +20,10 @@ Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md
 - **Comments:** prefer single-line, occasionally two. Simple, concise language. Explain *why*, not *what*.
 - **Commit messages:** concise but sufficiently descriptive.
 - Match the surrounding code's style, naming, and idioms rather than importing new patterns.
+
+## Tests
+
+There is no repo-wide test runner. `tests/` holds targeted `node --test` files for the billing paths, run with `npm run test:billing`. They compile a route with `tests/helpers/load-typescript-module.cjs` and inject mocks, so adding an import to a covered route means adding it to that test's mock map or the test throws `Unexpected dependency`. Run the scripts, not `node --test tests/`, which tries to execute the helper.
 
 ## Related repos
 

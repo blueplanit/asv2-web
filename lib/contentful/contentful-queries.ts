@@ -14,6 +14,7 @@ import {
     BLOG_INDEX_TAG,
     CONTENT_TYPES,
     CMS_PAGE_INDEX_TAG,
+    PROMOTION_TAG,
     contentTypeTag,
     copyKeyTag,
     slugTag,
@@ -235,3 +236,35 @@ export const getCopyConfig = (pageKey: string) =>
         revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.COPY_CONFIG), copyKeyTag(pageKey)],
     })(pageKey);
+
+/* Promotion */
+
+export type PromotionEntry = { id: string; fields: Record<string, unknown> };
+
+const readActivePromotionEntry = async (production: boolean): Promise<PromotionEntry | null> => {
+    const res = await contentfulClient.getEntries(
+        withProductionFilter(
+            {
+                content_type: CONTENT_TYPES.PROMOTION,
+                // Only enough to tell 0 / 1 / "more than 1" apart.
+                limit: 2,
+            },
+            production,
+        ),
+    );
+
+    // Zero or more-than-one published entry both mean "no Promotion" — more than one
+    // is a content mistake, and showing neither makes it visible rather than guessing (ADR-0005).
+    if (res.items.length !== 1) return null;
+
+    const item = res.items[0];
+    return { id: item.sys.id, fields: item.fields as Record<string, unknown> };
+};
+
+// Reads the currently active Promotion entry (raw, unvalidated fields), or null when
+// none or more than one is published. See get-active-promotion.ts for the safe wrapper.
+export const getActivePromotionEntry = (): Promise<PromotionEntry | null> =>
+    unstable_cache(readActivePromotionEntry, ["active-promotion"], {
+        revalidate: BACKSTOP_WINDOW_SECONDS,
+        tags: [PROMOTION_TAG],
+    })(isProd());

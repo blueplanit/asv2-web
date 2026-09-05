@@ -7,6 +7,8 @@ export const CONTENT_TYPES = {
     BLOG_POST: "blogPostASv2",
     CMS_PAGE: "pageASv2",
     COPY_CONFIG: "aSv2CopyAndConfig",
+    // Carries no slug and no pageKey. At most one entry is ever published.
+    PROMOTION: "promotionASv2",
 } as const;
 
 // Content types this site renders. A webhook for any other type costs no Contentful call.
@@ -35,6 +37,10 @@ export const slugTag = (contentType: string, slug: string) =>
 // Expires a listing. A new, renamed, or removed entry changes what the listing shows.
 export const BLOG_INDEX_TAG = `contentful:${CONTENT_TYPES.BLOG_POST}:index`;
 export const CMS_PAGE_INDEX_TAG = `contentful:${CONTENT_TYPES.CMS_PAGE}:index`;
+
+// Expires the "which Promotion is active" listing. No per-entry tag exists because
+// there is never more than one entry to distinguish. See ADR-0005.
+export const PROMOTION_TAG = contentTypeTag(CONTENT_TYPES.PROMOTION);
 
 // Expires one Copy Config entry, keyed by pageKey.
 export const copyKeyTag = (pageKey: string) =>
