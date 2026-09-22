@@ -47,15 +47,19 @@ Both siblings already use it.
 A Contentful webhook calls `/api/revalidate` and expires cache tags. Published
 changes reach the site in seconds.
 
-Time-based revalidation drops from 60 seconds to 7 days. It no longer delivers
-content. It only catches a webhook that failed.
+Time-based revalidation drops from 60 seconds to 7 days for entry reads. The shared
+blog listing uses a one-hour backstop so a missed scheduled-publish webhook cannot
+keep a new post out of the blog index and sitemap for a week. In a warm production
+cache, this costs about one additional Delivery API call per hour, shared across
+every listing consumer.
 
 The 7 days is for consistency with the other two repos, not for the savings. Most
 of the win is in the first step away from 60 seconds. A move from 24 hours to 7
 days saves almost nothing further.
 
-**A future reader will read `revalidate = 604800` as a bug. It is not.** It is
-only reachable when the webhook has already failed.
+The webhook also revalidates the rendered paths that depend on each changed entry.
+This makes invalidation explicit for metadata routes such as `/sitemap.xml`, whose
+rendered output has its own route cache.
 
 ### 3. The webhook confirms a change before it expires a tag
 
@@ -144,8 +148,9 @@ a Contentful outage now fails loudly, which is the safer failure.
 - An editor who replaces a cover image without republishing the post keeps the
   old image for up to 7 days. Asset webhooks are ignored on purpose. Acting on
   them would let one deleted image expire every cached post.
-- A broken webhook is invisible for up to 7 days. The Contentful activity log is
-  the only place it shows. This is the main cost of the long window.
+- A broken webhook can leave entry changes stale for up to 7 days. New blog posts
+  still reach the blog index and sitemap within an hour through the shorter listing
+  backstop. The Contentful activity log remains the place to diagnose the failure.
 - Vercel preview deployments still hide entries whose `showInProduction` is
   false, because Vercel sets `NODE_ENV=production` for preview builds.
   `VERCEL_ENV` is what separates preview from production. This behaviour predates

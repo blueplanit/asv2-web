@@ -13,10 +13,10 @@ export const metadata = createMarketingMetadata({
     path: "/blog",
 });
 
-// The Backstop Window. A Contentful webhook expires this listing as soon as a post changes.
-// See docs/adr/0003-contentful-delivery-quota.md.
+// The webhook expires this listing immediately. The hourly fallback keeps scheduled posts
+// discoverable if a webhook delivery fails. See ADR-0003.
 export const dynamic = "force-static";
-export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
+export const revalidate = 3600; // BLOG_INDEX_BACKSTOP_SECONDS
 
 export default async function BlogIndexPage() {
     const posts = await getBlogPostsByLanguage("en");

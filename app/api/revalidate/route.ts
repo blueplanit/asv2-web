@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getEntryById } from "@/lib/contentful/contentful";
@@ -8,6 +8,7 @@ import {
     CONTENT_TYPES,
     CMS_PAGE_INDEX_TAG,
     SERVED_CONTENT_TYPES,
+    contentPaths,
     contentTypeTag,
     copyKeyTag,
     slugTag,
@@ -114,18 +115,22 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Unable to confirm the change" }, { status: 500 });
     }
 
-    const tags = tagsFor(contentType, readField(body?.fields?.slug), readField(body?.fields?.pageKey));
+    const slug = readField(body?.fields?.slug);
+    const pageKey = readField(body?.fields?.pageKey);
+    const tags = tagsFor(contentType, slug, pageKey);
+    const paths = contentPaths(contentType, slug, pageKey);
 
     try {
         // Next 16 requires the profile argument. "max" is the value its own deprecation
         // notice names for a route handler; updateTag is Server Actions only.
         for (const tag of tags) revalidateTag(tag, "max");
+        for (const path of paths) revalidatePath(path);
     } catch (err) {
         console.error("Revalidation failed:", err);
-        return NextResponse.json({ error: "Unable to expire the cache tags" }, { status: 500 });
+        return NextResponse.json({ error: "Unable to expire the content cache" }, { status: 500 });
     }
 
-    return NextResponse.json({ revalidated: tags.length, confirmed: true, tags });
+    return NextResponse.json({ revalidated: tags.length, confirmed: true, tags, paths });
 }
 
 /**
