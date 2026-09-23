@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { HighIntentLandingPage } from "@/components/marketing/high-intent-landing-page";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
@@ -37,7 +38,19 @@ export default function StripeCsvExportAlternativePage() {
                     pill: "Automated",
                 },
             ]}
-            summary="Stripe CSV exports are fine for one-off questions. SyncStaq is for teams that need Stripe billing data in Google Sheets every week without export, import, cleanup, and formula repair."
+            summary={
+                <>
+                    Stripe CSV exports are fine for one-off questions. For recurring reports, a {" "}
+                    <Link
+                        href="/stripe-google-sheets-integration"
+                        className="font-semibold text-indigo-700 underline underline-offset-2"
+                    >
+                        Stripe-to-Google-Sheets integration
+                    </Link>{" "}
+                    keeps billing data available without repeating the export, import, and cleanup
+                    cycle.
+                </>
+            }
             cards={[
                 {
                     title: "When CSVs break down",

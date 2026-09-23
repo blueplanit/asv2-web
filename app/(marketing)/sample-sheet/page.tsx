@@ -28,7 +28,14 @@ export default function SampleSheetPage() {
                         <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
                             Explore the public SyncStaq sample Sheet to see raw Stripe tabs and
                             example reports on the Working Sheet. Then use SyncStaq to create a new
-                            Sheet synced with your own Stripe billing data.
+                            Sheet synced with your own Stripe billing data. See {" "}
+                            <Link
+                                href="/stripe-google-sheets-integration"
+                                className="font-semibold text-indigo-700 underline underline-offset-2"
+                            >
+                                how the Stripe connection works
+                            </Link>
+                            .
                         </p>
                         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                             <a
