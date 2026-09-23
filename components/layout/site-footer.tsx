@@ -15,6 +15,11 @@ const productLinks: FooterLinkItem[] = [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Pricing", href: "/pricing" },
     { label: "Stripe App", href: STRIPE_MARKETPLACE_URL, external: true },
+    {
+        label: "Google Sheets Add-on",
+        href: "https://workspace.google.com/marketplace/app/syncstaq/1037732017136",
+        external: true,
+    },
     // { label: "Changelog", href: "#" },
     // { label: "Status", href: "#" },
 ];
@@ -23,11 +28,11 @@ const resourcesLinks: FooterLinkItem[] = [
     // { label: "Docs", href: "#" },
     // { label: "API Reference", href: "#" },
     // { label: "Guides", href: "#" },
+    { label: "How it works", href: "/how-it-works" },
+    { label: "Sample Sheet", href: "/sample-sheet" },
+    { label: "Blog", href: "/blog" },
     { label: "Stripe to Sheets", href: "/stripe-google-sheets-integration" },
     { label: "CSV Export Alternative", href: "/stripe-csv-export-alternative" },
-    { label: "Blog", href: "/blog" },
-    { label: "Sample Sheet", href: "/sample-sheet" },
-    { label: "How it works", href: "/how-it-works" },
     { label: "Commission revenue share", href: "/use-cases/stripe-commission-revenue-share" },
 ];
 
@@ -46,7 +51,7 @@ const legalLinks: FooterLinkItem[] = [
 ];
 
 const socialLinks = [
-    { label: "YouTube", href: "#" },
+    { label: "YouTube", href: "https://www.youtube.com/@SyncStaq" },
 ];
 
 const footerLinkClass =
@@ -150,12 +155,14 @@ export function SiteFooter() {
                             <ul className="mt-2 flex flex-wrap gap-2 text-[11px]">
                                 {socialLinks.map((item) => (
                                     <li key={item.label}>
-                                        <Link
+                                        <a
                                             href={item.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
                                             className="cursor-pointer rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                                         >
                                             {item.label}
-                                        </Link>
+                                        </a>
                                     </li>
                                 ))}
                             </ul>
