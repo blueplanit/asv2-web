@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 type Cta = {
     href: string;
@@ -36,7 +37,7 @@ type HighIntentLandingPageProps = {
     visualTitle: string;
     visualSubtitle: string;
     visualRows: VisualRow[];
-    summary: string;
+    summary: ReactNode;
     cards: FeatureCard[];
     relatedLinks: RelatedLink[];
 };

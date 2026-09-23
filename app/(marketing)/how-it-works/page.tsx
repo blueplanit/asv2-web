@@ -26,8 +26,19 @@ const setupSteps = [
     },
     {
         title: "Create your Google Sheet",
-        body:
-            "SyncStaq creates a dedicated Sheet with raw tabs and a Working Sheet for your own formulas and reports.",
+        body: (
+            <>
+                When you {" "}
+                <Link
+                    href="/stripe-google-sheets-integration"
+                    className="font-semibold text-indigo-700 underline underline-offset-2"
+                >
+                    connect Stripe to Google Sheets
+                </Link>
+                , SyncStaq creates a dedicated Sheet with raw tabs and a Working Sheet for your own
+                formulas and reports.
+            </>
+        ),
     },
     {
         title: "Backfill, then sync hourly",
