@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
 const sampleSheetUrl =
@@ -101,9 +102,18 @@ export default function StripeGoogleSheetsIntegrationPage() {
                     </a>
                 </div>
                 <ul className="mt-7 flex flex-wrap gap-x-7 gap-y-2 text-sm text-slate-600">
-                    <li>Read-only Stripe access</li>
-                    <li>App-created Google Sheet</li>
-                    <li>Hourly updates</li>
+                    <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                        Read-only Stripe access
+                    </li>
+                    <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                        App-created Google Sheet
+                    </li>
+                    <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                        Hourly updates
+                    </li>
                 </ul>
             </section>
 
