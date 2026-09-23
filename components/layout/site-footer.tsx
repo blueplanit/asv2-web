@@ -15,6 +15,11 @@ const productLinks: FooterLinkItem[] = [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Pricing", href: "/pricing" },
     { label: "Stripe App", href: STRIPE_MARKETPLACE_URL, external: true },
+    {
+        label: "Google Sheets Add-on",
+        href: "https://workspace.google.com/marketplace/app/syncstaq/1037732017136",
+        external: true,
+    },
     // { label: "Changelog", href: "#" },
     // { label: "Status", href: "#" },
 ];
