@@ -68,7 +68,10 @@ export function MailerLiteCommissionForm() {
 
   if (status === "success") {
     return (
-      <div className="rounded-2xl mx-auto mb-20 w-2/5 border border-slate-200 bg-white p-6 shadow-sm">
+      <div
+        className="w-full self-start rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+        role="status"
+      >
         <h3 className="text-lg font-semibold text-slate-900">You're all set</h3>
         <p className="mt-2 text-sm text-slate-600">
           Your commission tracker template is ready. Open it and make your own
@@ -89,17 +92,14 @@ export function MailerLiteCommissionForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="mx-auto mb-20 max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+      className="w-full min-w-0 self-start rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-600">
-        Free resource
-      </p>
-      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+      <h3 className="text-2xl font-semibold text-slate-950">
         Free Stripe Commission Tracker
-      </h2>
+      </h3>
       <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-        A Google Sheet that calculates rep commissions and partner revenue share from Stripe -
-        net of fees and refunds.
+        A Google Sheet for calculating rep commissions and partner revenue
+        share, with fee and refund settings you control.
       </p>
 
       <label
@@ -125,6 +125,7 @@ export function MailerLiteCommissionForm() {
         <ReCAPTCHA
           ref={recaptchaRef}
           sitekey={RECAPTCHA_SITE_KEY}
+          size="compact"
           onChange={(token: string | null) => setRecaptchaToken(token)}
           onExpired={() => setRecaptchaToken(null)}
           onErrored={() => setRecaptchaToken(null)}
@@ -142,7 +143,7 @@ export function MailerLiteCommissionForm() {
         disabled={status === "submitting" || !recaptchaToken}
         className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "submitting" ? "Sending…" : "Send me the template"}
+        {status === "submitting" ? "Sending…" : "Email me the free template"}
       </button>
 
       <p className="mt-3 text-xs text-slate-500">
