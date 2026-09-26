@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing/pricing-config";
-import type { BillingDisplay, BillingInterval } from "@/lib/pricing/get-billing-display";
+import type { BillingDisplay, BillingInterval, BillingDisplayResult } from "@/lib/pricing/get-billing-display";
 import {
     trackAmplitudeError,
     trackAmplitudeEvent,
@@ -16,6 +16,7 @@ import { EVENT_NAMES } from "@/lib/analytics/event-names";
 
 type PricingClientProps = {
     copy: PricingCopy;
+    initialPricing?: BillingDisplayResult | null;
 };
 
 type PricingApiResponse = {
@@ -194,8 +195,8 @@ function PriceDisplay({ variant, loading, error, price, intervalLabel, discounte
     return <p className="text-sm font-semibold text-slate-900">{price}{intervalLabel}</p>;
 }
 
-export function PricingClient({ copy }: PricingClientProps) {
-    // The page is static, so the session is read here rather than on the server.
+export function PricingClient({ copy, initialPricing = null }: PricingClientProps) {
+    // Session reads remain in the browser; the server only supplies public prices.
     // status is "loading" until next-auth answers.
     const { status } = useSession();
     const isLoggedIn = status === "authenticated";
@@ -207,7 +208,7 @@ export function PricingClient({ copy }: PricingClientProps) {
     // Set once checkout reports the Promotion cannot apply to this account, so the next
     // attempt asks for the full price rather than repeating the same rejection.
     const [skipPromotion, setSkipPromotion] = useState(false);
-    const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(DEFAULT_BILLING_DISPLAY);
+    const [billingDisplay, setBillingDisplay] = useState<BillingDisplay>(initialPricing?.billingDisplay ?? DEFAULT_BILLING_DISPLAY);
     const [pricingStatus, setPricingStatus] = useState<PricingStatus>("loading");
     const [pricingAttempt, setPricingAttempt] = useState(0);
     const [promotionId, setPromotionId] = useState<string | null>(null);
@@ -537,7 +538,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                                 <div aria-live="polite" aria-busy={pricingLoading}>
                                     <PriceDisplay
                                         variant="card"
-                                        loading={pricingLoading}
+                                        loading={pricingLoading && !initialPricing}
                                         error={pricingError}
                                         price={price}
                                         intervalLabel={intervalLabel}
@@ -545,6 +546,13 @@ export function PricingClient({ copy }: PricingClientProps) {
                                         percentOff={percentOff}
                                     />
                                 </div>
+
+                                {!pricingError && (initialPricing || !pricingLoading) && (
+                                    <p className="text-sm text-slate-600">
+                                        Monthly: {billingDisplay.monthly.discountedPrice ?? billingDisplay.monthly.price}/month.
+                                        {" "}Annual: {billingDisplay.yearly.discountedPrice ?? billingDisplay.yearly.price}/year, billed annually.
+                                    </p>
+                                )}
 
                                 <ul className="space-y-2">
                                     {copy.plan.bullets.map((line) => (
@@ -641,7 +649,7 @@ export function PricingClient({ copy }: PricingClientProps) {
                         <p className="text-xs font-medium text-slate-600">{copy.plan.name}</p>
                         <PriceDisplay
                             variant="sticky"
-                            loading={pricingLoading}
+                            loading={pricingLoading && !initialPricing}
                             error={pricingError}
                             price={price}
                             intervalLabel={intervalLabel}

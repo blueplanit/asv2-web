@@ -22,6 +22,7 @@ export type BillingDisplay = Record<
 
 export type BillingDisplayResult = {
     billingDisplay: BillingDisplay;
+    offerAmounts: Record<BillingInterval, { amount: number; currency: string }>;
     // The Promotion's Contentful entry id — same id space as the banner's own
     // analytics (components/layout/promotion-banner.tsx), for funnel correlation.
     promotionId: string | null;
@@ -104,6 +105,16 @@ export async function getBillingDisplay(): Promise<BillingDisplayResult> {
         billingDisplay: {
             monthly: display(prices.monthly.unitAmount, prices.monthly.currency, "/month"),
             yearly: display(prices.yearly.unitAmount, prices.yearly.currency, "/year"),
+        },
+        offerAmounts: {
+            monthly: {
+                amount: (shownCoupon ? discountedAmount(prices.monthly.unitAmount, shownCoupon) : prices.monthly.unitAmount) / 100,
+                currency: prices.monthly.currency.toUpperCase(),
+            },
+            yearly: {
+                amount: (shownCoupon ? discountedAmount(prices.yearly.unitAmount, shownCoupon) : prices.yearly.unitAmount) / 100,
+                currency: prices.yearly.currency.toUpperCase(),
+            },
         },
         promotionId: discount?.promotion.id ?? null,
         promotionVersion: deliverableDiscountVersion(discount),

@@ -9,6 +9,7 @@ import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { getMarketingCopy } from "@/lib/marketing/marketing-config";
 import { STRIPE_MARKETPLACE_URL } from "@/lib/constants";
 import Link from "next/link";
+import { SiteStructuredData } from "@/components/marketing/structured-data";
 
 export const metadata: Metadata = {
     alternates: {
@@ -26,6 +27,7 @@ export default async function HomePage() {
 
     return (
         <div className="bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
+            <SiteStructuredData />
             <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 pb-16 pt-12 lg:pt-16">
                 <Hero copy={copy.hero} />
                 <div className="mt-4">
