@@ -10,9 +10,9 @@ import {
     getBlogPath,
 } from "@/lib/contentful/blog-localization";
 
-// The Backstop Window. A Contentful webhook expires the listings this reads as soon as an
-// entry changes. See docs/adr/0003-contentful-delivery-quota.md.
-export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
+// The webhook expires this route immediately. The hourly fallback keeps scheduled posts
+// discoverable if a webhook delivery fails. See ADR-0003.
+export const revalidate = 3600; // BLOG_INDEX_BACKSTOP_SECONDS
 
 type SitemapEntry = MetadataRoute.Sitemap[number];
 
