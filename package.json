@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:checkout": "node --test tests/billing-checkout.test.cjs",
+    "test:marketing": "node --test tests/marketing-pricing.test.cjs",
     "test:billing": "node --test tests/billing-checkout.test.cjs tests/billing-reconciliation.test.cjs tests/promotion-display.test.cjs"
   },
   "dependencies": {
