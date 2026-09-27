@@ -20,13 +20,13 @@ Set the discount amount.
 
 Set **duration**. `/pricing` shows the struck-through price for every duration. See [ADR-0006](../adr/0006-introductory-discount-pricing.md).
 
-| Duration | Discount kind | `/pricing` shows |
+| Duration | Glossary term | `/pricing` shows |
 | --- | --- | --- |
 | `forever` | Ongoing Discount | the discounted price only |
 | `once` | Introductory Discount | the discounted price, then "for your first month, then $19/month" |
 | `repeating` | Introductory Discount | the discounted price, then "for your first 12 months, then $19/month" |
 
-For `repeating`, set `duration_in_months` to a multiple of 12. Stripe discounts every bill created inside the Discount Period. A 3-month coupon therefore discounts a whole yearly bill, and an 18-month coupon discounts two yearly bills. `/pricing` states this correctly, but it costs more than the monthly offer suggests.
+For `repeating`, set `duration_in_months` to a multiple of 12. Stripe discounts every bill created inside the Discount Period. A 3-month coupon therefore discounts a whole yearly bill. An 18-month coupon discounts two yearly bills. `/pricing` states this correctly. The cost is higher than the monthly offer suggests.
 
 ### 2. Create the Promotion Code in Stripe
 
@@ -106,7 +106,7 @@ A visitor who dismisses the banner has that dismissal stored against the entry's
 | Symptom | Cause |
 | --- | --- |
 | Nothing appears at all | Two entries are published, or a required field is empty, or the entry is unpublished |
-| Banner appears, price is full | The Promotion Code is inactive, expired, or out of redemptions, or the `promo_…` ID is wrong or from Stripe test mode. Search the Vercel logs for `getDeliverableDiscount` |
+| Banner appears, price is full | The Promotion Code is inactive, expired, or out of redemptions |
 | The Discount Period line is wrong | Check the Coupon's `duration` and `duration_in_months` in Stripe. The line comes from those fields only |
 | Checkout stops and refreshes the price | The Promotion ended or changed after the pricing page loaded |
 | Banner appears on your machine but not on a deployment | `showInProduction` is unchecked. Vercel sets `NODE_ENV=production` for preview builds too, so an unchecked entry is hidden on preview and production alike, and shows only in local development |
