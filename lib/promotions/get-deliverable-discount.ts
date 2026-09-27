@@ -50,8 +50,14 @@ export async function getDeliverableDiscount(): Promise<DeliverableDiscount | nu
     }
 }
 
-// True only for a `forever` coupon — a `once`/`repeating` coupon still applies at
-// checkout, but showing it as the ongoing rate would be false after the next invoice.
-export function isOngoingDiscount(coupon: Stripe.Coupon): boolean {
-    return coupon.duration === "forever";
+// Bills an Introductory Discount covers at this interval, or null for an Ongoing Discount.
+// Stripe discounts any bill created before the Discount Period ends, so a 3-month coupon
+// covers a whole yearly bill. See ADR-0006.
+export function discountedBillCount(
+    coupon: Pick<Stripe.Coupon, "duration" | "duration_in_months">,
+    intervalMonths: number,
+): number | null {
+    if (coupon.duration === "forever") return null;
+    if (coupon.duration === "once") return 1;
+    return Math.ceil((coupon.duration_in_months ?? 0) / intervalMonths);
 }

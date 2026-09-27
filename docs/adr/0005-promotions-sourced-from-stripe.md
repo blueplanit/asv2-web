@@ -57,6 +57,8 @@ The subscription webhook is the primary path that writes Stripe's Customer, subs
 
 ### 7. Only a `forever` coupon gets a struck-through price
 
+**Superseded by [ADR-0006](./0006-introductory-discount-pricing.md).** Every Deliverable Discount now shows a struck-through price. A `once` or `repeating` coupon also states its Discount Period.
+
 `/pricing` shows a discounted per-interval price only when the coupon's `duration` is `forever`. A `once` or `repeating` coupon still runs the Promotion and still applies at checkout, but the page shows the full price.
 
 A `once` coupon on a monthly plan discounts the first month alone. Rendering "$15/month" for it states an ongoing rate that is false from month two. That is the same deception as a countdown to a deadline that does not exist, which decision 2 already rejects.

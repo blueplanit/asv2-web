@@ -18,7 +18,15 @@ Do Stripe first. You need the Promotion Code ID before you can fill in Contentfu
 
 Set the discount amount.
 
-Set **duration** to `forever`. A `once` or `repeating` coupon still applies at checkout, but `/pricing` then shows the full price with no strikethrough. This is deliberate: "$15/month" is false from month two if the coupon only covers the first month.
+Set **duration**. `/pricing` shows the struck-through price for every duration. See [ADR-0006](../adr/0006-introductory-discount-pricing.md).
+
+| Duration | Discount kind | `/pricing` shows |
+| --- | --- | --- |
+| `forever` | Ongoing Discount | the discounted price only |
+| `once` | Introductory Discount | the discounted price, then "for your first month, then $19/month" |
+| `repeating` | Introductory Discount | the discounted price, then "for your first 12 months, then $19/month" |
+
+For `repeating`, set `duration_in_months` to a multiple of 12. Stripe discounts every bill created inside the Discount Period. A 3-month coupon therefore discounts a whole yearly bill, and an 18-month coupon discounts two yearly bills. `/pricing` states this correctly, but it costs more than the monthly offer suggests.
 
 ### 2. Create the Promotion Code in Stripe
 
@@ -53,6 +61,8 @@ Content type `promotionASv2`. **Always create a new entry. Never reuse an old on
 
 Write evergreen copy. Name the discount and call it limited-time. Do not state a deadline or imply one with "ends soon". No deadline exists, so claiming one deceives the visitor.
 
+For an Introductory Discount, name the Discount Period in `bannerHeadline` or `ctaLabel`, for example "50% off your first 12 months". "50% off" alone implies an Ongoing Discount. The site does not check banner copy.
+
 ### 5. Confirm no other entry is published, then publish
 
 Two published entries make the site show **no** Promotion at all. That is a deliberate fail-safe against an editorial mistake, and it is silent.
@@ -61,7 +71,7 @@ Two published entries make the site show **no** Promotion at all. That is a deli
 
 ### 6. Check the site
 
-The banner appears on public marketing pages within seconds. `/pricing` shows the original price struck through, the discounted price, and the percent off. Checkout applies the discount with no code entry.
+The banner appears on public marketing pages within seconds. `/pricing` shows the original price struck through, the discounted price, and the percent off. For an Introductory Discount, check the Discount Period line under the price on both billing intervals. Checkout applies the discount with no code entry.
 
 ## End a Promotion
 
@@ -96,8 +106,8 @@ A visitor who dismisses the banner has that dismissal stored against the entry's
 | Symptom | Cause |
 | --- | --- |
 | Nothing appears at all | Two entries are published, or a required field is empty, or the entry is unpublished |
-| Banner appears, price not struck through | The Coupon's `duration` is not `forever`. Checkout still discounts |
-| Banner appears, price is full | The Promotion Code is inactive, expired, out of redemptions, or its Coupon is not `forever` |
+| Banner appears, price is full | The Promotion Code is inactive, expired, or out of redemptions, or the `promo_…` ID is wrong or from Stripe test mode. Search the Vercel logs for `getDeliverableDiscount` |
+| The Discount Period line is wrong | Check the Coupon's `duration` and `duration_in_months` in Stripe. The line comes from those fields only |
 | Checkout stops and refreshes the price | The Promotion ended or changed after the pricing page loaded |
 | Banner appears on your machine but not on a deployment | `showInProduction` is unchecked. Vercel sets `NODE_ENV=production` for preview builds too, so an unchecked entry is hidden on preview and production alike, and shows only in local development |
 | Banner will not appear for you | You dismissed it, or you are signed in as a paying subscriber. Clear `promotion-banner-dismissed-id` and `promotion-banner-subscriber` from browser storage |

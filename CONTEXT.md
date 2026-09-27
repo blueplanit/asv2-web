@@ -53,6 +53,17 @@ _Avoid_: "promo", "discount", "campaign" — each is used loosely elsewhere; "Pr
 A Promotion whose named **Promotion Code** also resolves at Stripe and is still redeemable. The banner needs only the published entry, but a struck-through price and an actual discount at checkout need both. The two conditions can disagree — a Promotion Code that expires or exhausts its `max_redemptions` under a still-published entry leaves the banner advertising a discount nothing delivers. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
 _Avoid_: calling a Promotion "active" without saying which of the two you mean.
 
+**Ongoing Discount**:
+A **Deliverable Discount** that applies to every bill for the life of the subscription. Stripe calls this a `forever` coupon.
+
+**Introductory Discount**:
+A **Deliverable Discount** that applies only to the bills inside its **Discount Period**. Later bills are full price. Stripe calls this a `once` or `repeating` coupon.
+_Avoid_: "limited discount" — "limited" describes the Promotion's banner, not the discount.
+
+**Discount Period**:
+The length of an **Introductory Discount**, starting at the first paid bill. A bill created inside the period is discounted. On a yearly plan, a period shorter than 12 months still discounts the whole first year. See [ADR-0006](./docs/adr/0006-introductory-discount-pricing.md).
+_Avoid_: "trial" — the free trial ends before the first paid bill, so it never uses the Discount Period.
+
 **Promotion Code**:
 The Stripe object that carries the discount and bounds it (`active`, `expires_at`, `max_redemptions`). Referenced by ID from a Promotion entry; never typed by a visitor, since checkout applies it automatically. It carries no eligibility restriction — every visitor who reaches checkout during a Promotion qualifies. See [ADR-0005](./docs/adr/0005-promotions-sourced-from-stripe.md).
 _Avoid_: "coupon" — Stripe's Coupon defines the discount math, but this project only ever references the Promotion Code that wraps one.
