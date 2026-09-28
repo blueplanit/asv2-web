@@ -25,7 +25,7 @@ export const COPY_PAGE_KEYS = {
 // Next cannot import a value into `revalidate`, so each route hardcodes 604800 and cites this.
 export const BACKSTOP_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 
-/* Cache tags. The webhook expires a cached read by tag rather than by path. */
+/* Cache tags. The webhook expires a cached read by tag. */
 
 // Expires every cached read of one content type. Used when a payload names no single entry.
 export const contentTypeTag = (contentType: string) => `contentful:${contentType}`;
@@ -45,3 +45,34 @@ export const PROMOTION_TAG = contentTypeTag(CONTENT_TYPES.PROMOTION);
 // Expires one Copy Config entry, keyed by pageKey.
 export const copyKeyTag = (pageKey: string) =>
     `contentful:${CONTENT_TYPES.COPY_CONFIG}:${pageKey}`;
+
+/* Rendered routes. The webhook also expires, by path, each rendered route that shows an entry. */
+
+// Lists the rendered routes that show an entry of this type. Expiring them by path also
+// refreshes metadata routes such as /sitemap.xml.
+export function contentPaths(
+    contentType: string,
+    slug: string | null,
+    pageKey: string | null,
+): string[] {
+    if (contentType === CONTENT_TYPES.BLOG_POST) {
+        return [
+            "/blog",
+            "/sitemap.xml",
+            ...(slug ? [`/blog/${slug}`, `/es/blog/${slug}`] : []),
+        ];
+    }
+
+    if (contentType === CONTENT_TYPES.CMS_PAGE) {
+        return ["/sitemap.xml", ...(slug ? [`/pages/${slug}`] : [])];
+    }
+
+    if (contentType === CONTENT_TYPES.COPY_CONFIG) {
+        if (pageKey === COPY_PAGE_KEYS.LANDING) return ["/"];
+        if (pageKey === COPY_PAGE_KEYS.PRICING) return ["/pricing"];
+    }
+
+    if (contentType === CONTENT_TYPES.PROMOTION) return ["/", "/pricing"];
+
+    return [];
+}

@@ -34,6 +34,7 @@ const resourcesLinks: FooterLinkItem[] = [
     { label: "Stripe to Sheets", href: "/stripe-google-sheets-integration" },
     { label: "CSV Export Alternative", href: "/stripe-csv-export-alternative" },
     { label: "Commission revenue share", href: "/use-cases/stripe-commission-revenue-share" },
+    { label: "Revenue by product template", href: "/templates/stripe-revenue-by-product" },
 ];
 
 const companyLinks: FooterLinkItem[] = [
