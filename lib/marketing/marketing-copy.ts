@@ -58,11 +58,7 @@ export const DEFAULT_MARKETING_COPY: MarketingCopy = {
         primaryCtaLabel: "Get started",
         primaryCtaHref: "/login",
         supportingText: "Sign in with Google. No credit card required.",
-        highlights: [
-            "Never export another CSV from Stripe.",
-            "Keep one source of truth in Google Sheets.",
-            "Built for revenue ops and Stripe-powered teams.",
-        ],
+        highlights: ["Read-only Stripe access", "Six months of history", "Hourly updates"],
     },
     howItWorks: {
         eyebrow: "How it works",
