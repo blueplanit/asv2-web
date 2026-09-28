@@ -12,8 +12,8 @@ export const metadata = createMarketingMetadata({
     path: "/pricing",
 });
 
-// The HTML carries the price and becomes eligible for a rebuild after 10 minutes.
-// The first visit after expiry can still see stale pricing. See ADR-0003 decision 5.
+// A Promotion Code can stop being redeemable at Stripe with no notice to the site.
+// The HTML carries the price, so the route rebuilds after 10 minutes. See ADR-0003 decision 5.
 export const dynamic = "force-static";
 export const revalidate = 600;
 

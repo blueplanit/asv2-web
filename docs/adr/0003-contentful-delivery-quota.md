@@ -108,50 +108,51 @@ on mount would report every visitor as logged out, because `useSession` reports
 call returns. That loss is small and falls on both groups equally. A wrong
 boolean would instead corrupt the split on the one page where it matters.
 
-#### The price is in the HTML, eligible for a rebuild after 10 minutes
+#### `/pricing` carries the price in its HTML and rebuilds after 10 minutes
 
-`/pricing` renders a server-read price into its HTML. Crawlers that skip JavaScript
-then see that price, which may be stale until a rebuild. Without this, the HTML
-shows "Loading..." where the price goes.
+`/pricing` renders the current price into its HTML. Crawlers that skip JavaScript
+then see the price. Without this, the HTML shows "Loading..." where the price goes.
 
 The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
 Code can stop being redeemable at Stripe, at its end date or its redemption limit.
-Stripe does not notify the site. After 10 minutes, a request can start a rebuild.
-This is an eligibility interval, not a deadline for fresh HTML.
+Stripe does not notify the site. After the 10-minute window, the next visit starts
+a rebuild.
 
-The webhook marks `/pricing` for revalidation when a Promotion or the pricing Copy
-Config changes in Contentful. The next visit triggers a rebuild. A Stripe-only
-change relies on the 10-minute interval to become eligible for a rebuild.
+The webhook expires `/pricing` when a Promotion or the pricing Copy Config changes
+in Contentful. The next visit then starts a rebuild. A change at Stripe waits for
+the 10-minute window.
 
-A stale cached price charges nobody. The browser still reads `/api/billing/pricing`
-on every visit and replaces the displayed price when that read succeeds. Checkout
-reads the Promotion Code again before it creates a session. See ADR-0005.
+A stale cached price charges nobody. The browser reads `/api/billing/pricing` on
+every visit. A successful read replaces the displayed price. Checkout reads the
+Promotion Code again before it creates a session. See ADR-0005.
 
-A rebuild happens on demand, never on a timer. The first visit after the 10 minutes
-still receives stale HTML and starts a rebuild in the background. The rebuilt HTML
-is served after that rebuild succeeds. With no visits, no rebuild happens. If a
-rebuild throws, Next.js keeps the previous HTML and retries on a later request.
+A rebuild happens on demand, never on a timer. With no visits, no rebuild happens.
+The first visit after the 10-minute window gets the stale HTML. That visit starts a
+rebuild in the background. Later visits get the rebuilt HTML.
 
-While a Promotion runs, a rebuild makes one uncached Stripe call, for the Promotion
-Code. With steady traffic and successful rebuilds, the 10-minute interval means
-about 144 such calls a day per cache instance. Webhook invalidations and retries
-after failed rebuilds can add more. A rebuild also reads the two list prices.
-Their shared cache refreshes them each hour, which costs 2 calls
-an hour. Browser reads use that cache too. Rendering on every request instead adds
-one Promotion Code call per page view while a Promotion runs, and every view waits
-for Stripe.
+While a Promotion runs, each rebuild makes one uncached Stripe call, for the
+Promotion Code. With steady traffic, that is about 144 calls a day. Each webhook
+expiry adds one rebuild. A rebuild also reads the two list prices. Their shared
+cache refreshes them each hour, at 2 calls an hour. Browser reads use the same
+cache. Rendering on every request adds one Promotion Code call per page view while
+a Promotion runs. Every view then waits for Stripe.
 
-Two failures leave the cached HTML without the correct price. Next.js keeps each
-result until a later rebuild succeeds; 10 minutes is no upper bound. Both are
-exceptions to decision 7:
+No read on this page throws. The page catches a list-price failure. The Promotion
+and pricing Copy Config reads return a fallback. A failed read therefore still gives
+a successful rebuild. Next.js then caches the HTML with the fallback in it. Three
+fallbacks are exceptions to decision 7:
 
 - If the list-price read fails, the HTML shows the browser's loading and retry flow.
 - If the Promotion or Promotion Code read fails, the HTML shows the full price.
   During a Promotion, the HTML and the structured data then omit the discount.
+- If the pricing Copy Config read fails, the HTML shows `DEFAULT_PRICING_COPY`.
 
-Visitors can see stale or fallback pricing in the initial HTML before the browser
-read replaces it. Signed-in checkout waits for that read. Crawlers that skip
-JavaScript can keep seeing the incorrect HTML until a successful rebuild.
+A fallback stays until a rebuild reads successfully. A run of failed reads keeps it
+past the 10-minute window.
+
+Visitors can see a stale or fallback price in the initial HTML. The browser read
+then replaces the price. Signed-in checkout waits for that read. Crawlers that skip
+JavaScript see the cached HTML.
 
 ### 6. The listing reads a summary, not the whole post
 
@@ -167,12 +168,12 @@ of a shared function.
 
 ### 7. A failure is never cached
 
-The cache stores successful reads only. The cached `/pricing` HTML has two exceptions.
+The cache stores successful reads only. The cached `/pricing` HTML has three exceptions.
 See decision 5.
 
 `getMarketingCopy` and `getPricingCopy` still fall back to their `DEFAULT_*`
 copy, which is real hand-maintained text. The fallback now sits outside the
-cache, so an outage cannot store it.
+data cache, so an outage cannot store it there.
 
 A missing Copy Config entry throws for the same reason. Contentful answers that
 read successfully, with zero items, so the cache would otherwise store the empty
