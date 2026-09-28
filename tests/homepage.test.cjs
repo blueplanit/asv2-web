@@ -25,6 +25,7 @@ const page = load("app/(marketing)/page.tsx", {
     "react/jsx-runtime": dependencies["react/jsx-runtime"],
     "@/components/marketing/hero": hero,
     "@/components/marketing/final-cta-section": finalCta,
+    "@/components/marketing/structured-data": { SiteStructuredData: () => null },
     "@/lib/marketing/marketing-config": {
         getMarketingCopy: async () => {
             copyReads += 1;

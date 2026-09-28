@@ -29,6 +29,7 @@ export type BillingDisplay = Record<
 
 export type BillingDisplayResult = {
     billingDisplay: BillingDisplay;
+    offerAmounts: Record<BillingInterval, { amount: number; currency: string }>;
     // The Promotion's Contentful entry id — same id space as the banner's own
     // analytics (components/layout/promotion-banner.tsx), for funnel correlation.
     promotionId: string | null;
@@ -113,10 +114,21 @@ export async function getBillingDisplay(): Promise<BillingDisplayResult> {
         };
     }
 
+    // Structured data states one price with no end date, so only an Ongoing Discount lowers it.
+    function offerAmount(unitAmount: number, currency: string, intervalMonths: number) {
+        const ongoing = coupon !== null && discountedBillCount(coupon, intervalMonths) === null;
+        const amount = ongoing ? discountedAmount(unitAmount, coupon) : unitAmount;
+        return { amount: amount / 100, currency: currency.toUpperCase() };
+    }
+
     return {
         billingDisplay: {
             monthly: display(prices.monthly.unitAmount, prices.monthly.currency, "/month", 1, "month"),
             yearly: display(prices.yearly.unitAmount, prices.yearly.currency, "/year", 12, "year"),
+        },
+        offerAmounts: {
+            monthly: offerAmount(prices.monthly.unitAmount, prices.monthly.currency, 1),
+            yearly: offerAmount(prices.yearly.unitAmount, prices.yearly.currency, 12),
         },
         promotionId: discount?.promotion.id ?? null,
         promotionVersion: deliverableDiscountVersion(discount),

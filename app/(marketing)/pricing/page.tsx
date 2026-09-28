@@ -2,6 +2,8 @@
 import { PricingClient } from "@/components/pricing/pricing-client";
 import { getPricingCopy } from "@/lib/pricing/pricing-config";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
+import type { BillingDisplayResult } from "@/lib/pricing/get-billing-display";
+import { AppStructuredData } from "@/components/marketing/structured-data";
 
 export const metadata = createMarketingMetadata({
     title: "Pricing — Stripe to Google Sheets Sync | SyncStaq",
@@ -10,13 +12,23 @@ export const metadata = createMarketingMetadata({
     path: "/pricing",
 });
 
-// PricingClient reads the session in the browser, so this page stays static.
-// force-static holds that: a server-side session read here fails the build.
+// A Promotion Code can stop being redeemable at Stripe with no notice to the site.
+// The HTML carries the price, so the route rebuilds after 10 minutes. See ADR-0003 decision 5.
 export const dynamic = "force-static";
-export const revalidate = 604800; // BACKSTOP_WINDOW_SECONDS
+export const revalidate = 600;
 
 export default async function PricingPage() {
     const pricingCopy = await getPricingCopy();
+    let initialPricing: BillingDisplayResult | null = null;
+    try {
+        const { getBillingDisplay } = await import("@/lib/pricing/get-billing-display");
+        initialPricing = await getBillingDisplay();
+    } catch {
+        console.error("PricingPage: current pricing unavailable; browser will retry");
+    }
 
-    return <PricingClient copy={pricingCopy} />;
+    return <>
+        <AppStructuredData pricing={initialPricing} />
+        <PricingClient copy={pricingCopy} initialPricing={initialPricing} />
+    </>;
 }

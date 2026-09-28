@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/marketing/hero";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { getMarketingCopy } from "@/lib/marketing/marketing-config";
+import { SiteStructuredData } from "@/components/marketing/structured-data";
 
 export const metadata: Metadata = {
     alternates: { canonical: "/" },
@@ -31,6 +32,7 @@ export default async function HomePage() {
 
     return (
         <main className="bg-white text-slate-950">
+            <SiteStructuredData />
             <Hero copy={{
                 ...copy.hero,
                 // Pin the reviewed homepage wording; retain CMS-backed title fields.
