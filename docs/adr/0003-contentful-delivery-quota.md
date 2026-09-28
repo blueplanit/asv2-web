@@ -44,8 +44,8 @@ Both siblings already use it.
 
 ### 2. The webhook delivers content; the window is a backstop
 
-A Contentful webhook calls `/api/revalidate` and expires cache tags. Published
-changes reach the site in seconds.
+A Contentful webhook calls `/api/revalidate` and expires cache tags and rendered
+routes. Published changes reach the site in seconds.
 
 Time-based revalidation drops from 60 seconds to 7 days. It no longer delivers
 content. It only catches a webhook that failed.
@@ -57,11 +57,11 @@ days saves almost nothing further.
 **A future reader will read `revalidate = 604800` as a bug. It is not.** It is
 only reachable when the webhook has already failed.
 
-The webhook also revalidates the rendered paths that depend on each changed entry.
-This makes invalidation explicit for metadata routes such as `/sitemap.xml`, whose
-rendered output has its own route cache.
+The webhook also expires, by path, each rendered route that shows the changed entry.
+A metadata route such as `/sitemap.xml` keeps its own route cache. Expiring it by
+path refreshes it.
 
-### 3. The webhook confirms a change before it expires a tag
+### 3. The webhook confirms a change before it expires the cache
 
 Contentful accepts a publish before its Delivery API serves the new version. The
 endpoint polls that API for up to 15 seconds and waits for the new version. It

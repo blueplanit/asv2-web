@@ -23,7 +23,7 @@ Working guide for AI agents (and humans) in this repo. [CONTEXT.md](./CONTEXT.md
 
 ## Tests
 
-There is no repo-wide test runner. `tests/` holds targeted `node --test` files for the billing paths, run with `npm run test:billing`. They compile a route with `tests/helpers/load-typescript-module.cjs` and inject mocks, so adding an import to a covered route means adding it to that test's mock map or the test throws `Unexpected dependency`. Run the scripts, not `node --test tests/`, which tries to execute the helper.
+There is no repo-wide test runner. `tests/` holds targeted `node --test` files. Run the billing tests with `npm run test:billing` and the Contentful webhook tests with `npm run test:contentful`. They compile a route with `tests/helpers/load-typescript-module.cjs` and inject mocks, so adding an import to a covered route means adding it to that test's mock map or the test throws `Unexpected dependency`. Run the scripts, not `node --test tests/`, which tries to execute the helper.
 
 ## Related repos
 
