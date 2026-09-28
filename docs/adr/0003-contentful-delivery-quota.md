@@ -102,39 +102,47 @@ layout are identical either way, and crawlers see the static HTML.
 cookie or a header. The declaration turns a future dynamic read into a build
 failure rather than a silent return to one Contentful call per page view.
 
-#### The price is in the HTML, cached for 10 minutes
-
-`/pricing` renders the current price into its HTML. Crawlers that skip JavaScript
-then see the price. Before this, the HTML showed "Loading..." where the price goes.
-
-The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
-Code can expire or run out of redemptions at Stripe. Stripe does not notify the
-site, so the cached price stays until the next rebuild. 10 minutes bounds that.
-
-The webhook expires `/pricing` immediately when a Promotion or the pricing Copy
-Config changes in Contentful. Only a change at Stripe waits for the 10 minutes.
-
-A stale cached price charges nobody. The browser still reads `/api/billing/pricing`
-on every visit and replaces the cached price. Checkout reads the Promotion Code
-again before it creates a session. See ADR-0005.
-
-A rebuild happens on demand, never on a timer. The first visit after the 10 minutes
-triggers one rebuild in the background. With no visits, no rebuild happens.
-
-A rebuild makes at most one uncached Stripe call, for the Promotion Code. The page
-therefore adds at most 144 Stripe calls a day. Rendering on every request instead
-adds one call per page view, and every view waits for Stripe.
-
-If the server price read fails, the HTML falls back to the browser's loading and
-retry flow. Next caches that fallback for up to 10 minutes. This departs from
-decision 7. The cost is small: visitors still see the price after the browser
-read, and only crawlers miss it.
-
 `PRICING_PAGE_VIEWED` now fires after the session resolves, not on mount. Firing
 on mount would report every visitor as logged out, because `useSession` reports
 `loading` first. The event is lost for a visitor who leaves before the session
 call returns. That loss is small and falls on both groups equally. A wrong
 boolean would instead corrupt the split on the one page where it matters.
+
+#### The price is in the HTML, cached for 10 minutes
+
+`/pricing` renders the current price into its HTML. Crawlers that skip JavaScript
+then see the price. Without this, the HTML shows "Loading..." where the price goes.
+
+The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
+Code can stop being redeemable at Stripe, at its end date or its redemption limit.
+Stripe does not notify the site. The cached price therefore stays until the next
+rebuild. 10 minutes bounds that.
+
+The webhook expires `/pricing` immediately when a Promotion or the pricing Copy
+Config changes in Contentful. Only a change at Stripe waits for the 10 minutes.
+
+A stale cached price charges nobody. The browser still reads `/api/billing/pricing`
+on every visit. That read replaces the cached price. Checkout reads the Promotion
+Code again before it creates a session. See ADR-0005.
+
+A rebuild happens on demand, never on a timer. The first visit after the 10 minutes
+triggers one rebuild in the background. With no visits, no rebuild happens.
+
+While a Promotion runs, a rebuild makes one uncached Stripe call, for the Promotion
+Code. That is at most 144 calls a day. A rebuild also reads the two list prices.
+Their shared cache refreshes them each hour, which costs 2 calls an hour. The browser
+read already uses that cache, so the page adds no list-price calls. Rendering on
+every request instead adds one call per page view. Every view then waits for Stripe.
+
+Two failures leave the cached HTML without the correct price. Next.js keeps each
+result for up to 10 minutes. Both are exceptions to decision 7:
+
+- If the list-price read fails, the HTML shows the browser's loading and retry flow.
+- If the Promotion or Promotion Code read fails, the HTML shows the full price.
+  During a Promotion, the HTML and the structured data then omit the discount.
+
+Visitors still see the correct price after the browser read. Only crawlers see the
+incorrect HTML.
 
 ### 6. The listing reads a summary, not the whole post
 
@@ -150,7 +158,8 @@ of a shared function.
 
 ### 7. A failure is never cached
 
-The cache stores successful reads only.
+The cache stores successful reads only. The cached `/pricing` HTML has two exceptions.
+See decision 5.
 
 `getMarketingCopy` and `getPricingCopy` still fall back to their `DEFAULT_*`
 copy, which is real hand-maintained text. The fallback now sits outside the
