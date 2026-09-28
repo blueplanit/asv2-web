@@ -35,11 +35,10 @@ export default async function HomePage() {
             <SiteStructuredData />
             <Hero copy={{
                 ...copy.hero,
-                // Pin the reviewed homepage wording; retain CMS-backed title fields.
+                // Pin the reviewed homepage wording; retain CMS-backed title and highlights fields.
                 subtitle: "Stop rebuilding reports from CSV exports. Keep Stripe billing data in Sheets for reporting, reconciliation, and product labeling.",
                 primaryCtaLabel: "Start 14-day free trial",
                 primaryCtaHref: "/pricing",
-                highlights: ["Read-only Stripe access", "Six months of history", "Hourly updates"],
             }} />
             <section className="mx-auto max-w-6xl px-6 py-10 min-[701px]:py-14">
                 <h2 className="text-3xl leading-snug font-semibold">For teams that keep coming back to Stripe exports.</h2>

@@ -33,7 +33,7 @@ const page = load("app/(marketing)/page.tsx", {
                 hero: {
                     title: "", title1: "Your Stripe data,", title2: "already in Google Sheets.",
                     subtitle: "Previous CMS subtitle", primaryCtaLabel: "Get started",
-                    primaryCtaHref: "/login", highlights: ["Previous highlight"],
+                    primaryCtaHref: "/login", highlights: ["CMS highlight one", "CMS highlight two"],
                 },
             };
         },
@@ -55,12 +55,16 @@ test("preserves canonical, static cache policy, and CMS title read", async () =>
 test("renders approved copy and trial links despite older CMS wording", async () => {
     const html = await rendered;
     assert.match(html, /Stop rebuilding reports from CSV exports/);
-    assert.doesNotMatch(html, /Previous CMS subtitle|Previous highlight/);
+    assert.doesNotMatch(html, /Previous CMS subtitle/);
     assert.equal((html.match(/href="\/pricing"/g) || []).length, 2);
     assert.equal((html.match(/Start 14-day free trial/g) || []).length, 2);
-    assert.match(html, /Read-only Stripe access/);
-    assert.match(html, /Six months of history/);
-    assert.match(html, /Hourly updates/);
+});
+
+test("renders the hero highlights from the landing Copy Config", async () => {
+    const html = await rendered;
+    assert.match(html, /CMS highlight one/);
+    assert.match(html, /CMS highlight two/);
+    assert.doesNotMatch(html, /Six months of history/);
 });
 
 test("uses the real sample screenshot in a labeled keyboard-scrollable region", async () => {
