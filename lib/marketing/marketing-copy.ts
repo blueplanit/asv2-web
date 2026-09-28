@@ -58,7 +58,12 @@ export const DEFAULT_MARKETING_COPY: MarketingCopy = {
         primaryCtaLabel: "Get started",
         primaryCtaHref: "/login",
         supportingText: "Sign in with Google. No credit card required.",
-        highlights: ["Read-only Stripe access", "Six months of history", "Hourly updates"],
+        highlights: [
+            "Hourly updates",
+            "Read-only Stripe access",
+            "Six months of history",
+            "No API key needed",
+        ],
     },
     howItWorks: {
         eyebrow: "How it works",
