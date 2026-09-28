@@ -38,10 +38,9 @@ function loadClient(status = "unauthenticated") {
     }, compiler).PricingClient;
 }
 
-test("server HTML contains current monthly and annual prices, including ongoing discounts", () => {
+test("server HTML contains the current monthly price, including ongoing discounts", () => {
     const html = renderToStaticMarkup(React.createElement(loadClient(), { copy, initialPricing: pricing }));
-    assert.match(html, /Monthly: \$15\/month/);
-    assert.match(html, /Annual: \$150\/year, billed annually/);
+    assert.match(html, /\$15/);
     assert.doesNotMatch(html, /Loading\.\.\./);
 });
 
@@ -138,7 +137,7 @@ test("pricing page reads the existing price source per request and tolerates a s
         assert.equal(page.dynamic, "force-dynamic");
         const html = renderToStaticMarkup(await page.default());
         assert.equal(reads, 1);
-        assert.equal(html.includes("Monthly: $15/month"), !fails);
+        assert.equal(html.includes("$15"), !fails);
         assert.equal(html.includes("Loading..."), fails);
     }
 });

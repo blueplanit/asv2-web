@@ -556,15 +556,6 @@ export function PricingClient({ copy, initialPricing = null }: PricingClientProp
                                     />
                                 </div>
 
-                                {!pricingError && (initialPricing || !pricingLoading) && (
-                                    <p className="text-sm text-slate-600">
-                                        Monthly: {billingDisplay.monthly.discountedPrice ?? billingDisplay.monthly.price}/month
-                                        {billingDisplay.monthly.discountPeriod && ` ${billingDisplay.monthly.discountPeriod.terms}`}.
-                                        {" "}Annual: {billingDisplay.yearly.discountedPrice ?? billingDisplay.yearly.price}/year
-                                        {billingDisplay.yearly.discountPeriod && ` ${billingDisplay.yearly.discountPeriod.terms}`}, billed annually.
-                                    </p>
-                                )}
-
                                 <ul className="space-y-2">
                                     {copy.plan.bullets.map((line) => (
                                         <li
