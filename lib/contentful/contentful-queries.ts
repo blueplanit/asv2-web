@@ -11,7 +11,6 @@ import {
 import { getBlogLanguage } from "./blog-localization";
 import {
     BACKSTOP_WINDOW_SECONDS,
-    BLOG_INDEX_BACKSTOP_SECONDS,
     BLOG_INDEX_TAG,
     CONTENT_TYPES,
     CMS_PAGE_INDEX_TAG,
@@ -92,7 +91,7 @@ const readAllBlogPosts = async (production: boolean): Promise<BlogPostSummary[]>
 // The whole set therefore costs a single Contentful call.
 const getAllBlogPosts = (): Promise<BlogPostSummary[]> =>
     unstable_cache(readAllBlogPosts, ["blog-post-list"], {
-        revalidate: BLOG_INDEX_BACKSTOP_SECONDS,
+        revalidate: BACKSTOP_WINDOW_SECONDS,
         tags: [contentTypeTag(CONTENT_TYPES.BLOG_POST), BLOG_INDEX_TAG],
     })(isProd());
 

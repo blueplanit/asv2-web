@@ -25,10 +25,6 @@ export const COPY_PAGE_KEYS = {
 // Next cannot import a value into `revalidate`, so each route hardcodes 604800 and cites this.
 export const BACKSTOP_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 
-// Scheduled posts must reach the blog index and sitemap even if a webhook delivery fails.
-// This listing costs one Delivery API call per refresh and is shared by every consumer.
-export const BLOG_INDEX_BACKSTOP_SECONDS = 60 * 60;
-
 /* Cache tags. The webhook expires a cached read by tag rather than by path. */
 
 // Expires every cached read of one content type. Used when a payload names no single entry.

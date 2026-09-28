@@ -99,13 +99,12 @@ Survey answers are written with `valueInputOption: "RAW"` and formula-trigger ch
 ## Contentful revalidation webhook
 
 One Contentful space serves three websites on a shared quota of 100,000 Delivery API
-calls per month. Entry reads are cached for 7 days. The shared blog listing is cached for
-one hour so scheduled posts still reach the index and sitemap if a webhook fails. A webhook
-normally expires both data and rendered-route caches immediately when content changes. See
+calls per month. Every Contentful read here is cached for 7 days. A webhook expires that
+cache and the affected rendered routes when content changes. See
 [ADR-0003](./docs/adr/0003-contentful-delivery-quota.md).
 
-**Without the webhook, a new blog post takes up to one hour to reach the index and sitemap;
-other published changes can take up to 7 days.** The steps below are required, not optional.
+**Without the webhook, a published change takes up to 7 days to appear.** The steps below
+are required, not optional.
 
 ### Web app env var
 
@@ -135,5 +134,5 @@ Publish any entry, then open the webhook's **Activity log**.
 - **503** — the endpoint could not confirm the change against the Delivery API. Contentful
   retries. A run of these means content is stale, so check the log.
 
-A silently broken webhook can leave entry changes stale for up to 7 days, so check this log
-after any change to the endpoint or the secret.
+A silently broken webhook is invisible for up to 7 days, so check this log after any change
+to the endpoint or the secret.
