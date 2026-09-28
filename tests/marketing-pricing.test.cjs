@@ -38,10 +38,9 @@ function loadClient(status = "unauthenticated") {
     }, compiler).PricingClient;
 }
 
-test("server HTML contains current monthly and annual prices, including ongoing discounts", () => {
+test("server HTML contains the current monthly price, including ongoing discounts", () => {
     const html = renderToStaticMarkup(React.createElement(loadClient(), { copy, initialPricing: pricing }));
-    assert.match(html, /Monthly: \$15\/month/);
-    assert.match(html, /Annual: \$150\/year, billed annually/);
+    assert.match(html, /\$15/);
     assert.doesNotMatch(html, /Loading\.\.\./);
 });
 
@@ -76,8 +75,26 @@ test("site entities share canonical IDs and JSON-LD escapes script-breaking text
     assert.equal((escaped.match(/<script/g) ?? []).length, 1);
 });
 
+// Structured data states one price with no end date, so only an Ongoing Discount lowers it.
+// The visible price still shows an Introductory Discount with its Discount Period terms.
 test("machine-readable offers use the same Stripe amounts and ongoing discount rules as visible prices", async () => {
-    for (const duration of ["forever", "once", "repeating"]) {
+    const discountModule = loadTypeScriptModule(
+        path.join(__dirname, "../lib/promotions/get-deliverable-discount.ts"),
+        {
+            "server-only": {},
+            "node:crypto": require("node:crypto"),
+            "@/lib/stripe/stripe-billing": { stripeBilling: {} },
+            "./get-active-promotion": { getActivePromotion: async () => null },
+            "@/lib/contentful/contentful": {},
+        },
+    );
+    const coupons = [
+        { duration: "forever", percent_off: 20 },
+        { duration: "once", percent_off: 20 },
+        { duration: "repeating", duration_in_months: 3, percent_off: 20 },
+    ];
+
+    for (const coupon of coupons) {
         const { getBillingDisplay } = loadTypeScriptModule(
             path.join(__dirname, "../lib/pricing/get-billing-display.ts"),
             {
@@ -87,21 +104,22 @@ test("machine-readable offers use the same Stripe amounts and ongoing discount r
                     stripeBilling: { prices: { retrieve: async (id) => ({ unit_amount: id === "monthly" ? 1900 : 19000, currency: "usd" }) } },
                 },
                 "@/lib/promotions/get-deliverable-discount": {
-                    getDeliverableDiscount: async () => ({ promotion: { id: "promotion" }, coupon: { duration, percent_off: 20 } }),
-                    isOngoingDiscount: (coupon) => coupon.duration === "forever",
-                    deliverableDiscountVersion: () => "version",
+                    ...discountModule,
+                    getDeliverableDiscount: async () => ({ promotion: { id: "promotion" }, promotionCodeId: "promo", coupon }),
                 },
             },
         );
+        const ongoing = coupon.duration === "forever";
         const result = await getBillingDisplay();
-        assert.equal(result.offerAmounts.monthly.amount, duration === "forever" ? 15.2 : 19);
-        assert.equal(result.offerAmounts.yearly.amount, duration === "forever" ? 152 : 190);
+        assert.equal(result.offerAmounts.monthly.amount, ongoing ? 15.2 : 19);
+        assert.equal(result.offerAmounts.yearly.amount, ongoing ? 152 : 190);
         assert.equal(result.offerAmounts.monthly.currency, "USD");
-        assert.equal(result.billingDisplay.monthly.discountedPrice, duration === "forever" ? "$15.20" : null);
+        assert.equal(result.billingDisplay.monthly.discountedPrice, "$15.20");
+        assert.equal(result.billingDisplay.monthly.discountPeriod === null, ongoing);
     }
 });
 
-test("pricing page reads the existing price source per request and tolerates a server lookup failure", async () => {
+test("pricing page renders the price into a 10-minute static page and tolerates a server lookup failure", async () => {
     for (const fails of [false, true]) {
         let reads = 0;
         const page = loadTypeScriptModule(path.join(__dirname, "../app/(marketing)/pricing/page.tsx"), {
@@ -116,10 +134,11 @@ test("pricing page reads the existing price source per request and tolerates a s
                 return pricing;
             } },
         }, compiler);
-        assert.equal(page.dynamic, "force-dynamic");
+        assert.equal(page.dynamic, "force-static");
+        assert.equal(page.revalidate, 600);
         const html = renderToStaticMarkup(await page.default());
         assert.equal(reads, 1);
-        assert.equal(html.includes("Monthly: $15/month"), !fails);
+        assert.equal(html.includes("$15"), !fails);
         assert.equal(html.includes("Loading..."), fails);
     }
 });

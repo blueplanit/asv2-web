@@ -44,8 +44,8 @@ Both siblings already use it.
 
 ### 2. The webhook delivers content; the window is a backstop
 
-A Contentful webhook calls `/api/revalidate` and expires cache tags. Published
-changes reach the site in seconds.
+A Contentful webhook calls `/api/revalidate` and expires cache tags and rendered
+routes. Published changes reach the site in seconds.
 
 Time-based revalidation drops from 60 seconds to 7 days. It no longer delivers
 content. It only catches a webhook that failed.
@@ -57,7 +57,11 @@ days saves almost nothing further.
 **A future reader will read `revalidate = 604800` as a bug. It is not.** It is
 only reachable when the webhook has already failed.
 
-### 3. The webhook confirms a change before it expires a tag
+The webhook also expires, by path, each rendered route that shows the changed entry.
+A metadata route such as `/sitemap.xml` keeps its own route cache. Expiring it by
+path refreshes it.
+
+### 3. The webhook confirms a change before it expires the cache
 
 Contentful accepts a publish before its Delivery API serves the new version. The
 endpoint polls that API for up to 15 seconds and waits for the new version. It
@@ -104,6 +108,51 @@ on mount would report every visitor as logged out, because `useSession` reports
 call returns. That loss is small and falls on both groups equally. A wrong
 boolean would instead corrupt the split on the one page where it matters.
 
+#### The price is in the HTML, eligible for a rebuild after 10 minutes
+
+`/pricing` renders a server-read price into its HTML. Crawlers that skip JavaScript
+then see that price, which may be stale until a rebuild. Without this, the HTML
+shows "Loading..." where the price goes.
+
+The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
+Code can stop being redeemable at Stripe, at its end date or its redemption limit.
+Stripe does not notify the site. After 10 minutes, a request can start a rebuild.
+This is an eligibility interval, not a deadline for fresh HTML.
+
+The webhook marks `/pricing` for revalidation when a Promotion or the pricing Copy
+Config changes in Contentful. The next visit triggers a rebuild. A Stripe-only
+change relies on the 10-minute interval to become eligible for a rebuild.
+
+A stale cached price charges nobody. The browser still reads `/api/billing/pricing`
+on every visit and replaces the displayed price when that read succeeds. Checkout
+reads the Promotion Code again before it creates a session. See ADR-0005.
+
+A rebuild happens on demand, never on a timer. The first visit after the 10 minutes
+still receives stale HTML and starts a rebuild in the background. The rebuilt HTML
+is served after that rebuild succeeds. With no visits, no rebuild happens. If a
+rebuild throws, Next.js keeps the previous HTML and retries on a later request.
+
+While a Promotion runs, a rebuild makes one uncached Stripe call, for the Promotion
+Code. With steady traffic and successful rebuilds, the 10-minute interval means
+about 144 such calls a day per cache instance. Webhook invalidations and retries
+after failed rebuilds can add more. A rebuild also reads the two list prices.
+Their shared cache refreshes them each hour, which costs 2 calls
+an hour. Browser reads use that cache too. Rendering on every request instead adds
+one Promotion Code call per page view while a Promotion runs, and every view waits
+for Stripe.
+
+Two failures leave the cached HTML without the correct price. Next.js keeps each
+result until a later rebuild succeeds; 10 minutes is no upper bound. Both are
+exceptions to decision 7:
+
+- If the list-price read fails, the HTML shows the browser's loading and retry flow.
+- If the Promotion or Promotion Code read fails, the HTML shows the full price.
+  During a Promotion, the HTML and the structured data then omit the discount.
+
+Visitors can see stale or fallback pricing in the initial HTML before the browser
+read replaces it. Signed-in checkout waits for that read. Crawlers that skip
+JavaScript can keep seeing the incorrect HTML until a successful rebuild.
+
 ### 6. The listing reads a summary, not the whole post
 
 `getAllBlogPosts` selects every field except the body, and returns
@@ -118,7 +167,8 @@ of a shared function.
 
 ### 7. A failure is never cached
 
-The cache stores successful reads only.
+The cache stores successful reads only. The cached `/pricing` HTML has two exceptions.
+See decision 5.
 
 `getMarketingCopy` and `getPricingCopy` still fall back to their `DEFAULT_*`
 copy, which is real hand-maintained text. The fallback now sits outside the

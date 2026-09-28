@@ -12,9 +12,10 @@ export const metadata = createMarketingMetadata({
     path: "/pricing",
 });
 
-// Promotions must be evaluated per request, not frozen in a static page.
-// Copy and Stripe list prices retain their existing internal caches.
-export const dynamic = "force-dynamic";
+// The HTML carries the price and becomes eligible for a rebuild after 10 minutes.
+// The first visit after expiry can still see stale pricing. See ADR-0003 decision 5.
+export const dynamic = "force-static";
+export const revalidate = 600;
 
 export default async function PricingPage() {
     const pricingCopy = await getPricingCopy();

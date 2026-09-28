@@ -4,10 +4,16 @@ import { stripeBilling, BILLING_PRICES } from "@/lib/stripe/stripe-billing";
 import {
     deliverableDiscountVersion,
     getDeliverableDiscount,
-    isOngoingDiscount,
+    discountedBillCount,
 } from "@/lib/promotions/get-deliverable-discount";
 
 export type BillingInterval = "monthly" | "yearly";
+
+// Set only for an Introductory Discount: states when the discounted price ends.
+export type DiscountPeriodDisplay = {
+    terms: string;
+    short: string;
+};
 
 export type BillingDisplay = Record<
     BillingInterval,
@@ -17,6 +23,7 @@ export type BillingDisplay = Record<
         // Both null together, or both set together.
         discountedPrice: string | null;
         percentOff: number | null;
+        discountPeriod: DiscountPeriodDisplay | null;
     }
 >;
 
@@ -83,38 +90,45 @@ export async function getBillingDisplay(): Promise<BillingDisplayResult> {
         getDeliverableDiscount(),
     ]);
 
-    // A non-ongoing discount still applies at checkout, so it stays reportable below
-    // — it just cannot be shown as the per-interval rate.
-    const shownCoupon = discount && isOngoingDiscount(discount.coupon) ? discount.coupon : null;
+    const coupon = discount?.coupon ?? null;
 
-    function display(unitAmount: number, currency: string, intervalLabel: string) {
-        if (!shownCoupon) {
-            return { price: formatMoney(unitAmount, currency), intervalLabel, discountedPrice: null, percentOff: null };
+    function display(unitAmount: number, currency: string, intervalLabel: string, intervalMonths: number, unit: string) {
+        const price = formatMoney(unitAmount, currency);
+        const billCount = coupon ? discountedBillCount(coupon, intervalMonths) : null;
+
+        // A zero count means Stripe discounts no bill here, so showing a discount would be false.
+        if (!coupon || billCount === 0) {
+            return { price, intervalLabel, discountedPrice: null, percentOff: null, discountPeriod: null };
         }
 
-        const discounted = discountedAmount(unitAmount, shownCoupon);
+        const discounted = discountedAmount(unitAmount, coupon);
+        const period = billCount === 1 ? `first ${unit}` : `first ${billCount} ${unit}s`;
         return {
-            price: formatMoney(unitAmount, currency),
+            price,
             intervalLabel,
             discountedPrice: formatMoney(discounted, currency),
             percentOff: percentOffFor(unitAmount, discounted),
+            discountPeriod: billCount === null
+                ? null
+                : { terms: `for your ${period}, then ${price}${intervalLabel}`, short: period },
         };
+    }
+
+    // Structured data states one price with no end date, so only an Ongoing Discount lowers it.
+    function offerAmount(unitAmount: number, currency: string, intervalMonths: number) {
+        const ongoing = coupon !== null && discountedBillCount(coupon, intervalMonths) === null;
+        const amount = ongoing ? discountedAmount(unitAmount, coupon) : unitAmount;
+        return { amount: amount / 100, currency: currency.toUpperCase() };
     }
 
     return {
         billingDisplay: {
-            monthly: display(prices.monthly.unitAmount, prices.monthly.currency, "/month"),
-            yearly: display(prices.yearly.unitAmount, prices.yearly.currency, "/year"),
+            monthly: display(prices.monthly.unitAmount, prices.monthly.currency, "/month", 1, "month"),
+            yearly: display(prices.yearly.unitAmount, prices.yearly.currency, "/year", 12, "year"),
         },
         offerAmounts: {
-            monthly: {
-                amount: (shownCoupon ? discountedAmount(prices.monthly.unitAmount, shownCoupon) : prices.monthly.unitAmount) / 100,
-                currency: prices.monthly.currency.toUpperCase(),
-            },
-            yearly: {
-                amount: (shownCoupon ? discountedAmount(prices.yearly.unitAmount, shownCoupon) : prices.yearly.unitAmount) / 100,
-                currency: prices.yearly.currency.toUpperCase(),
-            },
+            monthly: offerAmount(prices.monthly.unitAmount, prices.monthly.currency, 1),
+            yearly: offerAmount(prices.yearly.unitAmount, prices.yearly.currency, 12),
         },
         promotionId: discount?.promotion.id ?? null,
         promotionVersion: deliverableDiscountVersion(discount),

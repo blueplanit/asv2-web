@@ -7,7 +7,12 @@ import { useSearchParams } from "next/navigation";
 import { Snackbar } from "@/components/ui/snackbar";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import type { PricingCopy } from "@/lib/pricing/pricing-config";
-import type { BillingDisplay, BillingInterval, BillingDisplayResult } from "@/lib/pricing/get-billing-display";
+import type {
+    BillingDisplay,
+    BillingDisplayResult,
+    BillingInterval,
+    DiscountPeriodDisplay,
+} from "@/lib/pricing/get-billing-display";
 import {
     trackAmplitudeError,
     trackAmplitudeEvent,
@@ -28,8 +33,8 @@ type PricingApiResponse = {
 type PricingStatus = "loading" | "ready" | "error";
 
 const DEFAULT_BILLING_DISPLAY: BillingDisplay = {
-    monthly: { price: "$19", intervalLabel: "/month", discountedPrice: null, percentOff: null },
-    yearly: { price: "$190", intervalLabel: "/year", discountedPrice: null, percentOff: null },
+    monthly: { price: "$19", intervalLabel: "/month", discountedPrice: null, percentOff: null, discountPeriod: null },
+    yearly: { price: "$190", intervalLabel: "/year", discountedPrice: null, percentOff: null, discountPeriod: null },
   };
 
 async function fetchCurrentPricing(signal: AbortSignal): Promise<PricingApiResponse | null> {
@@ -121,6 +126,7 @@ type PriceDisplayProps = {
     intervalLabel: string;
     discountedPrice: string | null;
     percentOff: number | null;
+    discountPeriod: DiscountPeriodDisplay | null;
 };
 
 // The "Save X%" pill, shared by the card and sticky variants below — same shape,
@@ -141,7 +147,7 @@ function DiscountBadge({ percentOff, size }: { percentOff: number; size: "md" | 
 
 // Shared by the main plan card and the mobile sticky bar, so the loading /
 // discounted / plain-price decision can't drift between the two surfaces.
-function PriceDisplay({ variant, loading, error, price, intervalLabel, discountedPrice, percentOff }: PriceDisplayProps) {
+function PriceDisplay({ variant, loading, error, price, intervalLabel, discountedPrice, percentOff, discountPeriod }: PriceDisplayProps) {
     if (error) {
         return <p className="text-sm font-medium text-red-600">Price temporarily unavailable</p>;
     }
@@ -169,6 +175,7 @@ function PriceDisplay({ variant, loading, error, price, intervalLabel, discounte
                         <span className="text-4xl font-semibold tracking-tight text-slate-900">{discountedPrice}</span>
                         <span className="pb-1 text-sm text-slate-500">{intervalLabel}</span>
                     </div>
+                    {discountPeriod && <p className="text-sm text-slate-500">{discountPeriod.terms}</p>}
                 </div>
             );
         }
@@ -189,6 +196,7 @@ function PriceDisplay({ variant, loading, error, price, intervalLabel, discounte
                     {percentOff !== null && <DiscountBadge percentOff={percentOff} size="sm" />}
                 </div>
                 <span className="text-sm font-semibold text-slate-900">{discountedPrice}{intervalLabel}</span>
+                {discountPeriod && <span className="text-[11px] text-slate-500">{discountPeriod.short}</span>}
             </div>
         );
     }
@@ -423,7 +431,7 @@ export function PricingClient({ copy, initialPricing = null }: PricingClientProp
         }
     }
 
-    const { price, intervalLabel, discountedPrice, percentOff } = billingDisplay[interval];
+    const { price, intervalLabel, discountedPrice, percentOff, discountPeriod } = billingDisplay[interval];
     const faqHeading = copy.included.faqTitle.trim().toLowerCase() === "faq" ? "FAQs" : copy.included.faqTitle;
 
     const freeTrialMsg = !isLoggedIn ? (
@@ -544,15 +552,9 @@ export function PricingClient({ copy, initialPricing = null }: PricingClientProp
                                         intervalLabel={intervalLabel}
                                         discountedPrice={discountedPrice}
                                         percentOff={percentOff}
+                                        discountPeriod={discountPeriod}
                                     />
                                 </div>
-
-                                {!pricingError && (initialPricing || !pricingLoading) && (
-                                    <p className="text-sm text-slate-600">
-                                        Monthly: {billingDisplay.monthly.discountedPrice ?? billingDisplay.monthly.price}/month.
-                                        {" "}Annual: {billingDisplay.yearly.discountedPrice ?? billingDisplay.yearly.price}/year, billed annually.
-                                    </p>
-                                )}
 
                                 <ul className="space-y-2">
                                     {copy.plan.bullets.map((line) => (
@@ -655,6 +657,7 @@ export function PricingClient({ copy, initialPricing = null }: PricingClientProp
                             intervalLabel={intervalLabel}
                             discountedPrice={discountedPrice}
                             percentOff={percentOff}
+                            discountPeriod={discountPeriod}
                         />
                     </div>
                     <button

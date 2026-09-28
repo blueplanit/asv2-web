@@ -99,8 +99,9 @@ Survey answers are written with `valueInputOption: "RAW"` and formula-trigger ch
 ## Contentful revalidation webhook
 
 One Contentful space serves three websites on a shared quota of 100,000 Delivery API
-calls per month. Every Contentful read here is cached for 7 days, and a webhook expires
-that cache when content changes. See [ADR-0003](./docs/adr/0003-contentful-delivery-quota.md).
+calls per month. Every Contentful read here is cached for 7 days. When content changes, a
+webhook expires that cache and each rendered route that shows the content. See
+[ADR-0003](./docs/adr/0003-contentful-delivery-quota.md).
 
 **Without the webhook, a published change takes up to 7 days to appear.** The steps below
 are required, not optional.
@@ -127,7 +128,7 @@ Generate one with `openssl rand -hex 32`. Set it in Vercel for production and pr
 
 Publish any entry, then open the webhook's **Activity log**.
 
-- **200 with `confirmed: true`** — the change is live.
+- **200 with `confirmed: true`** — the webhook expired the cache tags and rendered routes.
 - **200 with `revalidated: false`** — the entry belongs to one of the other two websites.
   This is expected and is not a failure.
 - **503** — the endpoint could not confirm the change against the Delivery API. Contentful
