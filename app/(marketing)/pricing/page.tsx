@@ -12,8 +12,8 @@ export const metadata = createMarketingMetadata({
     path: "/pricing",
 });
 
-// The HTML carries the price, so a Promotion Code that ends at Stripe stays visible until
-// the next rebuild. 10 minutes bounds that. See ADR-0003 decision 5.
+// The HTML carries the price and becomes eligible for a rebuild after 10 minutes.
+// The first visit after expiry can still see stale pricing. See ADR-0003 decision 5.
 export const dynamic = "force-static";
 export const revalidate = 600;
 

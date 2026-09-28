@@ -108,41 +108,50 @@ on mount would report every visitor as logged out, because `useSession` reports
 call returns. That loss is small and falls on both groups equally. A wrong
 boolean would instead corrupt the split on the one page where it matters.
 
-#### The price is in the HTML, cached for 10 minutes
+#### The price is in the HTML, eligible for a rebuild after 10 minutes
 
-`/pricing` renders the current price into its HTML. Crawlers that skip JavaScript
-then see the price. Without this, the HTML shows "Loading..." where the price goes.
+`/pricing` renders a server-read price into its HTML. Crawlers that skip JavaScript
+then see that price, which may be stale until a rebuild. Without this, the HTML
+shows "Loading..." where the price goes.
 
 The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
 Code can stop being redeemable at Stripe, at its end date or its redemption limit.
-Stripe does not notify the site. The cached price therefore stays until the next
-rebuild. 10 minutes bounds that.
+Stripe does not notify the site. After 10 minutes, a request can start a rebuild.
+This is an eligibility interval, not a deadline for fresh HTML.
 
-The webhook expires `/pricing` immediately when a Promotion or the pricing Copy
-Config changes in Contentful. Only a change at Stripe waits for the 10 minutes.
+The webhook marks `/pricing` for revalidation when a Promotion or the pricing Copy
+Config changes in Contentful. The next visit triggers a rebuild. A Stripe-only
+change relies on the 10-minute interval to become eligible for a rebuild.
 
 A stale cached price charges nobody. The browser still reads `/api/billing/pricing`
-on every visit. That read replaces the cached price. Checkout reads the Promotion
-Code again before it creates a session. See ADR-0005.
+on every visit and replaces the displayed price when that read succeeds. Checkout
+reads the Promotion Code again before it creates a session. See ADR-0005.
 
 A rebuild happens on demand, never on a timer. The first visit after the 10 minutes
-triggers one rebuild in the background. With no visits, no rebuild happens.
+still receives stale HTML and starts a rebuild in the background. The rebuilt HTML
+is served after that rebuild succeeds. With no visits, no rebuild happens. If a
+rebuild throws, Next.js keeps the previous HTML and retries on a later request.
 
 While a Promotion runs, a rebuild makes one uncached Stripe call, for the Promotion
-Code. That is at most 144 calls a day. A rebuild also reads the two list prices.
-Their shared cache refreshes them each hour, which costs 2 calls an hour. The browser
-read already uses that cache, so the page adds no list-price calls. Rendering on
-every request instead adds one call per page view. Every view then waits for Stripe.
+Code. With steady traffic and successful rebuilds, the 10-minute interval means
+about 144 such calls a day per cache instance. Webhook invalidations and retries
+after failed rebuilds can add more. A rebuild also reads the two list prices.
+Their shared cache refreshes them each hour, which costs 2 calls
+an hour. Browser reads use that cache too. Rendering on every request instead adds
+one Promotion Code call per page view while a Promotion runs, and every view waits
+for Stripe.
 
 Two failures leave the cached HTML without the correct price. Next.js keeps each
-result for up to 10 minutes. Both are exceptions to decision 7:
+result until a later rebuild succeeds; 10 minutes is no upper bound. Both are
+exceptions to decision 7:
 
 - If the list-price read fails, the HTML shows the browser's loading and retry flow.
 - If the Promotion or Promotion Code read fails, the HTML shows the full price.
   During a Promotion, the HTML and the structured data then omit the discount.
 
-Visitors still see the correct price after the browser read. Only crawlers see the
-incorrect HTML.
+Visitors can see stale or fallback pricing in the initial HTML before the browser
+read replaces it. Signed-in checkout waits for that read. Crawlers that skip
+JavaScript can keep seeing the incorrect HTML until a successful rebuild.
 
 ### 6. The listing reads a summary, not the whole post
 
