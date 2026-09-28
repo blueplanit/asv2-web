@@ -102,6 +102,34 @@ layout are identical either way, and crawlers see the static HTML.
 cookie or a header. The declaration turns a future dynamic read into a build
 failure rather than a silent return to one Contentful call per page view.
 
+#### The price is in the HTML, cached for 10 minutes
+
+`/pricing` renders the current price into its HTML. Crawlers that skip JavaScript
+then see the price. Before this, the HTML showed "Loading..." where the price goes.
+
+The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
+Code can expire or run out of redemptions at Stripe. Stripe does not notify the
+site, so the cached price stays until the next rebuild. 10 minutes bounds that.
+
+The webhook expires `/pricing` immediately when a Promotion or the pricing Copy
+Config changes in Contentful. Only a change at Stripe waits for the 10 minutes.
+
+A stale cached price charges nobody. The browser still reads `/api/billing/pricing`
+on every visit and replaces the cached price. Checkout reads the Promotion Code
+again before it creates a session. See ADR-0005.
+
+A rebuild happens on demand, never on a timer. The first visit after the 10 minutes
+triggers one rebuild in the background. With no visits, no rebuild happens.
+
+A rebuild makes at most one uncached Stripe call, for the Promotion Code. The page
+therefore adds at most 144 Stripe calls a day. Rendering on every request instead
+adds one call per page view, and every view waits for Stripe.
+
+If the server price read fails, the HTML falls back to the browser's loading and
+retry flow. Next caches that fallback for up to 10 minutes. This departs from
+decision 7. The cost is small: visitors still see the price after the browser
+read, and only crawlers miss it.
+
 `PRICING_PAGE_VIEWED` now fires after the session resolves, not on mount. Firing
 on mount would report every visitor as logged out, because `useSession` reports
 `loading` first. The event is lost for a visitor who leaves before the session

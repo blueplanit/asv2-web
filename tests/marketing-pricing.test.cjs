@@ -119,7 +119,7 @@ test("machine-readable offers use the same Stripe amounts and ongoing discount r
     }
 });
 
-test("pricing page reads the existing price source per request and tolerates a server lookup failure", async () => {
+test("pricing page renders the price into a 10-minute static page and tolerates a server lookup failure", async () => {
     for (const fails of [false, true]) {
         let reads = 0;
         const page = loadTypeScriptModule(path.join(__dirname, "../app/(marketing)/pricing/page.tsx"), {
@@ -134,7 +134,8 @@ test("pricing page reads the existing price source per request and tolerates a s
                 return pricing;
             } },
         }, compiler);
-        assert.equal(page.dynamic, "force-dynamic");
+        assert.equal(page.dynamic, "force-static");
+        assert.equal(page.revalidate, 600);
         const html = renderToStaticMarkup(await page.default());
         assert.equal(reads, 1);
         assert.equal(html.includes("$15"), !fails);
