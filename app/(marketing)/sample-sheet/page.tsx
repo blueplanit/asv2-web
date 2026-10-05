@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
 
@@ -10,123 +11,97 @@ export const metadata = createMarketingMetadata({
 
 const SAMPLE_SHEET_URL =
     "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/view?usp=sharing";
+const SAMPLE_SHEET_PREVIEW_URL =
+    "https://docs.google.com/spreadsheets/d/1f4A9fwCsRk8Hsu_OJ2NjwfbfAmup6BQFuvDpDwmc7ZE/preview";
+const primaryButton =
+    "inline-flex min-h-12 items-center justify-center rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white transition hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600";
 
-const tabs = ["Working Sheet", "Invoices_raw", "Charges_raw", "Subscriptions_raw"];
+const highlights = [
+    {
+        title: "Amounts, fees, and refunds",
+        description: "In Charges and Invoices, inspect the amount fields, payment status, and customer references.",
+    },
+    {
+        title: "Product and subscription detail",
+        description: "In Invoice Line Items and Subscriptions, look at product fields, quantities, and billing intervals.",
+    },
+    {
+        title: "Working Sheet examples",
+        description: "Explore examples of reports you can build from the data. These are starting points, not reports SyncStaq generates for you.",
+    },
+];
 
 export default function SampleSheetPage() {
     return (
         <main className="bg-white text-slate-950">
-            <section className="border-b border-slate-200 bg-slate-50">
-                <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center lg:py-20">
-                    <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
-                            Public sample Sheet
-                        </p>
-                        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                            See how SyncStaq structures Stripe data in Google Sheets.
-                        </h1>
-                        <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-                            Explore the public SyncStaq sample Sheet to see raw Stripe tabs and
-                            example reports on the Working Sheet. Then use SyncStaq to create a new
-                            Sheet synced with your own Stripe billing data.
-                        </p>
-                        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                            <a
-                                href={SAMPLE_SHEET_URL}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
-                            >
-                                View sample Sheet
-                            </a>
-                            <Link
-                                href="/pricing"
-                                className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-                            >
-                                Create my synced Sheet
-                            </Link>
-                        </div>
-                        <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-600">
-                            <span>Public sample data</span>
-                            <span aria-hidden="true">•</span>
-                            <span>Raw Stripe tabs</span>
-                            <span aria-hidden="true">•</span>
-                            <span>Working Sheet for formulas</span>
-                        </div>
-                    </div>
-
-                    <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-                            <span className="text-sm font-semibold text-slate-800">Working Sheet examples</span>
-                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                                Sample
-                            </span>
-                        </div>
-                        <div className="p-5">
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="rounded-xl bg-slate-50 p-3">
-                                    <p className="text-xs text-slate-500">Total revenue</p>
-                                    <p className="mt-1 text-xl font-semibold text-slate-950">$48.2k</p>
-                                </div>
-                                <div className="rounded-xl bg-slate-50 p-3">
-                                    <p className="text-xs text-slate-500">Fees</p>
-                                    <p className="mt-1 text-xl font-semibold text-slate-950">$1.6k</p>
-                                </div>
-                                <div className="rounded-xl bg-slate-50 p-3">
-                                    <p className="text-xs text-slate-500">Net</p>
-                                    <p className="mt-1 text-xl font-semibold text-slate-950">$46.6k</p>
-                                </div>
-                            </div>
-                            <div className="mt-5 flex h-36 items-end gap-3 rounded-xl bg-slate-50 p-4">
-                                {[58, 72, 48, 86, 64, 93].map((height, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex-1 rounded-t-lg bg-emerald-500"
-                                        style={{ height: `${height}%` }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2 border-t border-slate-200 px-5 py-3">
-                            {tabs.map((tab, index) => (
-                                <span
-                                    key={tab}
-                                    className={
-                                        index === 0
-                                            ? "rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white"
-                                            : "rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-                                    }
-                                >
-                                    {tab}
-                                </span>
-                            ))}
-                        </div>
-                    </aside>
+            <section className="bg-slate-50 pt-8 pb-6 text-center min-[701px]:pt-10 min-[701px]:pb-7">
+                <div className="mx-auto max-w-6xl px-6">
+                    <h1 className="text-[32px] leading-tight font-semibold min-[701px]:text-[42px]">
+                        SyncStaq Sample Sheet
+                    </h1>
+                    <p className="mx-auto mt-5 mb-6 max-w-[690px] text-lg leading-7 text-slate-600">
+                        Explore the Stripe data tabs and reporting examples in a public Google Sheet.
+                    </p>
+                    <a href={SAMPLE_SHEET_URL} target="_blank" rel="noopener noreferrer" className={primaryButton}>
+                        Open Sample Sheet
+                    </a>
+                    <p className="mt-4 text-sm text-slate-600">
+                        View-only example data. No Stripe connection required.
+                    </p>
                 </div>
             </section>
 
-            <section className="mx-auto max-w-6xl px-6 py-14 lg:py-20">
-                <div className="grid gap-4 md:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h2 className="text-lg font-semibold text-slate-950">What the sample shows</h2>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                            How synced invoices, charges, fees, and product fields can support
-                            spreadsheet-native reporting.
-                        </p>
+            <section aria-label="Sample Sheet preview" className="bg-slate-50 pb-9 min-[701px]:pb-12">
+                <figure className="mx-auto max-w-6xl px-6">
+                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3.5 min-[701px]:flex-row min-[701px]:items-center min-[701px]:justify-between min-[701px]:gap-5 min-[701px]:px-5">
+                            <strong className="text-base">SyncStaq Sample Data</strong>
+                            <a href={SAMPLE_SHEET_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-indigo-600 underline underline-offset-4 hover:text-indigo-800">
+                                Open full Sheet
+                            </a>
+                        </div>
+                        <iframe
+                            title="SyncStaq public sample Google Sheet"
+                            src={SAMPLE_SHEET_PREVIEW_URL}
+                            className="hidden h-[480px] w-full border-0 min-[701px]:block"
+                        />
+                        <div tabIndex={0} role="region" aria-label="Sample Charges data preview" className="max-h-80 overflow-auto focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-indigo-600 min-[701px]:hidden">
+                            <Image
+                                src="/images/how-it-works/sample-charges.jpg"
+                                width={1280}
+                                height={720}
+                                unoptimized
+                                alt="Public SyncStaq Sample Sheet showing example charge records and separate billing data tabs."
+                                className="block h-[720px] w-[1280px] max-w-none"
+                            />
+                        </div>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h2 className="text-lg font-semibold text-slate-950">What SyncStaq creates</h2>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                            A new Google Sheet with tabs for your own Stripe data and a Working
-                            Sheet for formulas and reports.
-                        </p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h2 className="text-lg font-semibold text-slate-950">Create your dashboards</h2>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Build charts, pivots, and reports from synced raw tabs so your dashboards
-                            update as SyncStaq keeps the Sheet current.
-                        </p>
+                    <figcaption className="mt-3 text-sm leading-6 text-slate-600">
+                        The sample contains example records, not your Stripe data. Your connected Sheet uses data from your own account.
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section className="mx-auto max-w-6xl px-6 py-10 min-[701px]:py-14">
+                <h2 className="mb-7 text-3xl leading-snug font-semibold">What to look for.</h2>
+                <div className="grid gap-6 min-[701px]:grid-cols-3 min-[701px]:gap-8">
+                    {highlights.map((highlight) => (
+                        <div key={highlight.title} className="border-t-2 border-slate-200 pt-5">
+                            <h3 className="text-xl leading-snug font-semibold">{highlight.title}</h3>
+                            <p className="mt-3 text-base leading-7 text-slate-600">{highlight.description}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            <section className="border-t border-slate-200 py-12 text-center">
+                <div className="mx-auto max-w-6xl px-6">
+                    <h2 className="text-3xl leading-snug font-semibold">Want a Sheet connected to your Stripe account?</h2>
+                    <div className="mt-6 flex flex-col justify-center gap-3 min-[701px]:flex-row">
+                        <Link href="/pricing" className={primaryButton}>Start 14-day free trial</Link>
+                        <Link href="/how-it-works" className="inline-flex min-h-12 items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600">
+                            See how it works
+                        </Link>
                     </div>
                 </div>
             </section>

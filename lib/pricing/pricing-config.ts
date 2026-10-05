@@ -117,7 +117,7 @@ export const DEFAULT_PRICING_COPY: PricingCopy = {
     "ctaLabels": {
         "signedInIdle": "Continue to checkout",
         "signedOutIdle": "Sign in to checkout",
-        "signedInLoading": "Redirecting to secure checkout…",
+        "signedInLoading": "Starting secure checkout…",
         "signedOutLoading": "Opening secure sign-in…"
     }
 };

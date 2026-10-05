@@ -1,450 +1,401 @@
-// Implementation notes for Eng:
-// Suggested slug: /use-cases/stripe-commission-revenue-share
-// Meta title: Calculate Stripe Commissions & Revenue Share in Google Sheets | SyncStaq
-// Meta description: Pay reps and partners from accurate Stripe data. SyncStaq syncs gross, fees, refunds, and net revenue into Google Sheets every hour without monthly CSV exports.
-// Target keywords: stripe commission calculation, stripe revenue share, partner payout reconciliation, net revenue after stripe fees, stripe commissions google sheets
-// FAQ: The FAQ block below is marked up as FAQPage schema with JSON-LD.
-
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check } from "lucide-react";
 import { MailerLiteCommissionForm } from "@/components/marketing/mailerlite-commission-form";
+import { CommissionWorkbookPreview } from "@/components/marketing/commission-workbook-preview";
 
-const metaTitle = "Calculate Stripe Commissions & Revenue Share in Google Sheets | SyncStaq";
-const metaDescription =
-    "Pay reps and partners from accurate Stripe data. SyncStaq syncs gross, fees, refunds, and net revenue into Google Sheets every hour without monthly CSV exports.";
+const title = "Free Stripe Commission & Revenue Share Template | SyncStaq";
+const description =
+    "Calculate Stripe commissions and partner revenue share in Google Sheets. Get a free tracker with owner rates, fee and refund settings, and payout summaries.";
+const path = "/use-cases/stripe-commission-revenue-share";
 
 export const metadata: Metadata = {
-    title: metaTitle,
-    description: metaDescription,
-    alternates: {
-        canonical: "/use-cases/stripe-commission-revenue-share",
-    },
-    keywords: [
-        "stripe commission calculation",
-        "stripe revenue share",
-        "partner payout reconciliation",
-        "net revenue after stripe fees",
-        "stripe commissions google sheets",
-    ],
-    openGraph: {
-        title: metaTitle,
-        description: metaDescription,
-        type: "website",
-        url: "/use-cases/stripe-commission-revenue-share",
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: metaTitle,
-        description: metaDescription,
-    },
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: { title, description, type: "website", url: path },
+    twitter: { card: "summary_large_image", title, description },
 };
-
-const trustItems = [
-    "Ongoing hourly sync",
-    "Read-only Stripe access",
-    "Structured Google Sheets output",
-    "14-day free trial",
-];
-
-const painCards = [
-    {
-        title: "Fees and refunds hide the real number",
-        body: "Commissionable revenue is rarely gross. You need net of Stripe fees, refunds, and discounts, not a disconnected CSV that has to be rebuilt by hand.",
-    },
-    {
-        title: "Late changes break last month's numbers",
-        body: "Refunds, disputes, and invoice updates can land after payout day. Date-based exports and simple polling scripts can miss records that change later.",
-    },
-    {
-        title: "Exports do not scale with trust",
-        body: "When a paycheck depends on the number, re-downloading CSVs and reworking pivots is hard to defend. Teams need calculations that tie back to Stripe rows.",
-    },
-];
-
-const audienceCards = [
-    {
-        title: "Revenue and sales operations",
-        body: "Reconcile sales-rep commissions against paid invoice line items, with consistent timestamps and cleaner refund handling.",
-    },
-    {
-        title: "Partner and affiliate programs",
-        body: "Calculate monthly or quarterly revenue share on net revenue after fees without rebuilding the report each cycle.",
-    },
-    {
-        title: "Publishers and ad networks",
-        body: "Prepare payout reports from Stripe invoice and charge data with fees, refunds, credits, and account context in one spreadsheet workflow.",
-    },
-    {
-        title: "Agencies and multi-product teams",
-        body: "Split revenue by product or stream and report it from a Sheet that stays connected to the underlying Stripe billing data.",
-    },
-];
-
-const steps = [
-    {
-        number: "1",
-        title: "Connect Stripe and Google",
-        body: "Sign in with Google, connect Stripe with read-only access, and create a Sheet in your Drive. No scripts, no code.",
-    },
-    {
-        number: "2",
-        title: "SyncStaq keeps it fresh",
-        body: "Your synced tabs update hourly with Stripe billing data, including records that change after the first time they appear.",
-    },
-    {
-        number: "3",
-        title: "Add rates, get payouts",
-        body: "Layer ownership and commission rules on top with normal formulas and pivots. Your payout table can tie back to Stripe source rows each period.",
-    },
-];
-
-const sampleRows = [
-    ["Vector Finance", "$299.00", "$0.00", "$9.05", "$289.95", "15%", "$43.49"],
-    ["Atlas Ops", "$149.00", "$0.00", "$4.62", "$144.38", "15%", "$21.66"],
-    ["Metric Labs", "$79.00", "$0.00", "$2.61", "$76.39", "15%", "$11.46"],
-    ["Beacon Works", "$59.00", "$15.00", "$2.01", "$41.99", "15%", "$6.30"],
-];
 
 const faqs = [
     {
-        question: "Does SyncStaq calculate commissions for me?",
-        answer: "SyncStaq delivers the Stripe data your calculation depends on, including gross amounts, fees, refunds, net amounts, and invoice line items in Google Sheets. You keep control of rates, splits, ownership, and payout policy in the sheet.",
+        question: "Is the commission tracker really free?",
+        answer: "Yes. You can use the Google Sheets template with manually imported Stripe exports without a SyncStaq subscription. SyncStaq is an optional paid service for keeping Stripe source data updated in Sheets.",
     },
     {
-        question: "How do you handle refunds that arrive after a payout?",
-        answer: "SyncStaq refreshes your Stripe billing data hourly, so refund and dispute changes can update the underlying sheet rows. You decide the clawback or adjustment policy in your spreadsheet.",
+        question: "Does the free template connect to Stripe automatically?",
+        answer: "No. The free workflow uses CSV Import and a values-only paste into Charges. The workbook's calculations use the data you provide; a manual report is only as current as your last import.",
     },
     {
-        question: "Can I get net revenue after Stripe fees?",
-        answer: "Yes. Fee and net amount fields sync alongside charges, and invoice line items include product, discount, and tax detail that can help you define commissionable revenue more precisely.",
+        question:
+            "Can I calculate both rep commissions and partner revenue share?",
+        answer: "Yes. Owners & Rates includes reps and partners, and Customer to Owner assigns customers to them. The calculation applies the assigned owner's percentage to the selected base.",
     },
     {
-        question: "How far back does the data go?",
-        answer: "Confirm the current backfill range in the app during setup. After the sheet is created, SyncStaq keeps the connected Stripe billing data updated hourly.",
+        question: "Does net always mean the same thing?",
+        answer: "No. In this workbook, Net deducts Stripe fees, and you can separately enable refund deductions. Your agreement may define a different base, so review the formulas before using the results.",
     },
     {
-        question: "Is my Stripe account safe?",
-        answer: "SyncStaq uses read-only Stripe access and mirrors data into Google Sheets in your own Google Drive. It does not write changes back to Stripe.",
+        question: "Will it handle retroactive refunds and clawbacks?",
+        answer: "Updated refund amounts can change the calculated commission when the source data is refreshed. The workbook does not automatically track what you already paid or implement a separate clawback ledger; decide and record those adjustments in your own workflow.",
+    },
+    {
+        question: "Which Stripe CSV should I use?",
+        answer: "Use an export with fee detail, such as an itemized balance or payout reconciliation report. A basic Payments CSV may not include fees. Match your exported columns to the CSV Import headers and verify amounts, refunds, units, and currency before calculating.",
     },
 ];
-
-const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: faqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: {
-            "@type": "Answer",
-            text: faq.answer,
-        },
-    })),
-};
+const features = [
+    {
+        title: "Owners and rates",
+        body: "Add reps or partners in Owners & Rates, then assign customers in Customer to Owner. Each owner has a percentage rate.",
+    },
+    {
+        title: "A defined commission base",
+        body: "Choose Gross or Net in Settings. Net deducts Stripe fees; a separate setting controls whether refunds are deducted.",
+    },
+    {
+        title: "Calculations you can inspect",
+        body: "Commission Calc shows the charge, owner, base, rate, and commission. Payout Summary groups the results by owner and month.",
+    },
+];
+const steps = [
+    {
+        title: "Bring in Stripe data",
+        body: "Use an export that includes fee detail. Paste it into CSV Import, match the expected columns, then paste the mapped values into Charges.",
+    },
+    {
+        title: "Set your base and ownership",
+        body: "Choose your settings, enter owner rates, and map each customer to an owner. Check unassigned customers before approving a report.",
+    },
+    {
+        title: "Review, then arrange payment",
+        body: "Inspect Commission Calc and filter Payout Summary by month. The workbook calculates amounts; it does not send money to reps or partners.",
+    },
+];
+const sampleRows = [
+    ["Demo Growth Co", "$99.00", "$0.00", "$3.20", "$95.80", "20%", "$19.16"],
+    ["Demo Refund Co", "$49.00", "$20.00", "$1.72", "$27.28", "15%", "$4.09"],
+];
+const wrap = "mx-auto max-w-6xl px-6";
+const heading = "text-3xl font-semibold leading-tight text-slate-950";
+const body = "text-base leading-7 text-slate-600";
+const eyebrow = "mb-4 text-xs font-semibold uppercase text-indigo-600";
+const button =
+    "inline-flex min-h-12 items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600";
+const inlineLink =
+    "font-medium text-indigo-600 underline underline-offset-4 hover:text-indigo-500";
 
 export default function StripeCommissionRevenueSharePage() {
+    const faqSchema = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqs.map(({ question, answer }) => ({
+            "@type": "Question",
+            name: question,
+            acceptedAnswer: { "@type": "Answer", text: answer },
+        })),
+    };
     return (
-        <main className="bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
+        <main className="bg-white text-slate-900">
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(faqSchema).replace(/</g, "\\u003c"),
+                }}
             />
-
-            <section className="mx-auto grid max-w-6xl gap-10 px-6 pb-16 pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:items-center lg:pb-20 lg:pt-20">
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
-                        Commissions and revenue share
-                    </p>
-                    <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-                        Pay reps and partners from Stripe data you can actually trust.
+            <section className="bg-slate-50 py-12 text-center sm:py-16">
+                <div className={wrap}>
+                    <p className={eyebrow}>Free Google Sheets template</p>
+                    <h1 className="mx-auto max-w-4xl text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">
+                        Stripe Commission &amp; Revenue Share Tracker for Google
+                        Sheets
                     </h1>
-                    <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                        Commissions and revenue-share payouts fall apart when they are built on
-                        stale CSV exports. SyncStaq keeps gross, Stripe fees, refunds, and net
-                        revenue synced into Google Sheets every hour, so payout math starts from
-                        current Stripe billing data.
+                    <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-600">
+                        Calculate rep commissions and partner revenue share from
+                        Stripe data. Set owner rates, choose a gross or net
+                        base, and review payouts by month.
                     </p>
-
-                    <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <Link
-                            href="/login"
-                            className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                    <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+                        <a href="#get-template" className={button}>
+                            Email me the free template
+                        </a>
+                        <a
+                            href="#preview"
+                            className="inline-flex min-h-12 items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600"
                         >
-                            Start a 14-day trial
-                        </Link>
-                        <Link
-                            href="#sample"
-                            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                        >
-                            See the data you get
-                        </Link>
+                            Preview the workbook
+                        </a>
                     </div>
-
-                    <div className="mt-8 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                        {trustItems.map((item) => (
-                            <div key={item} className="flex items-start gap-3">
-                                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-                                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                                </span>
-                                <span>{item}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <CommissionSheetPreview />
-            </section>
-
-            <MailerLiteCommissionForm />
-
-            <section className="border-y border-slate-200 bg-white/70">
-                <div className="mx-auto max-w-6xl px-6 py-16">
-                    <div className="max-w-3xl">
-                        <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                            Why payout math breaks in Stripe
-                        </h2>
-                        <p className="mt-4 text-base leading-8 text-slate-600">
-                            Stripe records payments, but payout rules usually live somewhere else.
-                            The hard part is getting current, fee-adjusted revenue to multiply
-                            against rep, partner, or publisher rates.
-                        </p>
-                    </div>
-                    <div className="mt-10 grid gap-5 md:grid-cols-3">
-                        {painCards.map((card) => (
-                            <article
-                                key={card.title}
-                                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+                    <ul className="mt-6 flex flex-wrap justify-center gap-x-7 gap-y-3 text-sm text-slate-600">
+                        {[
+                            "Free to use with CSV exports",
+                            "Editable formulas and rates",
+                            "No SyncStaq subscription required",
+                        ].map((item) => (
+                            <li
+                                key={item}
+                                className="border-l-2 border-emerald-600 pl-3"
                             >
-                                <h3 className="text-base font-semibold text-slate-950">{card.title}</h3>
-                                <p className="mt-3 text-sm leading-7 text-slate-600">{card.body}</p>
-                            </article>
+                                {item}
+                            </li>
                         ))}
-                    </div>
+                    </ul>
                 </div>
             </section>
 
-            <section id="sample" className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-                <div>
-                    <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700 ring-1 ring-indigo-100">
-                        Straight from your synced sheet
-                    </span>
-                    <h2 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950">
-                        Net revenue, ready for your payout rules
+            <section
+                id="preview"
+                className={`${wrap} scroll-mt-8 py-12 sm:py-16`}
+            >
+                <div className="mb-8 max-w-3xl">
+                    <p className={eyebrow}>Inside the actual template</p>
+                    <h2 className={heading}>
+                        From Stripe rows to a payout summary.
                     </h2>
-                    <p className="mt-4 text-base leading-8 text-slate-600">
-                        SyncStaq syncs charges, invoices, invoice line items, payouts,
-                        subscriptions, customers, and disputes into structured tabs. Add rates,
-                        ownership, and formulas in Sheets, then review payout math against the
-                        Stripe rows underneath.
-                    </p>
-                    <p className="mt-4 text-base leading-8 text-slate-600">
-                        Because the data refreshes hourly, changes like refunds and disputes do
-                        not require rebuilding a payout workbook from another CSV export.
+                    <p className={`mt-4 ${body}`}>
+                        Map customers to reps or partners, apply their rates,
+                        and trace each commission back to its charge. Here are
+                        three views from the workbook.
                     </p>
                 </div>
-                <SamplePayoutTable />
+                <CommissionWorkbookPreview />
             </section>
 
-            <section className="border-y border-slate-200 bg-slate-50">
-                <div className="mx-auto max-w-6xl px-6 py-16">
-                    <div className="max-w-3xl">
-                        <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                            Built for anyone paying out on Stripe revenue
-                        </h2>
-                        <p className="mt-4 text-base leading-8 text-slate-600">
-                            If a payout depends on Stripe numbers, the work below is probably
-                            familiar.
-                        </p>
-                    </div>
-                    <div className="mt-10 grid gap-5 md:grid-cols-2">
-                        {audienceCards.map((card) => (
-                            <article
-                                key={card.title}
-                                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            <section className="bg-slate-50 py-12 sm:py-16">
+                <div className={wrap}>
+                    <h2 className={heading}>
+                        The pieces you need to calculate a payout.
+                    </h2>
+                    <div className="mt-8 grid gap-8 md:grid-cols-3">
+                        {features.map((feature) => (
+                            <div
+                                key={feature.title}
+                                className="border-t-2 border-slate-200 pt-6"
                             >
-                                <h3 className="text-base font-semibold text-slate-950">{card.title}</h3>
-                                <p className="mt-3 text-sm leading-7 text-slate-600">{card.body}</p>
-                            </article>
+                                <h3 className="text-xl font-semibold">
+                                    {feature.title}
+                                </h3>
+                                <p className={`mt-3 ${body}`}>{feature.body}</p>
+                            </div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            <section className="mx-auto max-w-6xl px-6 py-16">
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                    From Stripe to payout-ready in minutes
+            <section
+                id="get-template"
+                className={`${wrap} grid scroll-mt-8 gap-10 py-12 md:grid-cols-2 md:gap-16 sm:py-16`}
+            >
+                <div>
+                    <p className={eyebrow}>Get the free workbook</p>
+                    <h2 className={heading}>
+                        A starting point for your next commission report.
+                    </h2>
+                    <p className={`mt-4 ${body}`}>
+                        Receive the Google Sheets template by email, make your
+                        own copy, and adapt it to your agreements.
+                    </p>
+                    <ul className="mt-6 space-y-4 text-slate-600">
+                        {[
+                            "Sample data and a CSV Import mapping workflow",
+                            "Editable owner rates and customer assignments",
+                            "Gross/net settings and optional refund deductions",
+                            "Charge-level calculations and monthly summaries",
+                        ].map((item) => (
+                            <li
+                                key={item}
+                                className="border-l-2 border-emerald-600 pl-4"
+                            >
+                                {item}
+                            </li>
+                        ))}
+                    </ul>
+                    <p className="mt-6 text-sm text-slate-600">
+                        The template is free. SyncStaq is optional and has
+                        separate pricing.
+                    </p>
+                </div>
+                <MailerLiteCommissionForm />
+            </section>
+
+            <section className="bg-slate-50 py-12 sm:py-16">
+                <div className={wrap}>
+                    <div className="mb-8 max-w-3xl">
+                        <p className={eyebrow}>A worked example</p>
+                        <h2 className={heading}>See what a refund changes.</h2>
+                        <p className={`mt-4 ${body}`}>
+                            With a net base and refund deductions enabled, the
+                            template calculates: amount collected minus Stripe
+                            fee minus refunded amount, then multiplies the
+                            result by the owner&apos;s rate.
+                        </p>
+                    </div>
+                    <div
+                        className="overflow-x-auto rounded-lg border border-slate-200 focus-visible:outline-2 focus-visible:outline-indigo-600"
+                        tabIndex={0}
+                        role="region"
+                        aria-label="Sample commission calculations"
+                    >
+                        <table className="w-full min-w-[650px] border-collapse text-left text-sm">
+                            <thead className="bg-slate-100 text-slate-900">
+                                <tr>
+                                    {[
+                                        "Example customer",
+                                        "Collected",
+                                        "Refunded",
+                                        "Stripe fee",
+                                        "Base",
+                                        "Rate",
+                                        "Commission",
+                                    ].map((label) => (
+                                        <th
+                                            key={label}
+                                            scope="col"
+                                            className="border-b border-slate-200 p-4 font-semibold"
+                                        >
+                                            {label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sampleRows.map((row) => (
+                                    <tr
+                                        key={row[0]}
+                                        className="border-b border-slate-200 last:border-0"
+                                    >
+                                        {row.map((cell, index) => (
+                                            <td
+                                                key={index}
+                                                className={`p-4 ${index === 6 ? "font-semibold text-emerald-700" : "text-slate-600"} ${index > 0 ? "whitespace-nowrap tabular-nums" : ""}`}
+                                            >
+                                                {cell}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="mt-6 border-l-2 border-slate-300 pl-4 text-sm leading-6 text-slate-600">
+                        Your agreement defines the commissionable base. Do not
+                        deduct discounts again if they are already reflected in
+                        the collected amount. Review taxes, disputes, currency,
+                        rounding, and post-payout adjustments separately; this
+                        template is not a full commission-management or
+                        accounting system.
+                    </p>
+                </div>
+            </section>
+
+            <section className={`${wrap} py-12 sm:py-16`}>
+                <h2 className={heading}>
+                    Start with an export. Keep the rules yours.
                 </h2>
-                <div className="mt-10 grid gap-5 md:grid-cols-3">
-                    {steps.map((step) => (
-                        <article
-                            key={step.number}
-                            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                        >
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white">
-                                {step.number}
-                            </div>
-                            <h3 className="mt-5 text-base font-semibold text-slate-950">{step.title}</h3>
-                            <p className="mt-3 text-sm leading-7 text-slate-600">{step.body}</p>
-                        </article>
+                <div className="mt-8 grid gap-8 md:grid-cols-3">
+                    {steps.map((step, index) => (
+                        <div key={step.title}>
+                            <p className="mb-3 text-2xl font-semibold text-indigo-600">
+                                {index + 1})
+                            </p>
+                            <h3 className="text-xl font-semibold">
+                                {step.title}
+                            </h3>
+                            <p className={`mt-3 ${body}`}>{step.body}</p>
+                        </div>
                     ))}
                 </div>
-                <p className="mt-6 max-w-3xl text-sm leading-7 text-slate-500">
-                    Want the methodology first? Read{" "}
+                <p className="mt-6 text-sm leading-6 text-slate-600">
+                    Rates use the owner lookup. Effective-date and refund-policy
+                    labels are not automatic rules in the current formulas;
+                    adapt the calculation if your agreement requires them.
+                </p>
+            </section>
+
+            <section className="bg-emerald-50 py-12 sm:py-16">
+                <div
+                    className={`${wrap} grid items-center gap-10 md:grid-cols-2 md:gap-16`}
+                >
+                    <div>
+                        <p className={eyebrow}>
+                            Optional: stop repeating CSV exports
+                        </p>
+                        <h2 className={heading}>
+                            The template does the math.
+                            <br />
+                            SyncStaq keeps the source data moving.
+                        </h2>
+                        <p className={`mt-4 ${body}`}>
+                            SyncStaq keeps Stripe billing data available in
+                            Google Sheets for reporting, reconciliation, and
+                            analysis. Updates run hourly, with six months of
+                            history included in the first sync.
+                        </p>
+                        <p className={`mt-4 ${body}`}>
+                            Use that data with your commission workflow. You
+                            still own the customer mapping, rates, formulas, and
+                            payout decisions.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-semibold">
+                            Use the free template first.
+                        </h3>
+                        <p className={`mt-3 ${body}`}>
+                            No subscription is needed for the manual CSV
+                            workflow. When recurring exports become the
+                            bottleneck, connect Stripe to Google Sheets with
+                            read-only access through SyncStaq.
+                        </p>
+                        <Link href="/login" className={`mt-6 ${button}`}>
+                            Start a 14-day free trial
+                        </Link>
+                        <p className="mt-4 text-sm">
+                            <Link href="/how-it-works" className={inlineLink}>
+                                See how SyncStaq works
+                            </Link>
+                            {" · "}
+                            <Link href="/pricing" className={inlineLink}>
+                                View pricing
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section className="mx-auto max-w-4xl px-6 py-12 sm:py-16">
+                <h2 className={heading}>Template questions, answered.</h2>
+                <div className="mt-6">
+                    {faqs.map((faq, index) => (
+                        <details
+                            key={faq.question}
+                            open={index === 0}
+                            className="border-b border-slate-200 py-5"
+                        >
+                            <summary className="cursor-pointer text-lg font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600">
+                                {faq.question}
+                            </summary>
+                            <p className={`mt-4 ${body}`}>{faq.answer}</p>
+                        </details>
+                    ))}
+                </div>
+                <p className={`mt-7 ${body}`}>
+                    For the reporting workflow, read our{" "}
                     <Link
-                        href="/blog/stripe-sales-commissions"
-                        className="font-semibold text-indigo-700 underline decoration-indigo-200 underline-offset-4 hover:text-indigo-500"
+                        href="/blog/stripe-partner-revenue-share"
+                        className={inlineLink}
                     >
-                        The Cleanest Way to Calculate Sales Commissions from Stripe Data
-                    </Link>
-                    , or see{" "}
+                        Stripe partner revenue share guide
+                    </Link>{" "}
+                    or learn about{" "}
                     <Link
-                        href="/blog/stripe-revenue-by-product"
-                        className="font-semibold text-indigo-700 underline decoration-indigo-200 underline-offset-4 hover:text-indigo-500"
+                        href="/blog/stripe-fees-report-google-sheets"
+                        className={inlineLink}
                     >
-                        how to calculate revenue by product
+                        reporting Stripe fees in Google Sheets
                     </Link>
                     .
                 </p>
             </section>
-
-            <section className="border-y border-slate-200 bg-white">
-                <div className="mx-auto max-w-3xl px-6 py-16">
-                    <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                        Common questions
-                    </h2>
-                    <div className="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
-                        {faqs.map((faq, index) => (
-                            <details key={faq.question} className="group p-5" open={index === 0}>
-                                <summary className="cursor-pointer list-none text-base font-semibold text-slate-950">
-                                    <span className="inline-flex w-full items-center justify-between gap-4">
-                                        {faq.question}
-                                        <span className="text-lg text-slate-400 group-open:hidden">+</span>
-                                        <span className="hidden text-lg text-slate-400 group-open:inline">-</span>
-                                    </span>
-                                </summary>
-                                <p className="mt-3 text-sm leading-7 text-slate-600">{faq.answer}</p>
-                            </details>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            <section className="mx-auto max-w-6xl px-6 py-16">
-                <div className="rounded-3xl bg-slate-950 px-6 py-10 text-center shadow-xl sm:px-10">
-                    <h2 className="text-3xl font-semibold tracking-tight text-white">
-                        Stop rebuilding payout reports from CSV exports.
-                    </h2>
-                    <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-300">
-                        Connect Stripe and start syncing billing data into Google Sheets. The
-                        14-day trial starts after sign in and setup.
-                    </p>
-                    <Link
-                        href="/login"
-                        className="mt-7 inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-slate-100"
-                    >
-                        Start a 14-day trial
-                    </Link>
-                </div>
-            </section>
         </main>
-    );
-}
-
-function CommissionSheetPreview() {
-    return (
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                <div>
-                    <p className="text-sm font-semibold text-slate-950">Commission workbook</p>
-                    <p className="text-xs text-slate-500">Stripe data synced to Google Sheets</p>
-                </div>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 ring-1 ring-emerald-100">
-                    Updated hourly
-                </span>
-            </div>
-            <div className="overflow-x-auto bg-slate-50 px-4 py-4">
-                <div className="min-w-[430px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <div className="grid grid-cols-[84px_repeat(4,minmax(86px,1fr))] border-b border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                        <div className="border-r border-slate-200 px-3 py-2">Owner</div>
-                        <div className="border-r border-slate-200 px-3 py-2">Gross</div>
-                        <div className="border-r border-slate-200 px-3 py-2">Refunds</div>
-                        <div className="border-r border-slate-200 px-3 py-2">Fees</div>
-                        <div className="px-3 py-2">Net</div>
-                    </div>
-                    {sampleRows.slice(0, 4).map((row) => (
-                        <div
-                            key={row[0]}
-                            className="grid grid-cols-[84px_repeat(4,minmax(86px,1fr))] border-b border-slate-100 text-xs text-slate-700 last:border-b-0"
-                        >
-                            {row.slice(0, 5).map((cell, index) => (
-                                <div
-                                    key={`${row[0]}-${cell}`}
-                                    className={index === 4 ? "px-3 py-3 font-semibold text-slate-950" : "border-r border-slate-100 px-3 py-3"}
-                                >
-                                    {cell}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                    {["Charges", "Invoices", "Line Items", "Payouts", "Customers"].map((tab) => (
-                        <span
-                            key={tab}
-                            className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200"
-                        >
-                            {tab}
-                        </span>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function SamplePayoutTable() {
-    return (
-        <div>
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <table className="min-w-[680px] text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500">
-                        <tr>
-                            {["Partner / Rep", "Gross", "Refunds", "Fees", "Net", "Share", "Payout"].map((heading) => (
-                                <th key={heading} scope="col" className="px-4 py-3 font-semibold">
-                                    {heading}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                        {sampleRows.map((row) => (
-                            <tr key={row[0]}>
-                                {row.map((cell, index) => (
-                                    <td
-                                        key={`${row[0]}-${cell}`}
-                                        className={index === row.length - 1 ? "px-4 py-3 font-semibold text-slate-950" : "px-4 py-3"}
-                                    >
-                                        {cell}
-                                    </td>
-                                ))}
-                            </tr>
-                        ))}
-                    </tbody>
-                    <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-950">
-                        <tr>
-                            {["Total", "$586.00", "$15.00", "$18.29", "$552.71", "", "$82.91"].map((cell, index) => (
-                                <td key={`${cell}-${index}`} className="px-4 py-3">
-                                    {cell}
-                                </td>
-                            ))}
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            <p className="mt-3 text-xs leading-6 text-slate-500">
-                Illustrative example using sample Stripe billing data. Net = gross minus refunds
-                minus Stripe fees. Rates and ownership are yours to set.
-            </p>
-        </div>
     );
 }

@@ -44,8 +44,8 @@ Both siblings already use it.
 
 ### 2. The webhook delivers content; the window is a backstop
 
-A Contentful webhook calls `/api/revalidate` and expires cache tags. Published
-changes reach the site in seconds.
+A Contentful webhook calls `/api/revalidate` and expires cache tags and rendered
+routes. Published changes reach the site in seconds.
 
 Time-based revalidation drops from 60 seconds to 7 days. It no longer delivers
 content. It only catches a webhook that failed.
@@ -57,7 +57,11 @@ days saves almost nothing further.
 **A future reader will read `revalidate = 604800` as a bug. It is not.** It is
 only reachable when the webhook has already failed.
 
-### 3. The webhook confirms a change before it expires a tag
+The webhook also expires, by path, each rendered route that shows the changed entry.
+A metadata route such as `/sitemap.xml` keeps its own route cache. Expiring it by
+path refreshes it.
+
+### 3. The webhook confirms a change before it expires the cache
 
 Contentful accepts a publish before its Delivery API serves the new version. The
 endpoint polls that API for up to 15 seconds and waits for the new version. It
@@ -104,6 +108,52 @@ on mount would report every visitor as logged out, because `useSession` reports
 call returns. That loss is small and falls on both groups equally. A wrong
 boolean would instead corrupt the split on the one page where it matters.
 
+#### `/pricing` carries the price in its HTML and rebuilds after 10 minutes
+
+`/pricing` renders the current price into its HTML. Crawlers that skip JavaScript
+then see the price. Without this, the HTML shows "Loading..." where the price goes.
+
+The rendered route uses `revalidate = 600`, not the Backstop Window. A Promotion
+Code can stop being redeemable at Stripe, at its end date or its redemption limit.
+Stripe does not notify the site. After the 10-minute window, the next visit starts
+a rebuild.
+
+The webhook expires `/pricing` when a Promotion or the pricing Copy Config changes
+in Contentful. The next visit then starts a rebuild. A change at Stripe waits for
+the 10-minute window.
+
+A stale cached price charges nobody. The browser reads `/api/billing/pricing` on
+every visit. A successful read replaces the displayed price. Checkout reads the
+Promotion Code again before it creates a session. See ADR-0005.
+
+A rebuild happens on demand, never on a timer. With no visits, no rebuild happens.
+The first visit after the 10-minute window gets the stale HTML. That visit starts a
+rebuild in the background. Later visits get the rebuilt HTML.
+
+While a Promotion runs, each rebuild makes one uncached Stripe call, for the
+Promotion Code. With steady traffic, that is about 144 calls a day. Each webhook
+expiry adds one rebuild. A rebuild also reads the two list prices. Their shared
+cache refreshes them each hour, at 2 calls an hour. Browser reads use the same
+cache. Rendering on every request adds one Promotion Code call per page view while
+a Promotion runs. Every view then waits for Stripe.
+
+No read on this page throws. The page catches a list-price failure. The Promotion
+and pricing Copy Config reads return a fallback. A failed read therefore still gives
+a successful rebuild. Next.js then caches the HTML with the fallback in it. Three
+fallbacks are exceptions to decision 7:
+
+- If the list-price read fails, the HTML shows the browser's loading and retry flow.
+- If the Promotion or Promotion Code read fails, the HTML shows the full price.
+  During a Promotion, the HTML and the structured data then omit the discount.
+- If the pricing Copy Config read fails, the HTML shows `DEFAULT_PRICING_COPY`.
+
+A fallback stays until a rebuild reads successfully. A run of failed reads keeps it
+past the 10-minute window.
+
+Visitors can see a stale or fallback price in the initial HTML. The browser read
+then replaces the price. Signed-in checkout waits for that read. Crawlers that skip
+JavaScript see the cached HTML.
+
 ### 6. The listing reads a summary, not the whole post
 
 `getAllBlogPosts` selects every field except the body, and returns
@@ -118,11 +168,12 @@ of a shared function.
 
 ### 7. A failure is never cached
 
-The cache stores successful reads only.
+The cache stores successful reads only. The cached `/pricing` HTML has three exceptions.
+See decision 5.
 
 `getMarketingCopy` and `getPricingCopy` still fall back to their `DEFAULT_*`
 copy, which is real hand-maintained text. The fallback now sits outside the
-cache, so an outage cannot store it.
+data cache, so an outage cannot store it there.
 
 A missing Copy Config entry throws for the same reason. Contentful answers that
 read successfully, with zero items, so the cache would otherwise store the empty
@@ -150,11 +201,15 @@ a Contentful outage now fails loudly, which is the safer failure.
   false, because Vercel sets `NODE_ENV=production` for preview builds.
   `VERCEL_ENV` is what separates preview from production. This behaviour predates
   this ADR and is deliberately left alone.
-- Only the Blog Post reads vary by environment, so only they take `isProd` as a
+- The Blog Post and Promotion reads vary by environment, so both take `isProd` as a
   cache key. The CMS Page and Copy Config queries apply no `showInProduction`
   filter, so their results cannot differ between environments. Adding a
   `showInProduction` field to either content type means adding the filter **and**
   the cache key together.
+- A Promotion therefore cannot be staged on a preview deployment. Preview builds set
+  `NODE_ENV=production`, so they filter on `showInProduction` exactly as production
+  does. Making preview a real staging environment means gating on `VERCEL_ENV`
+  instead, which changes this behaviour for every content type at once.
 - The design assumes Vercel. `unstable_cache` needs a store shared across
   instances, and `revalidateTag` needs to reach every instance. Self-hosting this
   app requires a cache handler first.

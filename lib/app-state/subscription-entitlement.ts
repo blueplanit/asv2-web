@@ -52,3 +52,12 @@ export function isUserProfileEntitled(
 
     return end >= now;
 }
+
+// Narrower than isUserProfileEntitled: excludes a trial, since a trialing user is
+// still a Promotion's audience, not an existing customer (ADR-0005 decision 5).
+export function isUserProfileActivePaidSubscriber(
+    profile: UserProfile | null | undefined,
+): boolean {
+    if (!profile) return false;
+    return profile.subscriptionStatus === "active" && profile.subscriptionRawStatus !== "trialing";
+}

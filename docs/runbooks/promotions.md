@@ -1,0 +1,115 @@
+# Runbook: running a Promotion
+
+How to start, end, and replace a **Promotion**. See [CONTEXT.md](../../CONTEXT.md) for the terms and [ADR-0005](../adr/0005-promotions-sourced-from-stripe.md) for why the design works this way.
+
+A Promotion spans two systems. Stripe holds the discount. Contentful holds the banner copy and names the Stripe object. Both must be right, and the order matters.
+
+## Before you start
+
+You need dashboard access to Stripe and to the Contentful space.
+
+Stripe is the source of truth for the discount amount. Contentful never stores a percentage. Publishing a Contentful entry is the only thing that starts a Promotion.
+
+## Start a Promotion
+
+Do Stripe first. You need the Promotion Code ID before you can fill in Contentful.
+
+### 1. Create the Coupon in Stripe
+
+Set the discount amount.
+
+Set **duration**. `/pricing` shows the struck-through price for every duration. See [ADR-0006](../adr/0006-introductory-discount-pricing.md).
+
+| Duration | Glossary term | `/pricing` shows |
+| --- | --- | --- |
+| `forever` | Ongoing Discount | the discounted price only |
+| `once` | Introductory Discount | the discounted price, then "for your first month, then $19/month" |
+| `repeating` | Introductory Discount | the discounted price, then "for your first 12 months, then $19/month" |
+
+For `repeating`, set `duration_in_months` to a multiple of 12. Stripe discounts every bill created inside the Discount Period. A 3-month coupon therefore discounts a whole yearly bill. An 18-month coupon discounts two yearly bills. `/pricing` states this correctly. The cost is higher than the monthly offer suggests.
+
+### 2. Create the Promotion Code in Stripe
+
+Attach it to that Coupon.
+
+Set `max_redemptions`. Use 100 unless you have a reason for another figure. It bounds a Promotion nobody remembers to end.
+
+Do **not** restrict it to first-time customers. Trial converters get the discount, and that restriction may silently refuse them.
+
+Set an `expires_at` well past your intended end date, for example 90 days. It is a backstop, never shown to visitors.
+
+### 3. Copy the Promotion Code ID
+
+You need the ID (`promo_…`), not the customer-facing code (`SUMMER20`).
+
+```bash
+curl -s "https://api.stripe.com/v1/promotion_codes?limit=10" -u "$STRIPE_SECRET_KEY:" \
+  | python3 -c "import json,sys; [print(p['id'], '|', p['code'], '| active:', p['active']) for p in json.load(sys.stdin)['data']]"
+```
+
+### 4. Create a new Contentful entry
+
+Content type `promotionASv2`. **Always create a new entry. Never reuse an old one** — see [Why a new entry every time](#why-a-new-entry-every-time).
+
+| Field | Value |
+| --- | --- |
+| `stripePromotionCodeId` | the `promo_…` ID from step 3 |
+| `bannerHeadline` | the banner copy |
+| `ctaLabel` | the link text |
+| `ctaHref` | usually `/pricing` |
+| `showInProduction` | check it for a live Promotion |
+
+Write evergreen copy. Name the discount and call it limited-time. Do not state a deadline or imply one with "ends soon". No deadline exists, so claiming one deceives the visitor.
+
+For an Introductory Discount, name the Discount Period in `bannerHeadline` or `ctaLabel`, for example "50% off your first 12 months". "50% off" alone implies an Ongoing Discount. The site does not check banner copy.
+
+### 5. Confirm no other entry is published, then publish
+
+Two published entries make the site show **no** Promotion at all. That is a deliberate fail-safe against an editorial mistake, and it is silent.
+
+**A Vercel preview deployment cannot stage a Promotion.** Preview builds set `NODE_ENV=production`, so they apply the same `showInProduction` filter production does. Checking the box to see the banner on a preview also makes it live in production. Review the copy in Contentful, or in local development where the filter is skipped.
+
+### 6. Check the site
+
+The banner appears on public marketing pages within seconds. `/pricing` shows the original price struck through, the discounted price, and the percent off. For an Introductory Discount, check the Discount Period line under the price on both billing intervals. Checkout applies the discount with no code entry.
+
+## End a Promotion
+
+Both steps. The first alone leaves the discount redeemable.
+
+### 1. Unpublish the Contentful entry
+
+The banner goes, the full price returns, and checkout stops applying the discount. This takes seconds.
+
+### 2. Deactivate the Promotion Code in Stripe
+
+The site does not do this for you. Nothing in the app touches Stripe when you unpublish.
+
+This matters more than it looks. Stripe Checkout shows the customer-facing code to everyone who buys during a Promotion, and the "have a promo code?" box returns once the Promotion ends. Anyone who bought during the Promotion can type the code and still redeem it.
+
+## Replace one Promotion with another
+
+1. Unpublish the old entry.
+2. Deactivate the old Promotion Code in Stripe.
+3. Create the new Coupon and Promotion Code.
+4. Create a **new** Contentful entry.
+5. Publish it.
+
+Keep the old entry as an unpublished draft. It records what ran.
+
+## Why a new entry every time
+
+A visitor who dismisses the banner has that dismissal stored against the entry's ID. Reuse the entry and the ID does not change, so **everyone who dismissed the last Promotion never sees the new one**. Your most frequent visitors are the ones you lose, and nothing reports it.
+
+## When something looks wrong
+
+| Symptom | Cause |
+| --- | --- |
+| Nothing appears at all | Two entries are published, or a required field is empty, or the entry is unpublished |
+| Banner appears, price is full | The Promotion Code is inactive, expired, or out of redemptions |
+| The Discount Period line is wrong | Check the Coupon's `duration` and `duration_in_months` in Stripe. The line comes from those fields only |
+| Checkout stops and refreshes the price | The Promotion ended or changed after the pricing page loaded |
+| Banner appears on your machine but not on a deployment | `showInProduction` is unchecked. Vercel sets `NODE_ENV=production` for preview builds too, so an unchecked entry is hidden on preview and production alike, and shows only in local development |
+| Banner will not appear for you | You dismissed it, or you are signed in as a paying subscriber. Clear `promotion-banner-dismissed-id` and `promotion-banner-subscriber` from browser storage |
+
+A Promotion Code that runs out of redemptions goes permanently inactive while the entry stays published. The banner keeps advertising a discount nobody can get. Unpublish the entry.
