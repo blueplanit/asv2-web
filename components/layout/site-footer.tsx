@@ -29,6 +29,7 @@ const resourcesLinks: FooterLinkItem[] = [
     { label: "Sample Sheet", href: "/sample-sheet" },
     { label: "How it works", href: "/how-it-works" },
     { label: "Commission revenue share", href: "/use-cases/stripe-commission-revenue-share" },
+    { label: "Subscription dashboard", href: "/use-cases/stripe-subscription-dashboard-google-sheets" },
 ];
 
 const companyLinks: FooterLinkItem[] = [

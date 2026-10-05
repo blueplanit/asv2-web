@@ -26,6 +26,7 @@ const staticRoutes: Array<{
     { path: "/stripe-google-sheets-integration", changeFrequency: "monthly", priority: 0.9 },
     { path: "/stripe-csv-export-alternative", changeFrequency: "monthly", priority: 0.9 },
     { path: "/use-cases/stripe-commission-revenue-share", changeFrequency: "monthly", priority: 0.8 },
+    { path: "/use-cases/stripe-subscription-dashboard-google-sheets", changeFrequency: "monthly", priority: 0.8 },
     { path: "/how-it-works", changeFrequency: "monthly", priority: 0.8 },
     { path: "/sample-sheet", changeFrequency: "monthly", priority: 0.8 },
     { path: "/blog", changeFrequency: "weekly", priority: 0.7 },
