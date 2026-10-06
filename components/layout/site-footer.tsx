@@ -37,6 +37,7 @@ const resourcesLinks: FooterLinkItem[] = [
     { label: "Revenue by product template", href: "/templates/stripe-revenue-by-product" },
     { label: "Customer revenue template", href: "/templates/stripe-customer-revenue" },
     { label: "Fees and refunds template", href: "/templates/stripe-fees-and-refunds" },
+    { label: "Subscription dashboard template", href: "/templates/stripe-subscription-dashboard" },
 ];
 
 const companyLinks: FooterLinkItem[] = [

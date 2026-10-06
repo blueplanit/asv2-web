@@ -29,6 +29,7 @@ const staticRoutes: Array<{
     { path: "/templates/stripe-revenue-by-product", changeFrequency: "monthly", priority: 0.8 },
     { path: "/templates/stripe-fees-and-refunds", changeFrequency: "monthly", priority: 0.8 },
     { path: "/templates/stripe-customer-revenue", changeFrequency: "monthly", priority: 0.8 },
+    { path: "/templates/stripe-subscription-dashboard", changeFrequency: "monthly", priority: 0.8 },
     { path: "/how-it-works", changeFrequency: "monthly", priority: 0.8 },
     { path: "/sample-sheet", changeFrequency: "monthly", priority: 0.8 },
     { path: "/blog", changeFrequency: "weekly", priority: 0.7 },
