@@ -34,10 +34,10 @@ const resourcesLinks: FooterLinkItem[] = [
     { label: "Stripe to Sheets", href: "/stripe-google-sheets-integration" },
     { label: "CSV Export Alternative", href: "/stripe-csv-export-alternative" },
     { label: "Commission revenue share", href: "/use-cases/stripe-commission-revenue-share" },
-    { label: "Subscription dashboard", href: "/use-cases/stripe-subscription-dashboard-google-sheets" },
     { label: "Revenue by product template", href: "/templates/stripe-revenue-by-product" },
     { label: "Customer revenue template", href: "/templates/stripe-customer-revenue" },
     { label: "Fees and refunds template", href: "/templates/stripe-fees-and-refunds" },
+    { label: "Subscription dashboard template", href: "/templates/stripe-subscription-dashboard" },
 ];
 
 const companyLinks: FooterLinkItem[] = [
