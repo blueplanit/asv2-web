@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { createMarketingMetadata } from "@/lib/marketing/seo-metadata";
+import { RetroactiveRefundDemo } from "@/components/marketing/retroactive-refund-demo";
 
 export const metadata = createMarketingMetadata({
     title: "Sample Sheet: Stripe Data in Google Sheets | SyncStaq",
@@ -81,6 +82,8 @@ export default function SampleSheetPage() {
                     </figcaption>
                 </figure>
             </section>
+
+            <RetroactiveRefundDemo />
 
             <section className="mx-auto max-w-6xl px-6 py-10 min-[701px]:py-14">
                 <h2 className="mb-7 text-3xl leading-snug font-semibold">What to look for.</h2>

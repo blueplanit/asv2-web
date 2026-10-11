@@ -13,6 +13,8 @@ import type {
 } from "@/lib/contentful/contentful";
 import { getBlogPath } from "@/lib/contentful/blog-localization";
 import { getCoverImageUrl } from "@/lib/contentful/blog-presentation";
+import { getReportingOutcomePlacement } from "@/lib/marketing/reporting-outcomes";
+import { ReportingOutcomeLink } from "@/components/analytics/reporting-outcome-link";
 
 type BlogPostArticleProps = {
     post: BlogPostFields;
@@ -45,6 +47,7 @@ export function BlogPostArticle({
     alternatePath,
 }: BlogPostArticleProps) {
     const bodyDoc = post.body as unknown as Document;
+    const placement = bodyDoc ? getReportingOutcomePlacement(bodyDoc, slug, language) : null;
     const pageLabels = labels[language];
     const postPath = getBlogPath(slug, language);
     const postUrl = new URL(postPath, SITE_URL).toString();
@@ -182,7 +185,22 @@ export function BlogPostArticle({
 
             {bodyDoc && (
                 <div className="mt-8 text-base leading-8">
-                    {documentToReactComponents(bodyDoc, contentfulRichTextOptions)}
+                    {placement ? (
+                        <>
+                            {documentToReactComponents({ ...bodyDoc, content: bodyDoc.content.slice(0, placement.afterIndex + 1) }, contentfulRichTextOptions)}
+                            <p className="mt-4 text-base leading-8 text-slate-700">
+                                {placement.outcome.lead}
+                                <ReportingOutcomeLink
+                                    {...placement.outcome}
+                                    className="font-medium text-indigo-700 underline decoration-indigo-300 decoration-2 underline-offset-4 hover:text-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                                >
+                                    {placement.outcome.label}
+                                </ReportingOutcomeLink>
+                                {placement.outcome.note}
+                            </p>
+                            {documentToReactComponents({ ...bodyDoc, content: bodyDoc.content.slice(placement.afterIndex + 1) }, contentfulRichTextOptions)}
+                        </>
+                    ) : documentToReactComponents(bodyDoc, contentfulRichTextOptions)}
                 </div>
             )}
         </article>
