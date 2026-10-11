@@ -3,44 +3,16 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const path = require("node:path");
 const { loadTypeScriptModule } = require("./helpers/load-typescript-module.cjs");
-const { BLOCKS } = require("@contentful/rich-text-types");
+const { readFileSync } = require("node:fs");
 const root = path.join(__dirname, "..");
-const { reportingOutcomes, getReportingOutcomePlacement } = loadTypeScriptModule(path.join(root, "lib/marketing/reporting-outcomes.ts"), { "@contentful/rich-text-types": { BLOCKS } });
 const { getRefundExampleState } = loadTypeScriptModule(path.join(root, "lib/marketing/retroactive-refund-example.ts"), {});
 const ts = require("typescript");
-const text = value => ({ nodeType: "text", value, marks: [], data: {} });
-const node = (nodeType, value = "") => ({ nodeType, data: {}, content: [text(value)] });
-const doc = content => ({ nodeType: "document", data: {}, content });
-
-test("all four articles insert only in the matching worked-example section", () => {
-    for (const [slug, cta] of Object.entries(reportingOutcomes)) {
-        const body = doc([node("paragraph", "Intro"), node("heading-2", cta.heading), node("paragraph", "Example"), node("table"), node("heading-2", "Next section")]);
-        const before = JSON.stringify(body);
-        assert.equal(getReportingOutcomePlacement(body, slug, "en").afterIndex, 3);
-        assert.equal(JSON.stringify(body), before);
-        assert.equal(getReportingOutcomePlacement(body, slug, "es"), null);
-    }
-});
-
-test("refund CTA follows the fees subsection, not the earlier export table", () => {
-    const body = doc([node("table"), node("heading-2", "Analysis"), node("heading-3", "Refunds alongside fees"), node("paragraph", "Fees"), node("heading-3", "Investigations")]);
-    assert.equal(getReportingOutcomePlacement(body, "stripe-refund-reporting-google-sheets", "en").afterIndex, 3);
-});
-
-test("missing or moved anchors skip rather than inserting elsewhere", () => {
-    const body = doc([node("heading-2", "Step 5: Produce a stable, repeatable table"), node("paragraph"), node("heading-2", "Other"), node("table")]);
-    assert.equal(getReportingOutcomePlacement(body, "stripe-revenue-by-product", "en"), null);
-    assert.equal(getReportingOutcomePlacement(doc([]), "stripe-revenue-by-product", "en"), null);
-    assert.equal(getReportingOutcomePlacement(body, "unrelated-article", "en"), null);
-    assert.equal(getReportingOutcomePlacement(body, "constructor", "en"), null);
-    assert.equal(getReportingOutcomePlacement(body, "__proto__", "en"), null);
-});
-
-test("existing contextual destination suppresses duplicates, including www and query variants", () => {
-    for (const uri of ["/templates/stripe-revenue-by-product", "https://syncstaq.com/templates/stripe-revenue-by-product/?utm_source=blog", "https://www.syncstaq.com/templates/stripe-revenue-by-product"]) {
-        const body = doc([node("heading-2", "Step 5: Produce a stable, repeatable table"), node("table"), { nodeType: "paragraph", data: {}, content: [{ nodeType: "hyperlink", data: { uri }, content: [text("Existing link")] }] }]);
-        assert.equal(getReportingOutcomePlacement(body, "stripe-revenue-by-product", "en"), null);
-    }
+test("blog copy is rendered directly from Contentful without editorial injection", () => {
+    const source = readFileSync(path.join(root, "components/blog/blog-post-article.tsx"), "utf8");
+    assert.ok(source.includes("documentToReactComponents(bodyDoc, contentfulRichTextOptions)"));
+    assert.ok(!source.includes("getReportingOutcomePlacement"));
+    assert.ok(!source.includes("ReportingOutcomeLink"));
+    assert.ok(!source.includes("bodyDoc.content.slice"));
 });
 
 test("illustration keeps the Sheet unchanged until the hourly-update step", () => {
@@ -64,16 +36,15 @@ test("CTA tracking uses only static context and leaves normal link navigation in
         "@/lib/analytics/amplitude-client": { trackAmplitudeEvent: (...args) => { captured.push(args); } },
         "@/lib/marketing/reporting-outcomes": { REPORTING_OUTCOME_VERSION: "reporting-outcomes-v1" },
     }, { jsx: ts.JsxEmit.ReactJSX });
-    for (const outcome of Object.values(reportingOutcomes)) {
-        const link = ReportingOutcomeLink({ ...outcome, children: outcome.label });
-        assert.equal(link.props.href, outcome.destinationPath);
-        assert.equal(link.props.onClick(), undefined);
-        const [event, properties] = captured.at(-1);
-        assert.equal(event, "Reporting Outcome Clicked");
-        assert.deepEqual(properties, {
-            origin_path: outcome.originPath, destination_path: outcome.destinationPath,
-            placement: outcome.placement, outcome: outcome.outcome, experiment_version: "reporting-outcomes-v1",
-        });
-        assert.ok(Object.values(properties).every(value => !value.includes("?") && !value.includes("@")));
-    }
+    const outcome = { originPath: "/sample-sheet", destinationPath: "/templates/stripe-fees-and-refunds", placement: "retroactive-refund-example", outcome: "fees-and-refunds" };
+    const link = ReportingOutcomeLink({ ...outcome, children: "Explore the Fees and Refunds template" });
+    assert.equal(link.props.href, outcome.destinationPath);
+    assert.equal(link.props.onClick(), undefined);
+    const [event, properties] = captured.at(-1);
+    assert.equal(event, "Reporting Outcome Clicked");
+    assert.deepEqual(properties, {
+        origin_path: outcome.originPath, destination_path: outcome.destinationPath,
+        placement: outcome.placement, outcome: outcome.outcome, experiment_version: "reporting-outcomes-v1",
+    });
+    assert.ok(Object.values(properties).every(value => !value.includes("?") && !value.includes("@")));
 });

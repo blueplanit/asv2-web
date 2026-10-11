@@ -4,7 +4,7 @@ Status: staged for review, not published.
 
 ## Scope
 
-Four English articles receive one contextual link beside their existing worked example or relevant reporting subsection. The existing Contentful document is not changed. The renderer inserts the paragraph only when its configured heading and example are present, and skips it when that destination already appears in the document. Spanish and unrelated articles are unchanged.
+Article copy and link placement belong in Contentful. Four English entries have unpublished closing CTA updates, using the existing `ctaBlock` content type. Their template links appear after the conclusion rather than interrupting worked examples. The existing closing trial message is retained in the same callout. The app renders the CMS document directly; it does not insert article paragraphs, choose editorial anchors, or supply fallback copy. Spanish and unrelated entries are unchanged. Both the article changes and their new referenced blocks require separate publishing approval.
 
 The Sample Sheet page receives a three-step synthetic refund illustration below its existing preview. It reuses the public Fees and Refunds template screenshot and definitions. No Stripe record or Google Sheet is modified. The illustration is explicitly not evidence of a live sync: the source update is shown at the next hourly-sync step, and formulas are user-maintained reporting logic.
 
@@ -12,7 +12,7 @@ The Sample Sheet page receives a three-step synthetic refund illustration below 
 
 New event: `SyncStaq: Reporting Outcome Clicked`.
 
-Trigger: an intentional click on one of the scoped contextual article links or the demonstration's template link. Normal link navigation is unchanged.
+Trigger: an intentional click on the demonstration's template link. Normal link navigation is unchanged. Standard CMS hyperlinks do not currently emit this new event; do not claim article-level click attribution from it. Existing destination page views can indicate navigation but cannot isolate a CTA click or its placement.
 
 Properties: `origin_path`, `destination_path`, `placement`, `outcome`, and `experiment_version` (`reporting-outcomes-v1`). Values come from static public configuration, not full URLs, query strings, email addresses, click IDs, or user-entered content. The existing Amplitude SDK identity model remains unchanged; no persistent attribution cookie or new signup/trial emitter is introduced.
 
@@ -24,4 +24,4 @@ Use current page views as opportunity counts, not verified CTA exposures or qual
 
 ## Review And Validation
 
-Run `node --test tests/reporting-outcomes.test.cjs`. Review all four article placements and the illustrative amount changes on desktop and mobile. Confirm the disclaimer, template limitations, unchanged auth/billing paths, and absence of private data. Deployment is a separate approval decision.
+Run `node --test tests/reporting-outcomes.test.cjs`. Review the four actual CMS drafts and the illustrative amount changes on desktop and mobile. Confirm uninterrupted worked examples, distinct closing callouts, the disclaimer, template limitations, unchanged auth/billing paths, and absence of private data. Deployment and CMS publishing are separate approval decisions.
