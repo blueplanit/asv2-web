@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node tests are CommonJS. */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -9,15 +10,28 @@ const { loadTypeScriptModule } = require("./helpers/load-typescript-module.cjs")
 
 const root = path.resolve(__dirname, "..");
 const metadata = loadTypeScriptModule(path.join(root, "lib/marketing/seo-metadata.ts"), {});
+const image = (props) => {
+    const forwarded = { ...props };
+    delete forwarded.unoptimized;
+    return React.createElement("img", forwarded);
+};
+const demoData = loadTypeScriptModule(path.join(root, "lib/marketing/retroactive-refund-example.ts"), {});
+const demo = loadTypeScriptModule(path.join(root, "components/marketing/retroactive-refund-demo.tsx"), {
+    "react": React,
+    "react/jsx-runtime": require("react/jsx-runtime"),
+    "next/image": image,
+    "lucide-react": require("lucide-react"),
+    "@/lib/marketing/retroactive-refund-example": demoData,
+    "@/components/analytics/reporting-outcome-link": {
+        ReportingOutcomeLink: ({ children, destinationPath, className }) => React.createElement("a", { href: destinationPath, className }, children),
+    },
+}, { jsx: ts.JsxEmit.ReactJSX });
 const page = loadTypeScriptModule(path.join(root, "app/(marketing)/sample-sheet/page.tsx"), {
     "react/jsx-runtime": require("react/jsx-runtime"),
     "next/link": ({ children, ...props }) => React.createElement("a", props, children),
-    "next/image": (props) => {
-        const forwarded = { ...props };
-        delete forwarded.unoptimized;
-        return React.createElement("img", forwarded);
-    },
+    "next/image": image,
     "@/lib/marketing/seo-metadata": metadata,
+    "@/components/marketing/retroactive-refund-demo": demo,
 }, { jsx: ts.JsxEmit.ReactJSX });
 const html = renderToStaticMarkup(React.createElement(page.default));
 
@@ -51,9 +65,22 @@ test("mobile preview is scrollable, labeled, and backed by an existing image", (
 });
 
 test("keeps exploration guidance distinct from setup and automatic reporting claims", () => {
-    assert.equal((html.match(/<h3\b/g) || []).length, 3);
+    assert.equal((html.match(/<h3\b/g) || []).length, 6);
     assert.match(html, /not reports SyncStaq generates for you/);
     assert.match(html, /href="\/pricing"/);
     assert.match(html, /href="\/how-it-works"/);
-    assert.doesNotMatch(html, /\$48\.2k|\$46\.6k|<table\b|<details\b|six months|hourly/);
+    assert.doesNotMatch(html, /\$48\.2k|\$46\.6k|six months|real-time|instant sync/);
+});
+
+test("labels the new illustration and reuses the existing finished report", () => {
+    assert.match(html, /Synthetic data, not a recording of a live sync/);
+    assert.match(html, /SyncStaq syncs hourly/);
+    assert.match(html, /your formulas recalculate/);
+    assert.match(html, /Existing public template screenshot, before the illustrative update/);
+    assert.match(html, /src="\/templates\/fees-and-refunds\/monthly-overview.jpg"/);
+    assert.match(html, /href="\/templates\/stripe-fees-and-refunds"/);
+    assert.match(html, /\$27\.28/);
+    assert.match(html, /\$889\.18/);
+    assert.ok(html.indexOf('Sample Sheet preview') < html.indexOf('refund-demo-heading'));
+    assert.ok(html.indexOf('refund-demo-heading') < html.indexOf('What to look for.'));
 });
