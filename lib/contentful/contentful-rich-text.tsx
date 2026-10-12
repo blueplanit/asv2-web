@@ -1,10 +1,26 @@
 // lib/contentful/contentful-rich-text.tsx
 import type { Options } from "@contentful/rich-text-react-renderer";
 import { documentToReactComponents } from "@contentful/rich-text-react-renderer";
-import { BLOCKS, INLINES, type Document } from "@contentful/rich-text-types";
+import { BLOCKS, INLINES, MARKS, type Document } from "@contentful/rich-text-types";
 
 export type ContentfulRichTextDocument = Document;
 const SITE_ORIGIN = "https://www.syncstaq.com";
+
+// Contentful has no code-block type; a block is just a paragraph whose text all
+// carries the code mark. Detect that so we can render a real <pre> instead of an
+// inline chip that would swallow the snippet's line breaks.
+function isCodeBlock(node: { content?: readonly { nodeType: string; value?: string; marks?: readonly { type: string }[] }[] }): boolean {
+    const content = node.content ?? [];
+    if (content.length === 0) return false;
+    let sawCode = false;
+    for (const child of content) {
+        if (child.nodeType !== "text") return false;
+        if ((child.value ?? "").trim() === "") continue; // ignore whitespace-only nodes
+        if (!(child.marks ?? []).some((mark) => mark.type === MARKS.CODE)) return false;
+        sawCode = true;
+    }
+    return sawCode;
+}
 
 export const contentfulRichTextOptions: Options = {
     renderNode: {
@@ -23,7 +39,17 @@ export const contentfulRichTextOptions: Options = {
                 {children}
             </h3>
         ),
-        [BLOCKS.PARAGRAPH]: (_, children) => {
+        [BLOCKS.PARAGRAPH]: (node, children) => {
+            if (isCodeBlock(node as Parameters<typeof isCodeBlock>[0])) {
+                const code = ((node as { content?: { value?: string }[] }).content ?? [])
+                    .map((child) => child.value ?? "")
+                    .join("");
+                return (
+                    <pre className="mt-4 overflow-x-auto rounded-md border border-slate-800 bg-slate-900 px-4 py-3 text-sm leading-6 text-slate-100">
+                        <code className="font-mono">{code}</code>
+                    </pre>
+                );
+            }
             return (
                 <p className="mt-4 text-base leading-8 text-slate-700">
                     {children}
@@ -158,5 +184,13 @@ export const contentfulRichTextOptions: Options = {
                 </a>
             );
         },
+    },
+    renderMark: {
+        // Inline code. Code-only paragraphs are handled as <pre> blocks above.
+        [MARKS.CODE]: (text) => (
+            <code className="whitespace-pre-wrap break-words rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-800">
+                {text}
+            </code>
+        ),
     },
 };
